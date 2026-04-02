@@ -38,6 +38,10 @@ for (const [path, mod] of Object.entries(manifestModules)) {
   MANIFEST_MAP[manifest.type] = manifest
 }
 
+// Type aliases for backward compatibility with saved projects
+if (NODE_TYPES['textInput']) NODE_TYPES['promptEditor'] = NODE_TYPES['textInput']
+if (NODE_TYPES['llm']) NODE_TYPES['llmGemini'] = NODE_TYPES['llm']
+
 // Re-export compatibility helpers
 export { areSlotsCompatible, CATEGORY_LABELS, getCompatibleNodes, findHandleForSlot } from './_shared/types'
 export type { NodeManifest, SlotDef, SlotType, NodeCategory } from './_shared/types'

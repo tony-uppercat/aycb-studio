@@ -16,7 +16,7 @@ from src.shared import (
 )
 from config.settings import settings
 
-router = APIRouter(prefix="/api/system", tags=["system"])
+router = APIRouter(prefix="/api", tags=["system"])
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

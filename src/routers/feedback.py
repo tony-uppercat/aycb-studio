@@ -6,10 +6,10 @@ from fastapi import APIRouter, Form
 
 from src.shared import _log, FeedbackItem, FEEDBACK_FILE, FEEDBACK_ALL_FILE
 
-router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+router = APIRouter(prefix="/api", tags=["feedback"])
 
 
-@router.post("")
+@router.post("/feedback")
 def add_feedback(item: FeedbackItem):
     FEEDBACK_ALL_FILE.parent.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -25,7 +25,7 @@ def add_feedback(item: FeedbackItem):
     return {"status": "ok", "count": len(entries)}
 
 
-@router.post("/urgent")
+@router.post("/feedback/urgent")
 def add_urgent_feedback(item: FeedbackItem):
     FEEDBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -42,7 +42,7 @@ def add_urgent_feedback(item: FeedbackItem):
     return {"status": "ok", "count": len(entries)}
 
 
-@router.get("/urgent")
+@router.get("/feedback/urgent")
 def get_urgent_feedback():
     if not FEEDBACK_FILE.exists():
         return {"entries": []}
@@ -52,7 +52,7 @@ def get_urgent_feedback():
         return {"entries": []}
 
 
-@router.delete("/urgent/{item_id}")
+@router.delete("/feedback/urgent/{item_id}")
 def resolve_urgent_feedback(item_id: str):
     if not FEEDBACK_FILE.exists():
         return {"status": "not_found"}
@@ -64,7 +64,7 @@ def resolve_urgent_feedback(item_id: str):
     return {"status": "ok", "remaining": len(entries)}
 
 
-@router.post("/notify")
+@router.post("/console/notify")
 def console_notify(text: str = Form(...), type: str = Form("info")):
     prefix = "[SUCCESS]" if type == "success" else "[CLAUDE]"
     _log(f"{prefix} {text}")

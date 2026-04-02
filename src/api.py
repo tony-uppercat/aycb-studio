@@ -52,7 +52,7 @@ async def log_requests(request, call_next):
     t0 = time.time()
     response = await call_next(request)
     dt = time.time() - t0
-    skip = ("/api/system/logs", "/api/system/health")
+    skip = ("/api/logs", "/api/health")
     if not any(request.url.path.startswith(p) for p in skip):
         _log(f"{request.method} {request.url.path} -> {response.status_code} ({dt:.1f}s)")
     return response

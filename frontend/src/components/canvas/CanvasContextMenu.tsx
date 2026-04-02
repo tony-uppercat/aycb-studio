@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
-import { NODE_CATALOG, CATEGORY_LABELS, type NodeCatalogEntry } from '../../nodes/index'
+import { NODE_CATALOG, CATEGORY_LABELS, type NodeManifest } from '../../nodes/index'
 import { loadMedia } from '../../mediaStore'
 import { serializeNodes } from '../../hooks/useCanvasPersistence'
 import { saveUserTemplate } from '../../presets'
@@ -32,7 +32,7 @@ export interface Props {
   allEdges: Edge[]
   onClose: () => void
   /* Canvas actions */
-  onAddNode?: (entry: NodeCatalogEntry, position: { x: number; y: number }) => void
+  onAddNode?: (entry: NodeManifest, position: { x: number; y: number }) => void
   onPaste?: () => void
   onSelectAll?: () => void
   onFitView?: () => void
@@ -145,7 +145,7 @@ function SubMenu({ label, icon, shortcut, children, menuX }: {
 
 const CATEGORY_ORDER = ['input', 'media-model', 'llm', 'utility'] as const
 
-function AddNodeSubMenu({ menuX, onAdd }: { menuX: number; onAdd: (entry: NodeCatalogEntry) => void }) {
+function AddNodeSubMenu({ menuX, onAdd }: { menuX: number; onAdd: (entry: NodeManifest) => void }) {
   const grouped = useMemo(() =>
     CATEGORY_ORDER.map(cat => ({
       cat,
@@ -162,7 +162,7 @@ function AddNodeSubMenu({ menuX, onAdd }: { menuX: number; onAdd: (entry: NodeCa
           {g.items.map(entry => (
             <button key={entry.type} className={styles.item} onClick={() => onAdd(entry)}>
               <span className={styles.icon}>{entry.icon}</span>
-              <span className={styles.label}>{entry.name}</span>
+              <span className={styles.label}>{entry.label}</span>
             </button>
           ))}
         </div>
@@ -236,7 +236,7 @@ export function CanvasContextMenu({
 
   // ── Action handlers ──
 
-  const handleAddNode = useCallback((entry: NodeCatalogEntry) => {
+  const handleAddNode = useCallback((entry: NodeManifest) => {
     onAddNode?.(entry, flowPosition ?? { x: 0, y: 0 })
     onClose()
   }, [onAddNode, flowPosition, onClose])

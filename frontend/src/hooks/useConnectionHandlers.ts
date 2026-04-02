@@ -3,7 +3,7 @@ import { addEdge, type Connection, type Node, type Edge } from '@xyflow/react'
 import { useCanvasStore } from '../stores/canvasStore'
 import { getNextNodeId } from './useCanvasDragDrop'
 import { getHandleType } from './useDataPropagation'
-import { type NodeCatalogEntry, areSlotsCompatible, findHandleForSlot } from '../nodes/index'
+import { NODE_CATALOG, type NodeManifest, type SlotType, areSlotsCompatible, findHandleForSlot } from '../nodes/index'
 import { edgeStyle } from '../utils/edgeStyles'
 
 type PendingConnection = {
@@ -148,7 +148,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
     useCanvasStore.setState({ addMenuOpen: true })
   }, [getNodes, getEdges, setNodes, setEdges, snapshot, screenToFlowPosition])
 
-  const handleAddNodeFromDrag = useCallback((entry: NodeCatalogEntry) => {
+  const handleAddNodeFromDrag = useCallback((entry: NodeManifest) => {
     if (!pendingConnection) return
 
     const id = getNextNodeId(entry.type)
@@ -163,7 +163,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
 
     let connection: Connection
     if (pendingConnection.handleType === 'source') {
-      const compatibleInput = findHandleForSlot(entry.type, pendingConnection.slotType as Parameters<typeof findHandleForSlot>[1], 'in')
+      const compatibleInput = findHandleForSlot(NODE_CATALOG, entry.type, pendingConnection.slotType as SlotType, 'in')
         ?? (pendingConnection.slotType + '-in')
       connection = {
         source: pendingConnection.nodeId,
@@ -172,7 +172,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
         targetHandle: compatibleInput,
       }
     } else {
-      const compatibleOutput = findHandleForSlot(entry.type, pendingConnection.slotType as Parameters<typeof findHandleForSlot>[1], 'out')
+      const compatibleOutput = findHandleForSlot(NODE_CATALOG, entry.type, pendingConnection.slotType as SlotType, 'out')
         ?? (pendingConnection.slotType + '-out')
       connection = {
         source: id,
@@ -194,7 +194,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
     setPendingConnection(null)
   }, [pendingConnection, setNodes, setEdges, screenToFlowPosition, getNodes, getEdges, snapshot])
 
-  const handleAddNode = useCallback((entry: NodeCatalogEntry) => {
+  const handleAddNode = useCallback((entry: NodeManifest) => {
     const id = getNextNodeId(entry.type)
     // Use the React Flow container bounds (not window center) so node lands at the visible canvas center
     const rfContainer = document.querySelector('.react-flow')

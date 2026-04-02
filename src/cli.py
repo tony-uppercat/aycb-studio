@@ -204,7 +204,7 @@ def info() -> None:
 @app.command("ui-react")
 def ui_react(
     host: str = typer.Option("127.0.0.1", help="Host to bind"),
-    port: int = typer.Option(3001, help="Port to listen on"),
+    port: int = typer.Option(5101, help="Port to listen on"),
     build: bool = typer.Option(False, "--build", help="Build frontend before starting"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser automatically"),
 ):

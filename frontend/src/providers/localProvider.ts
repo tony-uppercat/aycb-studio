@@ -4,7 +4,7 @@ import { registerImageProvider, type ImageProvider } from './index'
 const localProvider: ImageProvider = {
   id: 'local',
   async generateImage(prompt: string, modelId: string, serverUrl: string): Promise<GenerateImageResult> {
-    const url = serverUrl || 'http://localhost:3001'
+    const url = serverUrl || 'http://localhost:5101'
     const fd = new FormData()
     // Strip 'local/' prefix — backend uses plain model IDs
     const cleanModelId = modelId.replace(/^local\//, '')

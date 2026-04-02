@@ -27,5 +27,5 @@
 .reviewLink:hover {
   color: var(--amber);
   border-color: var(--amber);
-  background: var(--amber-glow, rgba(212, 160, 23, 0.1));
+  background: var(--amber-glow);
 }

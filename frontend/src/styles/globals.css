@@ -1,9 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --amber: #d4a017;
-  --amber-glow: #d4a01730;
-  --amber-hover: #e0ad1f;
+  --amber: #F52776;
+  --amber-glow: #F5277630;
+  --amber-hover: #d41f64;
   --surface-0: #141414;
   --surface-1: #1a1a1a;
   --surface-2: #1e1e1e;

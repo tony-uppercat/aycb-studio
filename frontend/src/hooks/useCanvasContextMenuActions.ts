@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { getNextNodeId } from './useCanvasDragDrop'
-import type { NodeCatalogEntry } from '../nodes/index'
+import type { NodeManifest } from '../nodes/index'
 
 interface UseCanvasContextMenuActionsParams {
   getNodes: () => Node[]
@@ -17,7 +17,7 @@ export function useCanvasContextMenuActions({
   getNodes, getEdges, setNodes, setEdges, snapshot, clipboardRef, fitView,
 }: UseCanvasContextMenuActionsParams) {
 
-  const ctxAddNode = useCallback((entry: NodeCatalogEntry, position: { x: number; y: number }) => {
+  const ctxAddNode = useCallback((entry: NodeManifest, position: { x: number; y: number }) => {
     const id = getNextNodeId(entry.type)
     const newNode: Node = {
       id,

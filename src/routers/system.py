@@ -192,8 +192,8 @@ def save_session_report(payload: SessionReportPayload):
     content = "\n".join(lines)
 
     if report_path.exists():
-        existing = report_path.read_text(encoding="utf-8")
-        report_path.write_text(existing + content, encoding="utf-8")
+        existing = report_path.read_text(encoding="utf-8").rstrip("\n")
+        report_path.write_text(existing + "\n" + content, encoding="utf-8")
     else:
         header = f"# Daily Report — {today}\n\n"
         report_path.write_text(header + content, encoding="utf-8")

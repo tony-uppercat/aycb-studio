@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
-import { NODE_CATALOG, CATEGORY_LABELS, getCompatibleNodes, type NodeCatalogEntry } from '../nodes/index'
+import { NODE_CATALOG, CATEGORY_LABELS, getCompatibleNodes, type NodeManifest } from '../nodes/index'
 import { PRESETS } from './project/ProjectGallery'
 import { getUserTemplates, deleteUserTemplate, type UserTemplate } from '../presets'
 import styles from './AddNodeMenu.module.css'
@@ -8,7 +8,7 @@ import styles from './AddNodeMenu.module.css'
 interface Props {
   open: boolean
   onClose: () => void
-  onAdd: (entry: NodeCatalogEntry) => void
+  onAdd: (entry: NodeManifest) => void
   onAddTemplate?: (nodes: Node[], edges: Edge[]) => void
   filter?: { slotType: string; direction: 'input' | 'output' }
   position?: { x: number; y: number }
@@ -25,12 +25,12 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 
   const baseCatalog = filter
-    ? getCompatibleNodes(filter.slotType, filter.direction)
+    ? getCompatibleNodes(NODE_CATALOG, filter.slotType, filter.direction)
     : NODE_CATALOG
 
   const q = query.toLowerCase()
   const filtered = q
-    ? baseCatalog.filter(n => n.name.toLowerCase().includes(q) || n.description.toLowerCase().includes(q) || n.category.includes(q))
+    ? baseCatalog.filter(n => n.label.toLowerCase().includes(q) || n.description.toLowerCase().includes(q) || n.category.includes(q))
     : baseCatalog
 
   const templates = !filter && onAddTemplate
@@ -47,7 +47,7 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
 
   // Flat list of all selectable items for keyboard navigation
   const allItems: Array<
-    | { type: 'node'; entry: NodeCatalogEntry }
+    | { type: 'node'; entry: NodeManifest }
     | { type: 'template'; preset: typeof PRESETS[0] }
     | { type: 'userTemplate'; template: UserTemplate }
   > = [
@@ -91,12 +91,12 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
     ? `Compatible with ${filter.slotType} ${filter.direction}`
     : 'Add Node'
 
-  function select(entry: NodeCatalogEntry) {
+  function select(entry: NodeManifest) {
     onAdd(entry)
     onClose()
   }
 
-  function getFlatIndexForNode(entry: NodeCatalogEntry): number {
+  function getFlatIndexForNode(entry: NodeManifest): number {
     return allItems.findIndex(item => item.type === 'node' && item.entry.type === entry.type)
   }
 
@@ -193,7 +193,7 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
                   >
                     <span className={styles.itemIcon}>{entry.icon}</span>
                     <div className={styles.itemInfo}>
-                      <div className={styles.itemName}>{entry.name}</div>
+                      <div className={styles.itemName}>{entry.label}</div>
                       <div className={styles.itemDesc}>{entry.description}</div>
                     </div>
                   </div>

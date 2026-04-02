@@ -24,8 +24,8 @@ app = FastAPI(title="AYCB API", version="2.0.0")
 
 # ── CORS ────────────────────────────────────────────────────────────────────
 _CORS_ORIGINS = os.environ.get("AYCB_CORS_ORIGINS", "").split(",") if os.environ.get("AYCB_CORS_ORIGINS") else [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:5100",
+    "http://127.0.0.1:5100",
 ]
 
 app.add_middleware(

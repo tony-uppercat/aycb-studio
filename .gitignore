@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.pyc
+__pycache__/
+shared/data/
+shared/Media/
+shared/References/
+.vite/
+*.egg-info/

@@ -38,7 +38,8 @@ python-socketio[asyncio]>=5.10,<6.0
 aiosqlite>=0.20,<1.0
 
 # frontend/package.json
-socket.io-client: ^4.8.0   # already used in v0, check if in v2
+socket.io-client: ^4.8.0
+fabric: ^6.5.0              # Canvas drawing (iPad/Pencil support)
 ```
 
 ## Backend Structure
@@ -78,34 +79,62 @@ Separated from `src/routers/` to keep Review Hub self-contained. Mounted in `api
 
 ## Database Schema
 
-Same 7 tables as v0:
+7 tables. Cleaned up from v0: removed `is_favorite`/`favorite_by` redundancy from `media` (use `favorites` table instead), added FK constraints.
+
+**Note:** `[references]` is a reserved word in SQLite — always use bracket syntax in queries.
 
 ```sql
 -- Core
-media          (id, filename, filepath, directory, file_size, mime_type,
-                width, height, thumbnail_path, metadata, is_favorite,
-                favorite_by, created_at, updated_at)
-comments       (id, media_id, author, content, x_position, y_position,
-                annotation_type, box_width, box_height, parent_id,
-                created_at)
-favorites      (id, media_id, user_name, status, created_at,
-                UNIQUE(media_id, user_name))
-drawings       (id, media_id, author, strokes_json, thumbnail_data,
-                created_at, updated_at)
+media          (id INTEGER PRIMARY KEY, filename TEXT NOT NULL,
+                filepath TEXT, directory TEXT, file_size INTEGER,
+                mime_type TEXT, width INTEGER, height INTEGER,
+                thumbnail_path TEXT, metadata TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP)
+
+comments       (id INTEGER PRIMARY KEY, media_id INTEGER NOT NULL,
+                author TEXT, content TEXT, x_position REAL,
+                y_position REAL, annotation_type TEXT DEFAULT 'pin',
+                box_width REAL, box_height REAL,
+                parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE)
+
+favorites      (id INTEGER PRIMARY KEY, media_id INTEGER NOT NULL,
+                user_name TEXT NOT NULL, status TEXT DEFAULT 'favorite',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(media_id, user_name),
+                FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE)
+
+drawings       (id INTEGER PRIMARY KEY, media_id INTEGER NOT NULL,
+                author TEXT, strokes_json TEXT, thumbnail_data TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE)
 
 -- Reference library
-references     (id, filename, original_path, processed_path,
-                thumbnail_path, uploaded_by, tags, notes, file_size,
-                width, height, created_at)
+[references]   (id INTEGER PRIMARY KEY, filename TEXT NOT NULL,
+                original_path TEXT, processed_path TEXT,
+                thumbnail_path TEXT, uploaded_by TEXT,
+                tags TEXT, notes TEXT, file_size INTEGER,
+                width INTEGER, height INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP)
 
 -- System
-feedback       (id, message, category, author, urgent, resolved,
-                created_at)
-sessions       (id, user_name, device, socket_id, connected_at,
-                disconnected_at)
+feedback       (id INTEGER PRIMARY KEY, message TEXT NOT NULL,
+                category TEXT DEFAULT 'bug', author TEXT,
+                urgent INTEGER DEFAULT 0, resolved INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP)
+
+sessions       (id INTEGER PRIMARY KEY, user_name TEXT,
+                device TEXT, socket_id TEXT,
+                connected_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                disconnected_at TEXT)
 ```
 
-DB file: `shared/data/review-hub.db` (WAL mode, same location as v0).
+**Indexes:** media.directory, media.filename, comments.media_id, favorites.media_id, drawings.media_id, [references].uploaded_by
+
+DB file: `shared/data/review-hub.db` (WAL mode, PRAGMA foreign_keys=ON).
 
 ## Socket.io Events
 
@@ -162,16 +191,18 @@ frontend/src/
 
 ## Frontend Routing
 
-In v2's main `App.tsx`, add a route:
+No react-router-dom. Simple `pathname` check in App.tsx:
 
 ```tsx
-// If URL starts with /review, render ReviewApp
-// Otherwise render FlowCanvas (AYCB editor)
+const isReview = window.location.pathname.startsWith('/review')
+return isReview ? <ReviewApp /> : <FlowCanvas />
 ```
 
-ReviewApp has its own internal router:
+ReviewApp uses the same pattern internally:
 - `/review` → ReviewGallery
 - `/review/references` → ReferencePage
+
+Vite config needs `historyApiFallback` for `/review*` to serve index.html.
 
 ## API Mount in api.py
 
@@ -193,10 +224,11 @@ This adds:
 # src/review_hub/scanner.py
 # Runs every 5 seconds as asyncio background task
 # 1. List files in shared/Media/**
-# 2. Compare with media table
-# 3. New files → generate thumbnail (Pillow) → insert into DB
-# 4. Deleted files → mark as removed in DB
-# 5. Emit 'media_update' socket event if changes detected
+# 2. Skip files modified less than 2 seconds ago (avoids reading incomplete writes)
+# 3. Compare with media table
+# 4. New files → generate thumbnail (Pillow) → insert into DB
+# 5. Deleted files → mark as removed in DB
+# 6. Emit 'media_update' socket event if changes detected
 ```
 
 ## Thumbnail Generation
@@ -227,11 +259,11 @@ Static media files served via FastAPI `StaticFiles`:
 
 ## What Changes in Existing Code
 
-1. **`src/api.py`** — add `mount_review_hub(app)` call + static file mounts
-2. **`frontend/src/App.tsx`** — add route split: `/review*` → ReviewApp, else → FlowCanvas
+1. **`src/api.py`** — add `mount_review_hub(app)` call. **Mount API routes BEFORE static file mounts** to prevent path interception.
+2. **`frontend/src/App.tsx`** — add pathname check: `/review*` → ReviewApp, else → FlowCanvas
 3. **`pyproject.toml`** — add `python-socketio[asyncio]` and `aiosqlite` to `[api]` group
-4. **`frontend/package.json`** — add `socket.io-client` if not present
-5. **`frontend/vite.config.ts`** — add proxy for `/socket.io` → `:5101`
+4. **`frontend/package.json`** — add `socket.io-client`, `fabric`
+5. **`frontend/vite.config.ts`** — add proxy for `/socket.io` → `:5101` **with `ws: true`** for WebSocket upgrade, add proxy for `/api/rh` → `:5101`, add proxy for `/media` and `/references` → `:5101`
 
 ## What Does NOT Change
 
@@ -254,7 +286,20 @@ Static media files served via FastAPI `StaticFiles`:
 | app.py (mount) | < 60 lines |
 | Frontend components | < 300 lines each |
 | ReviewGallery | Split into sub-components if > 300 |
-| DrawingCanvas | < 300 (v0 was 835 — needs major split) |
+| DrawingCanvas.tsx | < 200 (container + Fabric.js canvas element) |
+| useDrawing.ts | < 250 (Fabric.js init, stroke handling, pressure mapping, undo) |
+| drawingUtils.ts | < 100 (stroke smoothing, Bezier, pressure-to-width) |
+
+## Async Convention
+
+Review Hub routes use `async def` (required by aiosqlite). Existing AYCB routers remain `def` (sync). FastAPI handles both — no conflict. New Review Hub code must always be async.
+
+## Out of Scope (Future)
+
+- Auth/HTTPS for online deployment — separate spec when needed
+- Multi-room support (currently single 'review' room)
+- Video streaming/transcoding
+- Cloud storage (S3/GCS) — currently filesystem only
 
 ## Implementation Order
 

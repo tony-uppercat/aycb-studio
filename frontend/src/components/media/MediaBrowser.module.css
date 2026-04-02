@@ -1,0 +1,602 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  height: 100vh;
+  background: #141416;
+  border-left: 1px solid #2a2a2e;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+  animation: slideIn 0.15s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2a2a2e;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.stats {
+  font-size: 11px;
+  color: #666;
+  margin-left: auto;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  margin-left: 8px;
+}
+
+.closeBtn:hover { color: #ccc; }
+
+/* ── Storage bar ── */
+.storageBar {
+  padding: 8px 16px 6px;
+  border-bottom: 1px solid #1e1e22;
+  flex-shrink: 0;
+}
+
+.storageInfo {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.storageTrack {
+  width: 100%;
+  height: 6px;
+  background: #1e1e22;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.storageFill {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.storageFillWarn {
+  background: #f87171;
+}
+
+/* ── Sort/Filter controls ── */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #1e1e22;
+  flex-shrink: 0;
+}
+
+.controlLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.controlSelect {
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 3px 6px;
+  cursor: pointer;
+  outline: none;
+}
+
+.controlSelect:hover {
+  border-color: #3a3a40;
+}
+
+.controlSelect:focus {
+  border-color: #f59e0b;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #1e1e22;
+  flex-shrink: 0;
+}
+
+.toolBtn {
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.toolBtn:hover {
+  background: #27272a;
+  color: #e2e8f0;
+}
+
+.toolBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolBtnDanger {
+  color: #f87171;
+  border-color: rgba(248,113,113,0.2);
+}
+
+.toolBtnDanger:hover {
+  background: rgba(248,113,113,0.1);
+  color: #fca5a5;
+}
+
+.toolSpacer {
+  flex: 1;
+}
+
+/* ── Responsive grid ── */
+.grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+  align-content: start;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.item:hover {
+  border-color: #3a3a40;
+  background: rgba(255,255,255,0.02);
+}
+
+.itemSelected {
+  border-color: #f59e0b;
+  background: rgba(245,158,11,0.05);
+}
+
+.thumbWrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #111;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.thumbWrap:hover .thumb {
+  transform: scale(1.04);
+}
+
+.thumbPlaceholder {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  border-radius: 4px;
+  font-size: 24px;
+}
+
+/* ── Hover info overlay ── */
+.thumbOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+.thumbWrap:hover .thumbOverlay {
+  opacity: 1;
+}
+
+.overlayName {
+  font-size: 10px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.overlayMeta {
+  font-size: 9px;
+  color: rgba(255,255,255,0.6);
+}
+
+/* ── Download button ── */
+.dlBtn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: #ccc;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 2;
+}
+
+.thumbWrap:hover .dlBtn {
+  opacity: 1;
+}
+
+/* ── Review badges ── */
+.favBadge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  color: #666;
+  font-size: 14px;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8));
+  z-index: 3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.thumbWrap:hover .favBadge {
+  opacity: 1;
+}
+.favBadgeActive {
+  color: #f59e0b;
+  opacity: 1;
+}
+
+.approvedBadge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  color: #22c55e;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(0,0,0,0.6);
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.rejectedBadge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(0,0,0,0.6);
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.dlBtn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
+/* ── Item labels ── */
+.itemName {
+  font-size: 9px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemSize {
+  font-size: 8px;
+  color: #555;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #555;
+  font-size: 12px;
+  padding: 20px 0;
+}
+
+/* ── Fullscreen gallery ── */
+.galleryOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 300;
+}
+
+.galleryContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 301;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.galleryMedia {
+  max-width: 85%;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.galleryArrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  z-index: 302;
+}
+
+.galleryArrow:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.galleryClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 302;
+}
+
+.galleryClose:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.galleryFav {
+  position: absolute;
+  top: 16px;
+  right: 112px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #666;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 302;
+  font-size: 18px;
+}
+.galleryFav:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #f59e0b;
+}
+.galleryFavActive {
+  color: #f59e0b;
+}
+
+.galleryDl {
+  position: absolute;
+  top: 16px;
+  right: 64px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 302;
+}
+
+.galleryDl:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.galleryInfo {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-family: monospace;
+  pointer-events: none;
+}
+
+/* ── Tab bar ── */
+.tabBar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #2a2a2e;
+  flex-shrink: 0;
+}
+
+.tabBtn {
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tabBtn:hover {
+  background: #27272a;
+  color: #e2e8f0;
+}
+
+.tabBtnActive {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.tabBtnActive:hover {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+}
+
+/* ── References search ── */
+.refSearch {
+  padding: 6px 12px;
+  border-bottom: 1px solid #1e1e22;
+  flex-shrink: 0;
+}
+
+.refSearchInput {
+  width: 100%;
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 5px 10px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.refSearchInput::placeholder {
+  color: #555;
+}
+
+.refSearchInput:focus {
+  border-color: #f59e0b;
+}
+
+/* ── REF badge (corner of thumbnail) ── */
+.refBadge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(245, 158, 11, 0.85);
+  color: #000;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ── Tag pills ── */
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 1px;
+}
+
+.tagPill {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #d97706;
+  font-size: 8px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  white-space: nowrap;
+}

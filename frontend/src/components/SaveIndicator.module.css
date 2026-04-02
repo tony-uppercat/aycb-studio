@@ -1,0 +1,44 @@
+.indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  font-size: 10px;
+}
+
+.indicator:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transition: background 0.3s;
+}
+
+.label {
+  color: #71717a;
+  font-weight: 500;
+  transition: color 0.3s;
+}
+
+/* States */
+.saved .dot { background: #22c55e; }
+.saved .label { color: #71717a; }
+
+.saving .dot { background: #f59e0b; animation: pulse 1s infinite; }
+.saving .label { color: #f59e0b; }
+
+.unsaved .dot { background: #ef4444; }
+.unsaved .label { color: #a1a1aa; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

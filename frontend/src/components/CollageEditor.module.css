@@ -1,0 +1,505 @@
+/* ── Collage Editor Modal ── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(8px);
+  z-index: 300;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 301;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* ── Header bar ── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 20px;
+  background: #111114;
+  border-bottom: 1px solid #2a2a2e;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  color: #e5e5e5;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.imageCount {
+  font-size: 11px;
+  color: #888;
+}
+
+.closeBtn {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* ── Main layout (sidebar + grid + panel) ── */
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  pointer-events: auto;
+}
+
+/* ── Left sidebar (image strip) ── */
+
+.sidebar {
+  width: 100px;
+  background: #141416;
+  border-right: 1px solid #2a2a2e;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px;
+  gap: 6px;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.sidebarLabel {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 2px;
+  user-select: none;
+}
+
+.thumbWrapper {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
+}
+
+.thumbWrapper:hover {
+  border-color: #f59e0b66;
+}
+
+.thumbWrapper:active {
+  cursor: grabbing;
+}
+
+.thumbWrapperPlaced {
+  border-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
+.thumbImg {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.thumbIndex {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ccc;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* ── Center (grid area) ── */
+
+.gridArea {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1c1c22;
+  overflow: auto;
+  padding: 32px;
+  position: relative;
+}
+
+.grid {
+  display: grid;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: gap 0.2s ease;
+}
+
+.cell {
+  position: relative;
+  background: #22222a;
+  border: 1px solid #333;
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  transition: border-color 0.15s;
+}
+
+.cell:hover {
+  border-color: #555;
+}
+
+.cellDragOver {
+  border-color: #f59e0b !important;
+  background: #f59e0b0a;
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, 0.08);
+}
+
+.cellEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #444;
+  font-size: 10px;
+  user-select: none;
+}
+
+.cellImgWrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  position: relative;
+}
+
+.cellImgWrapper:active {
+  cursor: grabbing;
+}
+
+.cellImg {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  image-rendering: auto;
+}
+
+.cellRemoveBtn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ccc;
+  font-size: 11px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  transition: all 0.1s;
+  line-height: 1;
+}
+
+.cell:hover .cellRemoveBtn {
+  display: flex;
+}
+
+.cellRemoveBtn:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.panTooltip {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  color: #999;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cellImgWrapper:active .panTooltip {
+  opacity: 1;
+}
+
+/* ── Right panel (controls) ── */
+
+.panel {
+  width: 220px;
+  background: #141416;
+  border-left: 1px solid #2a2a2e;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 20px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.panelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panelLabel {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+  user-select: none;
+}
+
+/* Aspect ratio pills */
+.pillGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pill {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 14px;
+  border: 1px solid #333;
+  background: #222228;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.pill:hover {
+  border-color: #555;
+  color: #ddd;
+}
+
+.pillActive {
+  background: #f59e0b22;
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+/* Grid size row */
+.sizeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sizeLabel {
+  font-size: 12px;
+  color: #888;
+  width: 54px;
+}
+
+.sizeBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #222228;
+  color: #ccc;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+  user-select: none;
+}
+
+.sizeBtn:hover {
+  border-color: #555;
+  background: #2a2a32;
+  color: #fff;
+}
+
+.sizeBtn:active {
+  background: #333;
+}
+
+.sizeBtnDisabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.sizeBtnDisabled:hover {
+  border-color: #333;
+  background: #222228;
+  color: #ccc;
+}
+
+.sizeValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5e5e5;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Gap slider */
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: 2px solid #1c1c22;
+}
+
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: 2px solid #1c1c22;
+}
+
+.sliderValue {
+  font-size: 11px;
+  color: #888;
+  min-width: 32px;
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Spacer pushes buttons to bottom */
+.panelSpacer {
+  flex: 1;
+}
+
+/* Action buttons */
+.resetBtn {
+  width: 100%;
+  padding: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #222228;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.resetBtn:hover {
+  border-color: #555;
+  color: #ddd;
+  background: #2a2a32;
+}
+
+.exportBtn {
+  width: 100%;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  background: #f59e0b;
+  color: #111;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  letter-spacing: 0.3px;
+}
+
+.exportBtn:hover {
+  background: #fbbf24;
+}
+
+.exportBtn:active {
+  background: #d97706;
+}
+
+.exportBtnDisabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.exportBtnDisabled:hover {
+  background: #f59e0b;
+}
+
+/* ── Responsive / small screen adjustments ── */
+
+@media (max-width: 800px) {
+  .sidebar {
+    width: 72px;
+  }
+  .panel {
+    width: 180px;
+  }
+}

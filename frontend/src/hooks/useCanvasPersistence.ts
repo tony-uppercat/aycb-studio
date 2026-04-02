@@ -1,0 +1,185 @@
+import { useEffect, useRef } from 'react'
+import type { Node, Edge, Viewport } from '@xyflow/react'
+import { useReactFlow } from '@xyflow/react'
+
+
+import { useCanvasStore } from '../stores/canvasStore'
+import { applyEdgeColor } from '../utils/edgeStyles'
+
+export interface PersistedCanvas {
+  nodes: Node[]
+  edges: Edge[]
+  viewport?: Viewport
+}
+
+/**
+ * Keys added by React Flow internals that should NOT be persisted.
+ * These are transient layout/interaction state, not user data.
+ */
+const RF_INTERNAL_KEYS = new Set([
+  'measured', 'selected', 'dragging', 'resizing', 'draggable',
+  'selectable', 'connectable', 'deletable', 'focusable',
+])
+
+/**
+ * Data keys whose values can be extremely large (e.g. embedded base64 images)
+ * and are NOT needed to reconstruct the canvas — media is stored in IndexedDB
+ * by mediaId.  Stripping these keeps serialized payloads lean.
+ */
+const LARGE_DATA_KEYS = new Set(['result', 'analysisHistory'])
+
+/**
+ * Strip non-serializable values and transient React Flow properties from nodes
+ * before saving to IndexedDB / exporting to JSON.
+ *
+ *  - File objects and blob: URLs → removed (media lives in IndexedDB via mediaId)
+ *  - React Flow internal keys (measured, selected, …) → removed
+ *  - Large embedded-data keys (result, analysisHistory) → removed
+ *  - Functions, Symbols, undefined → removed (not JSON-serializable)
+ */
+export function serializeNodes(nodes: Node[]): Node[] {
+  return nodes.map(n => {
+    // Build clean node without RF internal keys
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(n)) {
+      if (RF_INTERNAL_KEYS.has(k)) continue
+      if (k === 'data') continue // handled below
+      clean[k] = v
+    }
+
+    // Build clean data without non-serializable / oversized entries
+    const data: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(n.data as Record<string, unknown>)) {
+      if (v instanceof File) continue
+      if (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'undefined') continue
+      if (typeof v === 'string' && v.startsWith('blob:')) continue
+      if (LARGE_DATA_KEYS.has(k)) continue
+      data[k] = v
+    }
+    clean.data = data
+
+    return clean as Node
+  })
+}
+
+/**
+ * Load the default project from public/default-project.json on first visit.
+ * Restores media into IndexedDB and returns canvas data.
+ */
+export async function loadDefaultProject(): Promise<PersistedCanvas | null> {
+  try {
+    const resp = await fetch('/default-project.json')
+    if (!resp.ok) return null
+    const project = await resp.json()
+    if (project.version !== 1) return null
+
+    // Restore media into IndexedDB
+    const { saveMedia } = await import('../mediaStore')
+    for (const item of project.media ?? []) {
+      try {
+        const binary = atob(item.dataB64)
+        const buf = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i)
+        const blob = new Blob([buf], { type: item.type })
+        const file = new File([blob], item.name, { type: item.type })
+        await saveMedia(item.id, file)
+      } catch { /* skip broken entries */ }
+    }
+
+    const edges = (project.canvas.edges ?? []).map((e: Edge) => applyEdgeColor(e))
+    return {
+      nodes: project.canvas.nodes ?? [],
+      edges,
+      viewport: project.canvas.viewport,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Save canvas to IndexedDB (sole source of truth for multi-project support).
+ * Debounced at 500ms.
+ */
+export function useCanvasPersistence(nodes: Node[], edges: Edge[], activeProjectId?: string | null): void {
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { getViewport, getNodes, getEdges } = useReactFlow()
+  const setSaveStatus = useCanvasStore(s => s.setSaveStatus)
+  // Capture projectId in a ref so the debounced callback always uses the value
+  // from THIS tab's React state, never from a global key.
+  const projectIdRef = useRef(activeProjectId)
+  projectIdRef.current = activeProjectId
+
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+
+    // Mark unsaved while waiting for debounce
+    setSaveStatus('unsaved')
+
+    saveTimerRef.current = setTimeout(() => {
+      setSaveStatus('saving')
+
+      const viewport = getViewport()
+      const payload: PersistedCanvas = {
+        nodes: serializeNodes(getNodes()),
+        edges: getEdges(),
+        viewport,
+      }
+
+      // Save to IndexedDB project store (async, non-blocking)
+      // Use the ref-captured projectId (tab-local)
+      const pid = projectIdRef.current
+      if (pid) {
+        import('../stores/projectStore').then(async ({ updateProject }) => {
+          try {
+            await updateProject(pid, { canvas: payload })
+            setSaveStatus('saved')
+          } catch (err) {
+            console.warn('[AYCB] IndexedDB project save failed:', err)
+            setSaveStatus('unsaved')
+          }
+        })
+      } else {
+        setSaveStatus('unsaved')
+      }
+    }, 500)
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [nodes, edges, getViewport, getNodes, getEdges, setSaveStatus])
+}
+
+/**
+ * Load canvas from IndexedDB project store.
+ * Also runs migration from localStorage → IndexedDB on first use.
+ * Returns null if no project found (caller handles the default).
+ */
+export async function loadCanvasAsync(): Promise<PersistedCanvas | null> {
+  const { getActiveProjectId, getProject, migrateFromLocalStorage } = await import('../stores/projectStore')
+
+  // Try migration first (runs once if localStorage canvas exists)
+  let projectId = await getActiveProjectId()
+  if (!projectId) {
+    const migratedId = await migrateFromLocalStorage()
+    if (migratedId) {
+      projectId = migratedId
+    }
+  }
+
+  // Load from IndexedDB
+  if (projectId) {
+    const project = await getProject(projectId)
+    if (project?.canvas) {
+      const canvas = project.canvas
+      if (Array.isArray(canvas.edges)) {
+        canvas.edges = canvas.edges.map((e: Edge) => {
+          const migrated = e.sourceHandle === 'prompt-out' ? { ...e, sourceHandle: 'text-out' } : e
+          return applyEdgeColor(migrated)
+        })
+      }
+      return canvas
+    }
+  }
+
+  return null
+}

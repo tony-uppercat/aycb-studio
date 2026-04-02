@@ -1,0 +1,698 @@
+/* ── Console panel ── */
+.consoleWrap {
+  flex-shrink: 0;
+  background: #111113;
+  border-top: 1px solid #222225;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.resizeHandle {
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.resizeHandle:hover,
+.resizeHandle:active {
+  background: var(--accent, #f59e0b);
+}
+
+.consoleHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  border-bottom: 1px solid #222225;
+}
+
+.consoleTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #71717a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.consoleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.costBadgeHeader {
+  font-size: 10px;
+  font-weight: 600;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 16px;
+  height: 16px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.errorBadgeHeader {
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: #ef4444;
+  border-radius: 8px;
+  padding: 0 5px;
+  line-height: 14px;
+  height: 14px;
+  min-width: 14px;
+  text-align: center;
+  margin-right: 4px;
+}
+
+.consoleToggle {
+  background: none;
+  border: none;
+  color: #52525b;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.consoleToggle:hover {
+  color: #a1a1aa;
+}
+
+/* ── Tab bar (inline with header) ── */
+.tabBar {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.tabBtn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #52525b;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.1s, border-color 0.1s;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tabBtn:hover {
+  color: #a1a1aa;
+}
+
+.tabBtnActive {
+  color: #e2e8f0;
+  border-bottom: 2px solid #4fc3f7;
+}
+
+.badge {
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0 4px;
+  min-width: 14px;
+  text-align: center;
+  line-height: 14px;
+  height: 14px;
+}
+
+/* ── Split body (console left + feedback right) ── */
+.splitBody {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.consoleBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 12px 6px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #71717a;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-width: 0;
+}
+
+.consoleLine {
+  margin: 0;
+}
+
+.consoleLineSuccess {
+  margin: 0;
+  color: #22c55e;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.clickable:hover {
+  background: #1a1a1f;
+}
+
+.copied {
+  background: #0a1a0a !important;
+}
+
+.copiedLabel {
+  color: #4ade80;
+  font-size: 10px;
+}
+
+.consoleLine:hover {
+  color: #a1a1aa;
+}
+
+.consoleEmpty {
+  color: #3f3f46;
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Network tab ── */
+.netRow {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.netRow:hover {
+  background: #18181b;
+}
+
+.netTime {
+  color: #52525b;
+  flex-shrink: 0;
+  width: 72px;
+}
+
+.netMethod {
+  color: #a78bfa;
+  flex-shrink: 0;
+  width: 40px;
+}
+
+.netUrl {
+  color: #94a3b8;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.netStatus {
+  flex-shrink: 0;
+  width: 32px;
+  text-align: right;
+}
+
+.netDuration {
+  flex-shrink: 0;
+  width: 44px;
+  text-align: right;
+  color: #52525b;
+}
+
+.netGreen .netStatus { color: #4ade80; }
+.netYellow .netStatus { color: #fbbf24; }
+.netRed .netStatus { color: #f87171; }
+
+/* ── Media tab ── */
+.mediaToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+  white-space: nowrap;
+}
+
+.refreshBtn {
+  background: #1e1e22;
+  border: 1px solid #27272a;
+  color: #a1a1aa;
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  background: #27272a;
+  color: #e2e8f0;
+}
+
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mediaCount {
+  color: #52525b;
+  font-size: 10px;
+}
+
+.mediaRow {
+  display: flex;
+  gap: 8px;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  overflow: hidden;
+  align-items: baseline;
+}
+
+.mediaRow:hover {
+  background: #18181b;
+}
+
+.mediaType {
+  color: #4fc3f7;
+  flex-shrink: 0;
+  width: 36px;
+  text-transform: lowercase;
+}
+
+.mediaName {
+  color: #94a3b8;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mediaSize {
+  color: #52525b;
+  flex-shrink: 0;
+  text-align: right;
+  width: 52px;
+}
+
+.mediaId {
+  color: #3f3f46;
+  flex-shrink: 0;
+  width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Errors tab ── */
+.errorRow {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+  font-size: 10px;
+  background: #1c0a0a;
+  border-left: 2px solid #ef4444;
+  padding-left: 6px;
+  margin-bottom: 2px;
+  border-radius: 0 3px 3px 0;
+  overflow: hidden;
+}
+
+.errorRow:hover {
+  background: #220e0e;
+}
+
+.errTime {
+  color: #52525b;
+  flex-shrink: 0;
+  width: 72px;
+}
+
+.errNode {
+  color: #f87171;
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.errMsg {
+  color: #fca5a5;
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Costs tab ── */
+.costBadgeTab {
+  font-size: 9px;
+  font-weight: 600;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border-radius: 8px;
+  padding: 0 5px;
+  line-height: 14px;
+  height: 14px;
+  font-family: monospace;
+}
+
+.costRow {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  border-left: 2px solid #22c55e;
+  padding-left: 6px;
+  margin-bottom: 1px;
+  border-radius: 0 3px 3px 0;
+}
+
+.costRow:hover {
+  background: #18181b;
+}
+
+.costTime {
+  color: #52525b;
+  flex-shrink: 0;
+  width: 72px;
+}
+
+.costNode {
+  color: #94a3b8;
+  flex-shrink: 0;
+  width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.costModel {
+  color: #71717a;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.costTokens {
+  color: #52525b;
+  flex-shrink: 0;
+  width: 80px;
+  text-align: right;
+  font-family: monospace;
+}
+
+.costUsd {
+  flex-shrink: 0;
+  width: 60px;
+  text-align: right;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.costGreen .costUsd { color: #4ade80; }
+.costGreen { border-left-color: #22c55e; }
+
+.costYellow .costUsd { color: #fbbf24; }
+.costYellow { border-left-color: #f59e0b; }
+
+.costRed .costUsd { color: #f87171; }
+.costRed { border-left-color: #ef4444; }
+
+.costTotalRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 2px;
+  border-top: 1px solid #27272a;
+  margin-top: 4px;
+}
+.costTotal {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-family: monospace;
+}
+
+/* ── Split divider ── */
+.splitDivider {
+  width: 4px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: #222225;
+  transition: background 0.1s;
+}
+.splitDivider:hover,
+.splitDivider:active {
+  background: #6366f1;
+}
+
+/* ── Feedback side panel ── */
+.fbPanel {
+  flex-shrink: 0;
+  border-left: 1px solid #27272a;
+  display: flex;
+  flex-direction: column;
+  background: #0e0e10;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 10px;
+  color: #71717a;
+}
+.fbHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #222225;
+  flex-shrink: 0;
+}
+.fbTabBtn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.fbTabBtn:hover { color: var(--text-secondary); }
+.fbTabActive {
+  color: var(--amber);
+  background: rgba(212, 160, 23, 0.1);
+}
+.fbTitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.fbBadge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: #6366f1;
+  border-radius: 8px;
+  padding: 0 4px;
+  min-width: 14px;
+  text-align: center;
+  line-height: 14px;
+  height: 14px;
+}
+.fbList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 8px;
+}
+.fbRow {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 10px;
+  align-items: baseline;
+  border-left: 2px solid #6366f1;
+  padding-left: 6px;
+  margin-bottom: 1px;
+  border-radius: 0 3px 3px 0;
+}
+.fbRow:hover { background: #18181b; }
+.fbTime { color: #52525b; flex-shrink: 0; width: 64px; }
+.fbTag {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 14px;
+}
+.fbTag_bug { color: #fca5a5; background: rgba(239,68,68,0.15); }
+.fbTag_ux { color: #93c5fd; background: rgba(59,130,246,0.15); }
+.fbTag_idea { color: #86efac; background: rgba(34,197,94,0.15); }
+.fbTag_prompt { color: #d8b4fe; background: rgba(168,85,247,0.15); }
+.fbText { color: #d4d4d8; flex: 1; word-break: break-word; white-space: pre-wrap; }
+.fbNode { color: #52525b; flex-shrink: 0; font-size: 9px; }
+.fbNodeOverall { color: #6366f1; font-style: italic; }
+.fbUrgentBtn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #52525b;
+  color: #f59e0b;
+  font-size: 9px;
+  font-weight: 800;
+  width: 16px;
+  height: 16px;
+  line-height: 14px;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.fbUrgentBtn:hover { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); }
+.fbUrgentBadge {
+  flex-shrink: 0;
+  font-size: 8px;
+  font-weight: 800;
+  color: #fff;
+  background: #ef4444;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 14px;
+  letter-spacing: 0.03em;
+}
+
+.fbForm {
+  flex-shrink: 0;
+  border-top: 1px solid #222225;
+  padding: 4px 8px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fbCategories {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.fbCatBtn {
+  background: #1a1a1e;
+  border: 1px solid #27272a;
+  color: #71717a;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+.fbCatBtn:hover { border-color: #3f3f46; }
+.fbCatActive { border-color: #6366f1; color: #e2e8f0; }
+.fbExportBtn {
+  margin-left: auto;
+  background: #1a1a1e;
+  border: 1px solid #27272a;
+  color: #6366f1;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.fbExportBtn:hover { background: #27272a; }
+.fbInputRow {
+  display: flex;
+  gap: 4px;
+}
+.fbInput {
+  flex: 1;
+  background: #1a1a1e;
+  border: 1px solid #27272a;
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  outline: none;
+  font-family: inherit;
+}
+.fbInput:focus { border-color: #6366f1; }
+.fbInput::placeholder { color: #3f3f46; }
+.fbSendBtn {
+  background: #4f46e5;
+  border: none;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.fbSendBtn:hover:not(:disabled) { background: #6366f1; }
+.fbSendBtn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Feedback resolved / fixed ── */
+.fbResolved {
+  border-left: 2px solid #22c55e;
+  opacity: 0.6;
+}
+.fbResolvedText {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+.fbFixedBadge {
+  font-size: 9px;
+  font-weight: 600;
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.12);
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.fbFixedBadge:hover {
+  background: rgba(34, 197, 94, 0.25);
+}
+.fbCheckBtn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #27272a;
+  color: #52525b;
+  font-size: 11px;
+  width: 16px;
+  height: 16px;
+  line-height: 14px;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.fbCheckBtn:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}

@@ -1,0 +1,203 @@
+/* MediaInfoPanel — shared info panel styles (dark theme) */
+
+/* ── Panel container ── */
+.panel {
+  grid-area: info;
+  background: #141416;
+  border-left: 1px solid #2a2a2e;
+  overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+  animation: slideIn 0.15s ease-out;
+}
+.panel::-webkit-scrollbar { width: 5px }
+.panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px }
+
+@keyframes slideIn {
+  from { transform: translateX(20px); opacity: 0 }
+  to   { transform: translateX(0);    opacity: 1 }
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  position: sticky;
+  top: 0;
+  background: #141416;
+  z-index: 1;
+  border-bottom: 1px solid #2a2a2e;
+}
+.headerLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin: 0;
+}
+.headerClose {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.headerClose:hover { color: #ccc; background: #1e1e22 }
+
+/* ── Body ── */
+.body {
+  padding: 4px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Section ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sectionTitle {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #f59e0b;
+  text-transform: uppercase;
+  margin: 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(42, 42, 46, 0.6);
+}
+
+/* ── Definition list (grid-based) ── */
+.dl {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 3px 10px;
+  margin: 0;
+}
+.dl dt {
+  font-size: 10px;
+  color: #666;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+.dl dd {
+  font-size: 11px;
+  color: #ccc;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+/* ── Prompt ── */
+.promptWrap {
+  grid-column: 1 / -1;
+  position: relative;
+}
+.promptLabel {
+  font-size: 10px;
+  color: #666;
+  margin-bottom: 2px;
+}
+.prompt {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  line-height: 1.5;
+  max-height: 180px;
+  overflow-y: auto !important;
+  font-size: 11px;
+  color: #d4d4d8;
+  background: #1c1c20;
+  padding: 8px 10px;
+  border-radius: 5px;
+  margin-top: 2px;
+  border: 1px solid #2a2a2e;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.prompt:hover { border-color: #3a3a40 }
+
+.promptCopy {
+  position: absolute;
+  top: 26px;
+  right: 6px;
+  background: rgba(30, 30, 34, 0.9);
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #888;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.promptWrap:hover .promptCopy { opacity: 1 }
+.promptCopy:hover { color: #f59e0b; border-color: #f59e0b }
+
+/* ── "No data" placeholder ── */
+.none {
+  font-size: 11px;
+  color: #555;
+  margin: 0;
+}
+
+/* ── Review badges ── */
+.reviewBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+.reviewBadgeOk {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.reviewBadgeNo {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.reviewBadgePend {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+/* ── Favorite button ── */
+.favRow {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+.favButton {
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #888;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.favButton:hover { color: #f59e0b; border-color: #f59e0b }
+.favButtonActive {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}

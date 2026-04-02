@@ -1,0 +1,128 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  cursor: pointer;
+}
+.container {
+  position: fixed;
+  inset: 24px;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.closeBtn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  z-index: 202;
+}
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.captureMsg {
+  color: #4ade80;
+  font-size: 12px;
+}
+
+.hint {
+  position: absolute;
+  bottom: 0;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* ── Text preview ── */
+.textContainer {
+  width: 100%;
+  max-width: 720px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111113;
+  border: 1px solid #27272a;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.textToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: #18181b;
+  border-bottom: 1px solid #27272a;
+  flex-shrink: 0;
+}
+
+.textLabel {
+  color: #f59e0b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.textStats {
+  color: #52525b;
+  font-size: 11px;
+  flex: 1;
+}
+
+.textBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.textBtn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.textContent {
+  flex: 1;
+  height: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  margin: 0;
+  color: #d4d4d8;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+}

@@ -1,0 +1,31 @@
+.header {
+  background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface-1) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 24px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.title { margin: 0; font-size: 22px; font-weight: 700; color: var(--amber); letter-spacing: -0.3px; }
+.subtitle { margin: 3px 0 0; font-size: 11px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase; }
+.reviewLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.reviewLink:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--amber-glow, rgba(212, 160, 23, 0.1));
+}

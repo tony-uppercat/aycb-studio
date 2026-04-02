@@ -1,0 +1,182 @@
+:root {
+  --text: #6b6375;
+  --text-h: #08060d;
+  --bg: #fff;
+  --border: #e5e4e7;
+  --code-bg: #f4f3ec;
+  --accent: #aa3bff;
+  --accent-bg: rgba(170, 59, 255, 0.1);
+  --accent-border: rgba(170, 59, 255, 0.5);
+  --social-bg: rgba(244, 243, 236, 0.5);
+  --shadow:
+    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #9ca3af;
+    --text-h: #f3f4f6;
+    --bg: #16171d;
+    --border: #2e303a;
+    --code-bg: #1f2028;
+    --accent: #c084fc;
+    --accent-bg: rgba(192, 132, 252, 0.15);
+    --accent-border: rgba(192, 132, 252, 0.5);
+    --social-bg: rgba(47, 48, 58, 0.5);
+    --shadow:
+      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  }
+
+  #social .button-icon {
+    filter: invert(1) brightness(2);
+  }
+}
+
+#root {
+  width: 1126px;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  border-inline: 1px solid var(--border);
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -1.68px;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}
+
+/* React Flow node — suppress wrapper border/outline on custom nodes to
+   prevent "all nodes look selected" flash during drag-select.  Our NodeShell
+   component handles its own selected border via CSS Modules. */
+.react-flow__node.selected,
+.react-flow__node.selectable:focus,
+.react-flow__node.selectable:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* React Flow edge — wider hit area + hover/selected highlight */
+.react-flow__edge .react-flow__edge-interaction {
+  stroke-width: 20 !important;
+  pointer-events: stroke !important;
+}
+
+.react-flow__edge path.react-flow__edge-path {
+  transition: stroke-width 0.15s, filter 0.15s, stroke-dasharray 0.15s;
+  cursor: pointer;
+}
+
+.react-flow__edge:hover path.react-flow__edge-path {
+  stroke-width: 2 !important;
+  filter: brightness(1.8);
+}
+
+.react-flow__edge.selected path.react-flow__edge-path {
+  stroke-width: 3 !important;
+  stroke-dasharray: 6 3 !important;
+  filter: brightness(2) drop-shadow(0 0 4px currentColor) drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+}
+
+/* Edge highlight when a node is dragged near it for insertion */
+.react-flow__edge.edge-insert-highlight path.react-flow__edge-path {
+  stroke-width: 4 !important;
+  stroke-dasharray: 8 4 !important;
+  filter: brightness(2.2) drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px rgba(34, 197, 94, 0.6));
+  animation: edge-insert-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes edge-insert-pulse {
+  from { stroke-width: 3px; opacity: 0.8; }
+  to { stroke-width: 5px; opacity: 1; }
+}
+
+/* React Flow MiniMap — better contrast + interactive cursor feedback */
+.react-flow__minimap {
+  cursor: grab;
+}
+
+.react-flow__minimap:active {
+  cursor: grabbing;
+}
+
+.react-flow__minimap svg {
+  border-radius: 8px;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.7) !important;
+  stroke: #f59e0b !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__minimap-node {
+  fill: #a1a1aa !important;
+  stroke: #d4d4d8 !important;
+  rx: 3;
+  ry: 3;
+}

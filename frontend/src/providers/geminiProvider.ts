@@ -1,0 +1,240 @@
+/**
+ * Gemini provider — refactored from geminiDirect.ts into the provider abstraction.
+ * Registers gemini (image + LLM) and imagen (image) providers.
+ */
+import { GoogleGenAI } from '@google/genai'
+import type { GenerateImageResult, UsageInfo } from '../types'
+import { registerImageProvider, registerLLMProvider, type ImageProvider, type ImageGenerationOptions, type LLMProvider } from './index'
+import { MODEL_PRICING } from '../utils/costEstimate'
+
+/** Map display names to Gemini model IDs (mirrors backend MODELS + IMAGE_MODELS) */
+const MODEL_MAP: Record<string, string> = {
+  'Gemini 3.1 Pro': 'gemini-3.1-pro-preview',
+  'Gemini 3.1 Flash-Lite': 'gemini-3.1-flash-lite-preview',
+  'Gemini 3.1 Flash-Lite Thinking': 'gemini-3.1-flash-lite-preview:thinking',
+  'Gemini 3 Pro': 'gemini-3-pro-preview',
+  'Gemini 3 Flash': 'gemini-3-flash-preview',
+  'Gemini 3 Flash Thinking': 'gemini-3-flash-preview:thinking',
+  'Gemini 2.5 Flash Thinking': 'gemini-2.5-flash:thinking',
+  'Gemini 2.5 Pro Thinking': 'gemini-2.5-pro:thinking',
+  'Gemini 2.5 Flash': 'gemini-2.5-flash',
+  'Gemini 2.5 Pro': 'gemini-2.5-pro',
+  'Gemini 3.1 Flash Image': 'gemini-3.1-flash-image-preview',
+  'Gemini 3 Pro Image': 'gemini-3-pro-image-preview',
+  'Gemini 2.5 Flash Image': 'gemini-2.5-flash-image',
+  'Imagen 4': 'imagen-4.0-generate-001',
+  'Imagen 4 Ultra': 'imagen-4.0-ultra-generate-001',
+  'Imagen 4 Fast': 'imagen-4.0-fast-generate-001',
+}
+
+export function resolveModel(nameOrId: string): string {
+  return MODEL_MAP[nameOrId] ?? nameOrId
+}
+
+export async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// ── Gemini image provider (generateContent with IMAGE modality) ─────────────
+
+/** Official Google per-image pricing (at 1K default resolution) */
+const GEMINI_IMAGE_COST: Record<string, number> = {
+  'gemini-3.1-flash-image-preview': 0.067,   // $0.045@0.5K, $0.067@1K, $0.101@2K, $0.151@4K
+  'gemini-3-pro-image-preview': 0.134,        // $0.134@1K-2K, $0.240@4K
+  'gemini-2.5-flash-image': 0.039,            // max 1K only
+}
+
+/** Compute cost: fixed per-image for image gen, per-token for text/LLM */
+function computeGeminiCost(modelId: string, inputTokens: number, outputTokens: number): number {
+  // Image generation: use official fixed per-image price
+  if (GEMINI_IMAGE_COST[modelId] && outputTokens > 0) return GEMINI_IMAGE_COST[modelId]
+  // Text/LLM fallback: per-token rates
+  const rates = MODEL_PRICING[modelId] ?? [0, 0]
+  return (inputTokens / 1_000_000) * rates[0] + (outputTokens / 1_000_000) * rates[1]
+}
+
+const geminiImageProvider: ImageProvider = {
+  id: 'gemini',
+  async generateImage(prompt: string, modelNameOrId: string, apiKey: string, refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
+    const ai = new GoogleGenAI({ apiKey })
+    const modelId = resolveModel(modelNameOrId)
+
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: prompt },
+    ]
+
+    if (refs) {
+      for (const ref of refs) {
+        const b64 = await fileToBase64(ref)
+        parts.push({ inlineData: { mimeType: ref.type || 'image/png', data: b64 } })
+      }
+    }
+
+    // Build imageConfig for resolution and aspect ratio control
+    const imageConfig: Record<string, string> = {}
+    if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
+    if (options?.imageSize) imageConfig.imageSize = options.imageSize
+
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: [{ role: 'user', parts }],
+      config: {
+        responseModalities: ['IMAGE', 'TEXT'],
+        ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
+      },
+    })
+
+    // Extract usage metadata for cost tracking
+    const inputTokens = response.usageMetadata?.promptTokenCount ?? 0
+    const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0
+    const costUsd = computeGeminiCost(modelId, inputTokens, outputTokens)
+    const usage: UsageInfo | undefined = response.usageMetadata
+      ? { input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: costUsd }
+      : undefined
+
+    const candidate = response.candidates?.[0]
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData?.data) {
+          return { image_b64: part.inlineData.data, status: 'OK', usage }
+        }
+      }
+    }
+    return { image_b64: null, status: 'No image generated', usage }
+  },
+}
+
+// ── Imagen provider (generateImages API) ────────────────────────────────────
+
+const imagenImageProvider: ImageProvider = {
+  id: 'imagen',
+  async generateImage(prompt: string, modelNameOrId: string, apiKey: string, _refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
+    const ai = new GoogleGenAI({ apiKey })
+    const modelId = resolveModel(modelNameOrId)
+
+    const response = await ai.models.generateImages({
+      model: modelId,
+      prompt,
+      config: {
+        numberOfImages: 1,
+        ...(options?.aspectRatio ? { aspectRatio: options.aspectRatio } : {}),
+      },
+    })
+
+    // Imagen uses fixed per-image pricing (no token usage)
+    const IMAGEN_PRICING: Record<string, number> = {
+      'imagen-4.0-generate-001': 0.04,
+      'imagen-4.0-ultra-generate-001': 0.06,
+      'imagen-4.0-fast-generate-001': 0.02,
+    }
+    const perImageCost = IMAGEN_PRICING[modelId] ?? 0
+    const usage: UsageInfo = { input_tokens: 0, output_tokens: 0, cost_usd: perImageCost }
+
+    const img = response.generatedImages?.[0]
+    if (img?.image?.imageBytes) {
+      return { image_b64: img.image.imageBytes, status: 'OK', usage }
+    }
+    return { image_b64: null, status: 'No image generated', usage }
+  },
+}
+
+// ── Gemini LLM provider ─────────────────────────────────────────────────────
+
+const geminiLLMProvider: LLMProvider = {
+  id: 'gemini',
+  async chat(prompt: string, modelNameOrId: string, apiKey: string, mediaFiles?: File[]): Promise<{ text: string; status: string; usage?: UsageInfo }> {
+    const ai = new GoogleGenAI({ apiKey })
+    const modelId = resolveModel(modelNameOrId)
+
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: prompt },
+    ]
+
+    if (mediaFiles) {
+      for (const f of mediaFiles) {
+        const b64 = await fileToBase64(f)
+        parts.push({ inlineData: { mimeType: f.type || 'application/octet-stream', data: b64 } })
+      }
+    }
+
+    let isThinking = modelId.endsWith(':thinking')
+    const actualModelId = isThinking ? modelId.replace(':thinking', '') : modelId
+    const isGemini3 = actualModelId.startsWith('gemini-3')
+
+    // Gemini 3.1 Pro has thinking always enabled — auto-set thinking config
+    if (actualModelId === 'gemini-3.1-pro-preview') {
+      isThinking = true
+    }
+
+    // Gemini 3 uses thinkingLevel, Gemini 2.5 uses thinkingBudget
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let thinkingConfig: any = undefined
+    if (isThinking) {
+      thinkingConfig = isGemini3
+        ? { includeThoughts: true, thinkingLevel: 'HIGH' }
+        : { includeThoughts: true, thinkingBudget: -1 }
+    }
+
+    const config = thinkingConfig ? { thinkingConfig } : undefined
+    console.log(`[LLM] model=${actualModelId} thinking=${isThinking} config=`, JSON.stringify(config))
+
+    let response
+    try {
+      response = await ai.models.generateContent({
+        model: actualModelId,
+        contents: [{ role: 'user', parts }],
+        config,
+      })
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error(`[LLM] API error for model=${actualModelId} thinking=${isThinking}:`, errMsg)
+      if (isThinking) {
+        console.warn(`[LLM] Retrying ${actualModelId} without thinking config...`)
+        response = await ai.models.generateContent({
+          model: actualModelId,
+          contents: [{ role: 'user', parts }],
+        })
+      } else {
+        throw err
+      }
+    }
+
+    const allParts = response.candidates?.[0]?.content?.parts ?? []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const thoughtParts = allParts.filter((p: any) => p.thought && p.text).map((p: any) => p.text as string)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const answerParts = allParts.filter((p: any) => !p.thought && p.text).map((p: any) => p.text as string)
+
+    console.log(`[LLM] response: ${allParts.length} parts, ${thoughtParts.length} thoughts, ${answerParts.length} answers`)
+
+    const text = isThinking && thoughtParts.length > 0
+      ? `<thinking>\n${thoughtParts.join('\n')}\n</thinking>\n\n${answerParts.join('\n')}`
+      : answerParts.join('\n')
+
+    const inputTokens = response.usageMetadata?.promptTokenCount ?? 0
+    const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0
+    // Calculate cost from actual token counts (shared pricing table)
+    const rates = MODEL_PRICING[actualModelId] ?? [0, 0]
+    const costUsd = (inputTokens / 1_000_000) * rates[0] + (outputTokens / 1_000_000) * rates[1]
+
+    const usage: UsageInfo | undefined = response.usageMetadata
+      ? { input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: costUsd }
+      : undefined
+
+    return { text, status: 'OK', usage }
+  },
+}
+
+// ── Register all providers at module scope ──────────────────────────────────
+
+registerImageProvider(geminiImageProvider)
+registerImageProvider(imagenImageProvider)
+registerLLMProvider(geminiLLMProvider)

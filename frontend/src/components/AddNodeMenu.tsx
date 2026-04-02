@@ -1,0 +1,273 @@
+import { useEffect, useRef, useState } from 'react'
+import type { Node, Edge } from '@xyflow/react'
+import { NODE_CATALOG, CATEGORY_LABELS, getCompatibleNodes, type NodeCatalogEntry } from '../nodes/index'
+import { PRESETS } from './project/ProjectGallery'
+import { getUserTemplates, deleteUserTemplate, type UserTemplate } from '../presets'
+import styles from './AddNodeMenu.module.css'
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  onAdd: (entry: NodeCatalogEntry) => void
+  onAddTemplate?: (nodes: Node[], edges: Edge[]) => void
+  filter?: { slotType: string; direction: 'input' | 'output' }
+  position?: { x: number; y: number }
+}
+
+const CATEGORY_ORDER = ['input', 'media-model', 'llm', 'utility'] as const
+
+export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, position }: Props) {
+  const [query, setQuery] = useState('')
+  const [focusedIndex, setFocusedIndex] = useState(0)
+  const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  const baseCatalog = filter
+    ? getCompatibleNodes(filter.slotType, filter.direction)
+    : NODE_CATALOG
+
+  const q = query.toLowerCase()
+  const filtered = q
+    ? baseCatalog.filter(n => n.name.toLowerCase().includes(q) || n.description.toLowerCase().includes(q) || n.category.includes(q))
+    : baseCatalog
+
+  const templates = !filter && onAddTemplate
+    ? (q
+      ? PRESETS.filter(p => p.nodes.length > 0 && (p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)))
+      : PRESETS.filter(p => p.nodes.length > 0))
+    : []
+
+  const filteredUserTemplates = !filter && onAddTemplate
+    ? (q
+      ? userTemplates.filter(t => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q))
+      : userTemplates)
+    : []
+
+  // Flat list of all selectable items for keyboard navigation
+  const allItems: Array<
+    | { type: 'node'; entry: NodeCatalogEntry }
+    | { type: 'template'; preset: typeof PRESETS[0] }
+    | { type: 'userTemplate'; template: UserTemplate }
+  > = [
+    ...filtered.map(entry => ({ type: 'node' as const, entry })),
+    ...templates.map(preset => ({ type: 'template' as const, preset })),
+    ...filteredUserTemplates.map(template => ({ type: 'userTemplate' as const, template })),
+  ]
+
+  const totalItems = allItems.length
+
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuery('')
+      setFocusedIndex(0)
+      setUserTemplates(getUserTemplates())
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+  }, [open])
+
+  // Rebuild itemRefs array length without mutating during render
+  useEffect(() => {
+    itemRefs.current = new Array(totalItems).fill(null)
+  }, [totalItems])
+
+  if (!open) return null
+
+  const grouped = CATEGORY_ORDER.map(cat => ({
+    cat,
+    label: CATEGORY_LABELS[cat],
+    items: filtered.filter(n => n.category === cat),
+  })).filter(g => g.items.length > 0)
+
+  const menuClass = position ? styles.menuPositioned : styles.menu
+  const menuStyle = position ? {
+    left: Math.min(position.x, window.innerWidth - 340),
+    top: Math.min(position.y, window.innerHeight - 400),
+  } : undefined
+
+  const headerLabel = filter
+    ? `Compatible with ${filter.slotType} ${filter.direction}`
+    : 'Add Node'
+
+  function select(entry: NodeCatalogEntry) {
+    onAdd(entry)
+    onClose()
+  }
+
+  function getFlatIndexForNode(entry: NodeCatalogEntry): number {
+    return allItems.findIndex(item => item.type === 'node' && item.entry.type === entry.type)
+  }
+
+  function getFlatIndexForTemplate(presetId: string): number {
+    return allItems.findIndex(item => item.type === 'template' && item.preset.id === presetId)
+  }
+
+  function getFlatIndexForUserTemplate(templateId: string): number {
+    return allItems.findIndex(item => item.type === 'userTemplate' && item.template.id === templateId)
+  }
+
+  function scrollItemIntoView(index: number) {
+    const el = itemRefs.current[index]
+    if (el) {
+      el.scrollIntoView({ block: 'nearest' })
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      onClose()
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setFocusedIndex(prev => {
+        const next = totalItems === 0 ? 0 : (prev + 1) % totalItems
+        setTimeout(() => scrollItemIntoView(next), 0)
+        return next
+      })
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setFocusedIndex(prev => {
+        const next = totalItems === 0 ? 0 : (prev - 1 + totalItems) % totalItems
+        setTimeout(() => scrollItemIntoView(next), 0)
+        return next
+      })
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (totalItems === 0) return
+      const item = allItems[focusedIndex]
+      if (!item) return
+      if (item.type === 'node') {
+        select(item.entry)
+      } else if (item.type === 'template' && onAddTemplate) {
+        onAddTemplate(item.preset.nodes, item.preset.edges)
+        onClose()
+      } else if (item.type === 'userTemplate' && onAddTemplate) {
+        onAddTemplate(item.template.nodes, item.template.edges)
+        onClose()
+      }
+    }
+  }
+
+  // Reset focused index when query changes
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setQuery(e.target.value)
+    setFocusedIndex(0)
+  }
+
+  return (
+    <>
+      <div className={styles.overlay} onClick={onClose} />
+      <div className={menuClass} style={menuStyle}>
+        <div className={styles.searchWrap}>
+          <div className={styles.menuHeader}>{headerLabel}</div>
+          <input
+            ref={inputRef}
+            className={styles.searchInput}
+            placeholder="Search nodes..."
+            value={query}
+            onChange={handleQueryChange}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <div className={styles.list} ref={listRef}>
+          {grouped.map(g => (
+            <div key={g.cat}>
+              <div className={styles.categoryLabel}>{g.label}</div>
+              {g.items.map(entry => {
+                const flatIndex = getFlatIndexForNode(entry)
+                const isFocused = flatIndex === focusedIndex
+                return (
+                  <div
+                    key={entry.type}
+                    ref={el => { itemRefs.current[flatIndex] = el }}
+                    className={`${styles.item}${isFocused ? ' ' + styles.itemFocused : ''}`}
+                    onClick={() => select(entry)}
+                    onMouseEnter={() => setFocusedIndex(flatIndex)}
+                  >
+                    <span className={styles.itemIcon}>{entry.icon}</span>
+                    <div className={styles.itemInfo}>
+                      <div className={styles.itemName}>{entry.name}</div>
+                      <div className={styles.itemDesc}>{entry.description}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+          {templates.length > 0 && (
+            <div>
+              <div className={styles.categoryLabel}>Templates</div>
+              {templates.map(p => {
+                const flatIndex = getFlatIndexForTemplate(p.id)
+                const isFocused = flatIndex === focusedIndex
+                return (
+                  <div
+                    key={p.id}
+                    ref={el => { itemRefs.current[flatIndex] = el }}
+                    className={`${styles.item}${isFocused ? ' ' + styles.itemFocused : ''}`}
+                    onClick={() => { onAddTemplate!(p.nodes, p.edges); onClose() }}
+                    onMouseEnter={() => setFocusedIndex(flatIndex)}
+                  >
+                    <span className={styles.itemIcon}>{p.icon}</span>
+                    <div className={styles.itemInfo}>
+                      <div className={styles.itemName}>{p.name}</div>
+                      <div className={styles.itemDesc}>{p.description} · {p.nodes.length} nodes</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {filteredUserTemplates.length > 0 && (
+            <div>
+              <div className={`${styles.categoryLabel} ${styles.categoryLabelAmber}`}>My Templates</div>
+              {filteredUserTemplates.map(t => {
+                const flatIndex = getFlatIndexForUserTemplate(t.id)
+                const isFocused = flatIndex === focusedIndex
+                return (
+                  <div
+                    key={t.id}
+                    ref={el => { itemRefs.current[flatIndex] = el }}
+                    className={`${styles.item}${isFocused ? ' ' + styles.itemFocused : ''}`}
+                    onClick={() => { onAddTemplate!(t.nodes, t.edges); onClose() }}
+                    onMouseEnter={() => setFocusedIndex(flatIndex)}
+                  >
+                    <span className={styles.itemIcon}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="#f59e0b" aria-hidden="true">
+                        <path d="M8 1L9.8 6h5.2l-4.2 3.1L12.3 14 8 11.1 3.7 14l1.5-4.9L1 6h5.2z"/>
+                      </svg>
+                    </span>
+                    <div className={styles.itemInfo}>
+                      <div className={styles.itemName}>{t.name}</div>
+                      <div className={styles.itemDesc}>{t.description}</div>
+                    </div>
+                    <button
+                      className={styles.deleteBtn}
+                      title="Delete template"
+                      onClick={e => {
+                        e.stopPropagation()
+                        deleteUserTemplate(t.id)
+                        setUserTemplates(getUserTemplates())
+                      }}
+                    >×</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {filtered.length === 0 && templates.length === 0 && filteredUserTemplates.length === 0 && (
+            <div className={styles.hint}>No nodes match "{query}"</div>
+          )}
+        </div>
+        <div className={styles.hint}>↑↓ to navigate · Enter to add · Esc to close</div>
+      </div>
+    </>
+  )
+}

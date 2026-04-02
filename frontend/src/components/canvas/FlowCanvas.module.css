@@ -1,0 +1,241 @@
+.root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0c;
+}
+
+.topBar {
+  height: 48px;
+  flex-shrink: 0;
+  background: #111113;
+  border-bottom: 1px solid #222225;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 10;
+}
+
+.topLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand {
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+
+.addBtn {
+  background: #1c1c20;
+  border: 1px solid #2e2e33;
+  border-radius: 7px;
+  color: #a1a1aa;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.addBtn:hover {
+  background: #27272a;
+  color: #e5e5e5;
+  border-color: #3a3a40;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iconBtn {
+  background: #1c1c20;
+  border: 1px solid #2e2e33;
+  border-radius: 7px;
+  color: #71717a;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconBtn:hover {
+  background: #27272a;
+  color: #e5e5e5;
+  border-color: #3a3a40;
+}
+
+.iconBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+a.iconBtn {
+  text-decoration: none;
+  color: inherit;
+}
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Storage panel ── */
+.storagePanelBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 56px 16px 16px;
+}
+
+.storagePanel {
+  background: #18181b;
+  border: 1px solid #2e2e33;
+  border-radius: 10px;
+  width: 340px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.storagePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #27272a;
+}
+
+.storagePanelTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.storagePanelClose {
+  background: none;
+  border: none;
+  color: #52525b;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.storagePanelClose:hover {
+  color: #a1a1aa;
+  background: #27272a;
+}
+
+.storagePanelStats {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: #71717a;
+  border-bottom: 1px solid #27272a;
+}
+
+.storagePanelList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  max-height: 300px;
+}
+
+.storagePanelEmpty {
+  color: #3f3f46;
+  font-style: italic;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 14px;
+  margin: 0;
+}
+
+.storagePanelItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+  gap: 8px;
+  transition: background 0.1s;
+}
+
+.storagePanelItem:hover {
+  background: #1f1f23;
+}
+
+.storagePanelItemName {
+  font-size: 12px;
+  color: #a1a1aa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.storagePanelItemSize {
+  font-size: 11px;
+  color: #52525b;
+  flex-shrink: 0;
+}
+
+.storagePanelActions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #27272a;
+}
+
+.storagePanelBtn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #2e2e33;
+  background: #1c1c20;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.storagePanelBtn:hover:not(:disabled) {
+  background: #27272a;
+  color: #e5e5e5;
+  border-color: #3a3a40;
+}
+
+.storagePanelBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.storagePanelBtnDanger {
+  border-color: #7f1d1d;
+  color: #ef4444;
+}
+
+.storagePanelBtnDanger:hover:not(:disabled) {
+  background: #2a1215;
+  border-color: #991b1b;
+  color: #f87171;
+}

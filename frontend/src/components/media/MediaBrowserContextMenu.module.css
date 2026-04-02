@@ -1,0 +1,107 @@
+/* ── Media Browser Context Menu ── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 510;
+}
+
+.menu {
+  position: fixed;
+  z-index: 511;
+  background: #1a1a22;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  min-width: 200px;
+  max-width: 260px;
+  animation: mbCtxFadeIn 0.1s ease-out;
+}
+
+@keyframes mbCtxFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #ddd;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.item:hover {
+  background: #2a2a35;
+}
+
+.item:active {
+  background: #333340;
+}
+
+.itemDisabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.itemHighlight:hover {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.icon {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shortcut {
+  font-size: 10px;
+  color: #555;
+  font-family: monospace;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.separator {
+  height: 1px;
+  background: #2a2a2f;
+  margin: 3px 8px;
+}
+
+.header {
+  font-size: 10px;
+  color: #666;
+  padding: 4px 10px 5px;
+  border-bottom: 1px solid #2a2a2f;
+  margin-bottom: 2px;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.copied {
+  color: #22c55e;
+}

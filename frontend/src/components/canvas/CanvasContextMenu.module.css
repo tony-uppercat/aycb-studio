@@ -1,0 +1,185 @@
+/* ── Canvas Context Menu — Restructured ── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.menu {
+  position: fixed;
+  z-index: 51;
+  background: #1a1a22;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  min-width: 220px;
+  max-width: 280px;
+  animation: ctxFadeIn 0.1s ease-out;
+}
+
+@keyframes ctxFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+  font-size: 10px;
+  color: #666;
+  padding: 4px 10px 5px;
+  border-bottom: 1px solid #2a2a2f;
+  margin-bottom: 2px;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Menu Item ── */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #ddd;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.item:hover {
+  background: #2a2a35;
+}
+
+.item:active {
+  background: #333340;
+}
+
+.itemDisabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.itemDisabled:hover {
+  background: none;
+}
+
+.itemDanger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* ── Item parts ── */
+.icon {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shortcut {
+  font-size: 10px;
+  color: #555;
+  font-family: monospace;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-size: 10px;
+  background: #f59e0b22;
+  color: #f59e0b;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.arrow {
+  font-size: 10px;
+  color: #555;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Separator ── */
+.separator {
+  height: 1px;
+  background: #2a2a2f;
+  margin: 3px 8px;
+}
+
+/* ── Submenu container ── */
+.subItem {
+  position: relative;
+}
+
+.subMenu {
+  position: absolute;
+  left: calc(100% + 4px);
+  top: -4px;
+  background: #1a1a22;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  min-width: 200px;
+  animation: ctxFadeIn 0.08s ease-out;
+  z-index: 52;
+}
+
+/* Flip submenu left if near right edge */
+.subMenuLeft {
+  left: auto;
+  right: calc(100% + 4px);
+}
+
+/* ── Category label inside submenu ── */
+.subCatLabel {
+  font-size: 9px;
+  color: #666;
+  padding: 5px 10px 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+
+/* ── Busy state ── */
+.labelSaved {
+  color: #22c55e;
+}
+
+/* ── Inline sub-menu for node export ── */
+.inlineSubMenu {
+  border-left: 2px solid #f59e0b44;
+  margin-left: 8px;
+  padding-left: 0;
+}
+
+.inlineSubMenu .item {
+  padding-left: 8px;
+}
+
+.inlineSubMenu .item:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.inlineSubMenu .item:last-child {
+  border-radius: 0 0 6px 6px;
+}

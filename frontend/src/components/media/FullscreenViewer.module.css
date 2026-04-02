@@ -1,0 +1,262 @@
+/* FullscreenViewer — dark fullscreen overlay with collapsible info panel */
+
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: #0d0d0f;
+  animation: fadeIn 0.12s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── backdrop (click-outside to close) ── */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+/* ── main row: media + optional panel ── */
+.container {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── media area ── */
+.mediaArea {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 56px;
+  box-sizing: border-box;
+}
+
+.media {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+  user-select: none;
+}
+
+/* Video wrapper — lets scrubber sit below */
+.videoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  max-height: 100%;
+  gap: 8px;
+  width: 100%;
+}
+
+.videoWrap .media {
+  cursor: pointer;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Video scrubber ── */
+.scrubber {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 6px;
+  background: #2a2a2e;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.scrubberFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.scrubberHead {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+}
+
+/* ── Video controls ── */
+.videoControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.playBtn {
+  background: #2a2a2e;
+  border: none;
+  border-radius: 4px;
+  color: #e5e5e5;
+  cursor: pointer;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+.playBtn:hover { background: #3a3a3e; }
+
+.timeCode {
+  font-size: 12px;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── No media ── */
+.noMedia {
+  color: #555;
+  font-size: 14px;
+}
+
+/* ── Navigation arrows ── */
+.navBtn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  background: rgba(30, 30, 34, 0.85);
+  border: 1px solid #2a2a2e;
+  border-radius: 6px;
+  color: #ccc;
+  cursor: pointer;
+  padding: 10px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+  backdrop-filter: blur(4px);
+}
+
+.navBtn:hover {
+  background: rgba(50, 50, 56, 0.95);
+  color: #fff;
+}
+
+.navBtnLeft  { left: 12px; }
+.navBtnRight { right: 12px; }
+
+/* ── Counter ── */
+.counter {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #555;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ── Info panel (container for MediaInfoPanel) ── */
+.infoPanel {
+  width: 320px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ── Bottom toolbar ── */
+.toolbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid #1e1e22;
+  background: #141416;
+  flex-shrink: 0;
+}
+
+.toolBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #999;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 5px 10px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.toolBtn:hover {
+  background: #2a2a2e;
+  color: #e5e5e5;
+}
+
+.toolBtnActive {
+  background: #2a2a2e;
+  color: #f59e0b;
+  border-color: #f59e0b40;
+}
+
+/* ── Capture feedback ── */
+.captureMsg {
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Capture strip ── */
+.captureStrip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-top: 1px solid #1e1e22;
+  background: #141416;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+}
+
+.captureThumb {
+  width: 56px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.captureCount {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}

@@ -204,12 +204,6 @@ class FeedbackItem(BaseModel):
 
 
 # ── Pydantic models used by multiple routers ─────────────────────────────────
-class FavoriteToggle(BaseModel):
-    stem: str
-    status: str = "favorite"  # favorite | approved | rejected
-    user_name: str = "aycb"
-
-
 class PromptBody(BaseModel):
     text: str
 

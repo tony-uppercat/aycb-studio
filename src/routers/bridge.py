@@ -5,7 +5,6 @@ import asyncio
 import base64
 import glob as _glob
 import io
-import json as _json
 import re
 import time
 from datetime import datetime, timezone
@@ -15,10 +14,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image as PILImage
 from PIL.PngImagePlugin import PngInfo
-from pydantic import BaseModel
-
 from config.settings import settings
-from src.shared import FavoriteToggle, _log
+from src.shared import _log
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
 
@@ -100,7 +97,7 @@ def _save_to_bridge(
 
 
 def _delete_bridge_media(stem: str) -> str | None:
-    """Delete PNG + .review.json for a given stem from shared/Media/. Returns deleted path or None."""
+    """Delete PNG for a given stem from shared/Media/. Returns deleted path or None."""
     pattern = str(settings.media_dir / "**" / f"{stem}.png")
     matches = _glob.glob(pattern, recursive=True)
     if not matches:
@@ -108,21 +105,62 @@ def _delete_bridge_media(stem: str) -> str | None:
     png_path = Path(matches[0])
     deleted_path = str(png_path)
     png_path.unlink(missing_ok=True)
-    # Remove review sidecar if it exists
-    review_path = png_path.with_name(f"{stem}.review.json")
-    review_path.unlink(missing_ok=True)
     _log(f"Bridge media deleted: {deleted_path}")
     return deleted_path
 
 
-def _find_review_json(stem: str) -> dict | None:
-    """Search shared/Media/ recursively for {stem}.review.json and return parsed data, or None."""
-    pattern = str(settings.media_dir / "**" / f"{stem}.review.json")
-    matches = _glob.glob(pattern, recursive=True)
-    if not matches:
+def _get_review_from_db(stem: str) -> dict | None:
+    """Query Review Hub DB for review status by filename stem."""
+    import sqlite3
+
+    db_path = settings.db_path
+    if not db_path.exists():
         return None
-    review_path = Path(matches[0])
-    return _json.loads(review_path.read_text(encoding="utf-8"))
+    uri = db_path.as_uri() + "?mode=ro"
+    try:
+        con = sqlite3.connect(uri, uri=True)
+        con.row_factory = sqlite3.Row
+        row = con.execute(
+            "SELECT id FROM media WHERE filename LIKE ? LIMIT 1",
+            (f"{stem}%",),
+        ).fetchone()
+        if not row:
+            con.close()
+            return None
+        media_id = row["id"]
+        favs = con.execute(
+            "SELECT status, user_name FROM favorites WHERE media_id=?",
+            (media_id,),
+        ).fetchall()
+        comment_count = con.execute(
+            "SELECT COUNT(*) FROM comments WHERE media_id=?",
+            (media_id,),
+        ).fetchone()[0]
+        drawing_count = con.execute(
+            "SELECT COUNT(*) FROM drawings WHERE media_id=?",
+            (media_id,),
+        ).fetchone()[0]
+        con.close()
+
+        status = None
+        reviewed_by = None
+        favorite = False
+        for f in favs:
+            if f["status"] in ("approved", "rejected"):
+                status = f["status"]
+                reviewed_by = f["user_name"]
+            if f["status"] == "favorite":
+                favorite = True
+
+        return {
+            "status": status,
+            "reviewed_by": reviewed_by,
+            "favorite": favorite,
+            "comments_count": comment_count,
+            "drawings_count": drawing_count,
+        }
+    except Exception:
+        return None
 
 
 def _find_png_meta(stem: str) -> dict | None:
@@ -181,7 +219,7 @@ def _scan_media_list() -> list[dict]:
         ext = f.suffix.lower()
         if ext not in MEDIA_EXTENSIONS:
             continue
-        if f.name.endswith(".meta.json") or f.name.endswith(".review.json"):
+        if f.name.endswith(".meta.json"):
             continue
         stat = f.stat()
         stem = f.stem
@@ -326,7 +364,7 @@ async def bridge_media(
 
 @router.delete("/media/{stem}")
 async def delete_bridge_media(stem: str):
-    """Delete a bridged image and its sidecars from shared/Media/.
+    """Delete a bridged image from shared/Media/.
 
     stem is the filename without extension, e.g. 'generated_1774525338'.
     Searches recursively through project subdirectories.
@@ -360,63 +398,18 @@ async def get_bridge_meta(stem: str):
 
 @router.get("/review/{image_id}")
 async def get_review_status(image_id: str):
-    """Read .review.json sidecar for a generated image.
-
-    image_id is the filename stem, e.g. 'generated_1774482284911'.
-    Searches recursively through project subdirectories in shared/Media/.
-    Returns the parsed review JSON if found, or {"status": "not_reviewed"} if not.
-    """
+    """Read review status from Review Hub DB for a generated image."""
     try:
-        # Sanitise: only allow alphanumeric, underscore, hyphen
         safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", image_id)
         if not safe_id:
             return {"status": "not_reviewed"}
-        data = await asyncio.to_thread(_find_review_json, safe_id)
+        data = await asyncio.to_thread(_get_review_from_db, safe_id)
         if data is None:
             return {"status": "not_reviewed"}
         return data
     except Exception as e:
         _log(f"Review status read error: {e}")
         return {"status": "not_reviewed"}
-
-
-@router.get("/review-status")
-async def get_review_status_batch(ids: str = ""):
-    """Batch-read .review.json sidecars for multiple images.
-
-    Query param 'ids' is a comma-separated list of filename stems,
-    e.g. ?ids=generated_1774482284911,generated_1774482399022
-    Returns a dict of { stem: review_data } for each stem.
-    Missing reviews get {"status": "not_reviewed"}.
-    """
-    if not ids.strip():
-        return {}
-    stems = [s.strip() for s in ids.split(",") if s.strip()]
-    # Cap to 100 to avoid abuse
-    stems = stems[:100]
-
-    not_reviewed = {"status": "not_reviewed"}
-    result: dict[str, dict] = {}
-
-    def _read_all():
-        for stem in stems:
-            safe = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
-            if not safe:
-                result[stem] = not_reviewed
-                continue
-            data = _find_review_json(safe)
-            result[safe] = data if data is not None else not_reviewed
-
-    try:
-        await asyncio.to_thread(_read_all)
-    except Exception as e:
-        _log(f"Batch review status error: {e}")
-        # Fill remaining stems with not_reviewed
-        for stem in stems:
-            safe = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
-            if safe and safe not in result:
-                result[safe] = not_reviewed
-    return result
 
 
 @router.get("/media/list")
@@ -506,33 +499,25 @@ async def explore_stem_in_file_manager(stem: str):
 
 
 @router.post("/favorite")
-async def toggle_favorite(body: FavoriteToggle):
-    """Proxy favorite toggle to Review Hub API.
+async def toggle_favorite(body: dict):
+    """Toggle favorite/approved/rejected status via Review Hub DB."""
+    stem = body.get("stem", "")
+    status = body.get("status", "favorite")
+    user_name = body.get("user_name", "aycb")
 
-    Looks up media_id from Review Hub SQLite by stem, then calls
-    Review Hub's POST /api/favorites/toggle endpoint.
-    """
-    import httpx
-
-    media_id = await asyncio.to_thread(_lookup_media_id, body.stem)
+    media_id = await asyncio.to_thread(_lookup_media_id, stem)
     if media_id is None:
-        raise HTTPException(status_code=404, detail=f"Media not found for stem: {body.stem}")
+        raise HTTPException(status_code=404, detail=f"Media not found for stem: {stem}")
 
+    from src.review_hub.db import get_db
+    from src.review_hub.queries.favorites import toggle_favorite as db_toggle
+
+    db = await get_db()
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
-                "http://localhost:3002/api/favorites/toggle",
-                json={
-                    "media_id": media_id,
-                    "user_name": body.user_name,
-                    "status": body.status,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as e:
-        _log(f"Favorite toggle proxy error: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        result = await db_toggle(db, media_id=media_id, user_name=user_name, status=status)
+        return result or {"ok": True}
+    finally:
+        await db.close()
 
 
 @router.get("/references")

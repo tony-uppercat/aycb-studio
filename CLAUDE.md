@@ -27,7 +27,7 @@ When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 3. New backend endpoint = new file in `src/plugins/` (AYCB) or `src/review_hub/routes/` (Review Hub). Auto-discovered. Touch zero other files.
 4. All data fields: `snake_case`. API payloads, TypeScript interfaces. No camelCase for data properties.
 5. No emoji in UI. Lucide icons (16px, stroke 1.5) + plain text. Title Case for labels.
-6. `AbortController` on every frontend fetch call.
+6. `AbortController` on every frontend fetch in useEffect cleanup. Review Hub `get()` accepts signal; `post()`/`del()` do not yet.
 7. Sanitize all user text input before storage.
 8. Run tests after every change. Fix failures before reporting done.
 9. Interfaces before implementations. Check `types.ts` before creating services.
@@ -61,7 +61,7 @@ Review Hub (mounted on same backend):
   src/review_hub/db.py        SQLite (WAL mode, FK cascade)
 
 Shared data (outside repo, not in git):
-  ../../shared/Media/   ../../shared/References/   ../../shared/data/
+  ../shared/Media/   ../shared/References/   ../shared/data/
 ```
 
 ---
@@ -72,13 +72,14 @@ Shared data (outside repo, not in git):
 00_aycb_v2/
 ├── frontend/
 │   └── src/
-│       ├── nodes/                  Node components (auto-discovered)
+│       ├── nodes/                  21 node components (auto-discovered)
 │       │   ├── _shared/            NodeShell, types, shared CSS
-│       │   ├── prompt-editor/      PromptEditorNode
-│       │   ├── generate-image/     GenerateImageNode
-│       │   ├── llm/                LLMNode
-│       │   ├── json-parser/        JsonParserNode
-│       │   ├── batch/              BatchNode
+│       │   ├── prompt-editor/      generate-image/  llm/  batch/
+│       │   ├── image-upload/       image-compare/  image-analysis/
+│       │   ├── image-fx/           image-merge/  comparison/
+│       │   ├── video-analysis/     video-upload/  generate-video/
+│       │   ├── json-parser/        json-parser-blend/  metaprompt/
+│       │   ├── switch/  group/     text-combine/  result-viewer/  console/
 │       │   └── index.ts            Auto-discovery via import.meta.glob
 │       ├── review/                 Review Hub SPA (lazy-loaded at /review)
 │       │   ├── components/         Gallery, Lightbox, Drawing, Comments, etc.
@@ -182,7 +183,7 @@ Full set in `frontend/src/styles/design-tokens.css` and `frontend/src/styles/glo
 
 ## Not Yet Ported
 
-- **Remaining 12 nodes** — ImageUpload, ImageCompare, Inpainting, VideoAnalysis, VideoGenerate, ComfyUI, Switch, Collage, and others. Same pattern as existing 5.
+- **Remaining nodes** — Inpainting, ComfyUI, Collage. All other nodes (21) are ported.
 
 ---
 
@@ -192,6 +193,8 @@ Full set in `frontend/src/styles/design-tokens.css` and `frontend/src/styles/glo
 cd frontend && npx vitest run          # Frontend tests (115 tests)
 python -m pytest                        # Backend tests (98 tests)
 ```
+
+**Gap:** Review Hub frontend has zero test files (`frontend/src/review/` has no `.test.tsx`). Backend RH routes are covered by `tests/test_rh_routes.py`.
 
 ---
 
@@ -273,7 +276,8 @@ Pin-based: `ADMIN_PIN` constant in `frontend/src/review/stores/userStore.ts` and
 | Component files | PascalCase | `MediaGrid.tsx` |
 | Hook files | camelCase, `use` prefix | `useSocket.ts` |
 | Store files | camelCase, `Store` suffix | `mediaStore.ts` |
-| Test files | source name + `.test` | `MediaGrid.test.tsx` |
+| Test files (frontend) | source name + `.test` | `MediaGrid.test.tsx` |
+| Test files (backend) | `test_` prefix | `test_shared_utils.py` |
 | CSS modules | PascalCase (matching component) | `NodeShell.module.css` |
 | Directories | kebab-case | `generate-image/` |
 | Node manifest type | camelCase | `generateImage` |

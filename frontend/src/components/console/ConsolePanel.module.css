@@ -19,7 +19,7 @@
 
 .resizeHandle:hover,
 .resizeHandle:active {
-  background: var(--accent, #f59e0b);
+  background: var(--accent);
 }
 
 .consoleHeader {
@@ -500,8 +500,8 @@
 }
 .fbTabBtn:hover { color: var(--text-secondary); }
 .fbTabActive {
-  color: var(--amber);
-  background: rgba(212, 160, 23, 0.1);
+  color: var(--accent);
+  background: rgba(245, 39, 118, 0.1);
 }
 .fbTitle {
   font-size: 10px;

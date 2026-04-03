@@ -40,10 +40,10 @@
 }
 .favBtn:hover {
   opacity: 1;
-  color: var(--amber);
+  color: var(--accent);
 }
 .favBtnActive {
-  color: var(--amber);
+  color: var(--accent);
   opacity: 1;
 }
 
@@ -80,7 +80,7 @@
 }
 
 .resultArea:focus {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .error {
@@ -108,7 +108,7 @@
 }
 
 .promptInput:focus {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .label {
@@ -144,7 +144,7 @@
 }
 
 .select:focus {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .selectDeprecated {
@@ -192,14 +192,14 @@
 }
 
 .batchBtnActive {
-  background: var(--amber);
+  background: var(--accent);
   color: #000;
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .batchProgress {
   font-size: 10px;
-  color: var(--amber);
+  color: var(--accent);
   text-align: center;
   padding: 2px 0;
   font-weight: 600;
@@ -219,7 +219,7 @@
 }
 
 .selectSmall:focus {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .expandWrap {
@@ -483,7 +483,7 @@
   transition: color 0.12s;
 }
 .subtleToggle:hover { color: var(--text-dim) }
-.subtleToggleOn { color: var(--amber) }
+.subtleToggleOn { color: var(--accent) }
 
 .swapBtn {
   background: var(--surface-2);
@@ -531,7 +531,7 @@
 }
 
 .promptTextarea:focus {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .promptTextarea::placeholder {
@@ -576,7 +576,7 @@
 .effectToggleActive {
   background: var(--surface-4);
   color: var(--text-primary);
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .effectSlider {
@@ -595,7 +595,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--amber);
+  background: var(--accent);
   cursor: pointer;
 }
 
@@ -610,12 +610,12 @@
 }
 
 .effectThumb:hover {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .effectStatus {
   font-size: 9px;
-  color: var(--amber);
+  color: var(--accent);
   font-style: italic;
 }
 
@@ -647,7 +647,7 @@
 
 .historyArrow:hover:not(:disabled) {
   color: var(--text-primary);
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .historyArrow:disabled {
@@ -680,12 +680,12 @@
 
 .historyGridBtn:hover {
   color: var(--text-primary);
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .historyGridBtnActive {
-  color: var(--amber);
-  border-color: var(--amber);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .historyGrid {
@@ -721,7 +721,7 @@
 
 .historyThumbActive {
   opacity: 1;
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 /* ── Switch Node ── */
@@ -769,7 +769,7 @@
 
 .switchArrow:hover:not(:disabled) {
   color: var(--text-primary);
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .switchArrow:disabled {
@@ -877,7 +877,7 @@
 }
 
 .blendAllNone:hover {
-  color: var(--amber);
+  color: var(--accent);
 }
 
 .blendCheckbox {
@@ -892,12 +892,12 @@
 }
 
 .blendCheckbox:hover {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .blendCheckboxChecked {
-  background: var(--amber);
-  border-color: var(--amber);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .blendRowExcluded {
@@ -945,12 +945,12 @@
 
 .blendLimiterInput:focus {
   outline: none;
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .blendLimiterHint {
   font-size: 9px;
-  color: var(--amber);
+  color: var(--accent);
   opacity: 0.7;
 }
 
@@ -1382,7 +1382,7 @@
 }
 
 .batchCell:hover {
-  border-color: var(--amber);
+  border-color: var(--accent);
 }
 
 .batchCellSelected {
@@ -1449,8 +1449,8 @@
 }
 
 .batchExportBtn:hover {
-  background: var(--amber-glow);
-  border-color: var(--amber);
-  color: var(--amber);
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 

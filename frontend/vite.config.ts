@@ -11,6 +11,19 @@ export default defineConfig({
         target: 'http://localhost:5101',
         changeOrigin: true,
       },
+      '/socket.io': {
+        target: 'http://localhost:5101',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/media': {
+        target: 'http://localhost:5101',
+        changeOrigin: true,
+      },
+      '/references': {
+        target: 'http://localhost:5101',
+        changeOrigin: true,
+      },
     },
   },
   test: {

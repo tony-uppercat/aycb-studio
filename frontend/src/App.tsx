@@ -1,10 +1,22 @@
+import { lazy, Suspense } from 'react'
 import { ToastProvider } from './components/ui/Toast'
 import { SettingsProvider } from './components/SettingsContext'
 import { FlowCanvas } from './components/canvas/FlowCanvas'
 import { MediaPreviewProvider } from './components/media/MediaPreview'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 
+const ReviewApp = lazy(() => import('./review/ReviewApp'))
+
 export default function App() {
+  const isReview = window.location.pathname.startsWith('/review')
+  if (isReview) {
+    return (
+      <Suspense fallback={<div style={{ background: '#0a0a0b', color: '#a1a1aa', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Review Hub...</div>}>
+        <ReviewApp />
+      </Suspense>
+    )
+  }
+
   return (
     <ErrorBoundary
       fallback={(error, reset) => (

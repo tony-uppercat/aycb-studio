@@ -67,4 +67,5 @@ async def download_batch(body: BatchBody):
         buf,
         media_type="application/zip",
         headers={"Content-Disposition": "attachment; filename=media_batch.zip"},
+        background=lambda: buf.close(),
     )

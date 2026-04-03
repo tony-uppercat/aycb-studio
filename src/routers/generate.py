@@ -74,7 +74,7 @@ async def generate_image_endpoint(
         _log(f"Image generation — no image returned, model={model} ({dt:.1f}s)")
         return {"image_b64": None, "status": "No image generated", "usage": cost}
 
-    # Save to shared/Media/ with embedded PNG metadata + sidecar for Review Hub
+    # Save to shared/Media/ with embedded PNG metadata for Review Hub
     bridge_result = _save_to_bridge(
         pil_image=result,
         prompt=clean_prompt,

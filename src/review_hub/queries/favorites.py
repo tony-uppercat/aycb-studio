@@ -42,11 +42,3 @@ async def get_favorites(
     return _rows_to_list(await cursor.fetchall())
 
 
-async def get_status(
-    db: aiosqlite.Connection, media_id: int, user_name: str
-) -> dict | None:
-    cursor = await db.execute(
-        "SELECT * FROM favorites WHERE media_id=? AND user_name=?",
-        (media_id, user_name),
-    )
-    return _row_to_dict(await cursor.fetchone())

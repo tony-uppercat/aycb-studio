@@ -2,43 +2,14 @@
 
 from pathlib import Path
 
+from dotenv import set_key
 from fastapi import APIRouter
 
 from config.settings import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-ENV_PATH = settings.project_root / ".env"
-
-
-def _read_env() -> dict[str, str]:
-    """Parse .env into a dict."""
-    out: dict[str, str] = {}
-    if ENV_PATH.exists():
-        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            out[k.strip()] = v.strip()
-    return out
-
-
-def _write_env(data: dict[str, str]) -> None:
-    """Write dict back to .env, preserving unknown keys."""
-    lines: list[str] = []
-    if ENV_PATH.exists():
-        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                k = stripped.split("=", 1)[0].strip()
-                if k in data:
-                    lines.append(f"{k}={data.pop(k)}")
-                    continue
-            lines.append(line)
-    for k, v in data.items():
-        lines.append(f"{k}={v}")
-    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+ENV_PATH = str(settings.project_root / ".env")
 
 
 @router.get("/paths")
@@ -59,9 +30,7 @@ async def set_paths(body: dict):
         return {"error": "shared_root is required"}
     p = Path(new_path).resolve()
     settings.shared_root = p
-    env = _read_env()
-    env["AYCB_SHARED_ROOT"] = str(p)
-    _write_env(env)
+    set_key(ENV_PATH, "AYCB_SHARED_ROOT", str(p))
     return {"shared_root": str(p), "exists": p.exists()}
 
 

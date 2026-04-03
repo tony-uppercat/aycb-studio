@@ -37,8 +37,11 @@ async def save_drawing(body: DrawingBody):
             strokes_json=body.strokes_json,
             thumbnail_data=body.thumbnail_data,
         )
-        return {"id": new_id}
     finally:
         await db.close()
-        from src.review_hub.app import sio
+    from src.review_hub.app import sio
+    try:
         await sio.emit("drawing_save", {"media_id": body.media_id, "author": body.author}, room="review")
+    except Exception:
+        pass
+    return {"id": new_id}

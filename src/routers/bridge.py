@@ -268,7 +268,7 @@ async def bridge_media(
     cost_usd: str = Form("0"),
     project_name: str = Form(""),
 ):
-    """Save a browser-generated image + metadata sidecar to shared/Media/{project}/ for Review Hub."""
+    """Save a browser-generated image with embedded PNG metadata to shared/Media/{project}/."""
     try:
         if image_file and image_file.size:
             img_bytes = await image_file.read()

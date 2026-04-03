@@ -40,6 +40,8 @@ async def add_feedback(body: FeedbackBody):
         return {"id": fid}
     finally:
         await db.close()
+        from src.review_hub.app import sio
+        await sio.emit("feedback_new", {"id": fid, "category": body.category, "urgent": body.urgent}, room="review")
 
 
 @router.post("/feedback/{feedback_id}/resolve")

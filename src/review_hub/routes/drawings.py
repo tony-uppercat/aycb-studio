@@ -40,3 +40,5 @@ async def save_drawing(body: DrawingBody):
         return {"id": new_id}
     finally:
         await db.close()
+        from src.review_hub.app import sio
+        await sio.emit("drawing_save", {"media_id": body.media_id, "author": body.author}, room="review")

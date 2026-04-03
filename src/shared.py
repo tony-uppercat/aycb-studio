@@ -9,8 +9,6 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
-import cv2
-import numpy as np
 from fastapi import HTTPException, UploadFile
 from PIL import Image as PILImage
 from PIL.PngImagePlugin import PngInfo
@@ -137,6 +135,8 @@ def _estimate_cost(model_id: str, usage: dict | None) -> dict | None:
 
 def _pil_to_b64(pil: PILImage.Image, depth16: bool = True) -> str:
     """Convert PIL image to base64 PNG. If depth16=True, save as 16-bit per channel."""
+    import cv2
+    import numpy as np
     buf = io.BytesIO()
     if depth16:
         arr = np.array(pil)

@@ -4,9 +4,6 @@ from __future__ import annotations
 import asyncio
 import io
 
-import cv2
-import numpy as np
-from google.genai import types
 from PIL import Image as PILImage
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -16,8 +13,6 @@ from src.shared import (
     _pil_to_b64, _require_api_key, _classify_error,
     MAX_IMAGE_BYTES,
 )
-from src.gemini import _call_with_gemini_retries, _get_client
-
 router = APIRouter(prefix="/api/effects", tags=["effects"])
 
 
@@ -32,6 +27,7 @@ async def canny_edge_endpoint(
     raw = await _read_upload(image, MAX_IMAGE_BYTES, "Image")
     _log(f"Canny edge — threshold={threshold1}/{threshold2}, size={len(raw)/1024:.0f} KB")
     pil = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    import cv2, numpy as np
     frame = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, threshold1, threshold2)
@@ -61,6 +57,8 @@ async def depth_estimation_endpoint(
     try:
         from src.shared import _estimate_cost
 
+        from google.genai import types
+        from src.gemini import _call_with_gemini_retries, _get_client
         client = _get_client(effective_key)
         response, usage = await asyncio.to_thread(
             lambda: _call_with_gemini_retries(

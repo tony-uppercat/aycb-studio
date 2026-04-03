@@ -3,9 +3,6 @@ from __future__ import annotations
 
 import asyncio
 
-from google import genai
-from google.genai import types as genai_types
-
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.shared import (
@@ -13,7 +10,6 @@ from src.shared import (
     _require_api_key, _require_prompt, _estimate_cost, _classify_error,
     MODELS, MAX_IMAGE_BYTES,
 )
-from src.gemini import _call_with_gemini_retries
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 

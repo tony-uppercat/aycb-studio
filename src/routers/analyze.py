@@ -7,7 +7,6 @@ import tempfile
 import time
 from pathlib import Path
 
-import cv2
 from PIL import Image as PILImage
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -18,8 +17,6 @@ from src.shared import (
     _pil_to_b64, _safe_video_suffix,
     MODELS, MODEL_PRICING, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES,
 )
-from src.gemini import process_image, get_last_usage, _get_client, _call_with_gemini_retries, AnalysisResult
-from src.frames import extract_frames, extract_keyframes
 
 from config.settings import settings
 
@@ -38,7 +35,7 @@ async def analyze_image_endpoint(
 
     raw = await _read_upload(image, MAX_IMAGE_BYTES, "Image")
     pil = PILImage.open(io.BytesIO(raw)).convert("RGB")
-    import numpy as np
+    import cv2, numpy as np
     frame_bgr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
     model_id = MODELS.get(model, model)
@@ -47,6 +44,7 @@ async def analyze_image_endpoint(
 
     t0 = time.time()
     try:
+        from src.gemini import process_image, AnalysisResult
         result_tuple = await asyncio.to_thread(
             process_image, frame_bgr, source_path="upload", do_embed=do_embed, model_id=model_id,
             api_key=effective_key,
@@ -102,6 +100,7 @@ async def analyze_video_endpoint(
     t0 = time.time()
 
     try:
+        from src.frames import extract_keyframes
         frames = await asyncio.to_thread(
             extract_keyframes, tmp_path, max_keyframes, None, mode, cut_threshold
         )
@@ -132,9 +131,11 @@ async def analyze_video_endpoint(
             # Export frame as PNG to shared/Media/{folder}/{video}_f{####}.png
             frame_filename = f"{video_stem}_f{str(i).zfill(4)}.png"
             if export_dir:
+                import cv2
                 pil_export = PILImage.fromarray(cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB))
                 pil_export.save(export_dir / frame_filename, format="PNG")
 
+            from src.gemini import process_image, AnalysisResult
             result_tuple = await asyncio.to_thread(
                 process_image, frame.image, source_path=f"frame_{i+1}", do_embed=do_embed,
                 model_id=model_id, custom_prompt=prompt or None, api_key=effective_key,
@@ -144,6 +145,7 @@ async def analyze_video_endpoint(
             if frame_usage:
                 total_input_tokens += frame_usage.get('input_tokens', 0)
                 total_output_tokens += frame_usage.get('output_tokens', 0)
+            import cv2
             pil = PILImage.fromarray(cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB))
             frames_out.append({
                 "b64": _pil_to_b64(pil),

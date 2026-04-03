@@ -1,22 +1,21 @@
 # AYCB v2 — Session Report 2026-04-03 (Session 5)
 
 ## What We Did
-Audited the entire Review Hub frontend for bugs after last session's cleanup. Found 12 issues, fixed all of them.
+Built the backend test suite from scratch and caught real bugs the previous audit missed.
 
 ## What Changed
-- Lightbox was completely broken — close, navigate, approve/reject buttons did nothing (prop name mismatch from snake_case rename)
-- Every download was a 404 (wrong URL path in api.ts)
-- Sidebar directories broken: null rows, subfolders never shown, image previews wrong for subdirectory files
-- CommentThread fetch not actually cancellable on unmount
-- ConsolePanel was intercepting every fetch even when closed
-- Ping/latency display never updated (server returned ack instead of emitting event)
-- Deleted dead drawingToolStore.ts, cleaned up duplicate constants
+- 12 frontend bugs fixed from code audit (Lightbox broken, downloads 404, sidebar issues)
+- 5 more bugs caught by writing tests against the live server (FK violations, raw null responses)
+- Backend test suite: 10 → 98 tests across 14 files
+- Server restarts now clear stale sessions (fixes 8 phantom users)
+- LAN IP shown in Settings > Local tab for iPad access
+- Deprecated startup hooks replaced with lifespan
 
 ## Current State
-- Frontend: 115 tests passing
-- Backend: running, API endpoints responding
-- Review Hub: code fixes applied, needs browser smoke test
+- 213 total tests (98 backend + 115 frontend), all green, zero warnings
+- Server needs restart to pick up changes
+- Review Hub ready for browser smoke test
 
 ## Next Session
-1. Browser smoke test Review Hub at /review
-2. Test admin delete, drawing, comments, real-time
+1. Restart backend, smoke test Review Hub
+2. Test admin delete, drawing, comments in browser

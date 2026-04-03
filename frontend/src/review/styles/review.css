@@ -166,3 +166,63 @@
 .rh-reject-btn.active { color: var(--error, #ef4444); border-color: var(--error); }
 .rh-sidebar-comments h4 { font-size: 12px; color: var(--text-secondary, #a0a0a0); margin: 0 0 8px; }
 .rh-comment { font-size: 12px; color: var(--text-primary, #e8e8e8); margin-bottom: 6px; }
+
+/* Lightbox */
+.rh-lightbox-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex; align-items: center; justify-content: center;
+}
+.rh-lightbox-content {
+  position: relative; max-width: 95vw; max-height: 95vh;
+  display: flex; flex-direction: column; align-items: center;
+}
+.rh-lightbox-close {
+  position: absolute; top: -30px; right: 0;
+  background: none; border: none; color: #888; font-size: 24px; cursor: pointer;
+}
+.rh-lightbox-close:hover { color: #fff; }
+.rh-lightbox-counter {
+  position: absolute; top: -28px; left: 0;
+  font-size: 12px; color: #666;
+}
+.rh-lightbox-image-wrap {
+  position: relative; max-width: 90vw; max-height: 80vh;
+}
+.rh-lightbox-img {
+  max-width: 90vw; max-height: 80vh; object-fit: contain;
+  border-radius: 4px;
+}
+.rh-drawing-container {
+  position: absolute; inset: 0; pointer-events: auto;
+}
+.rh-drawing-container canvas {
+  position: absolute; inset: 0;
+}
+
+/* Drawing toolbar */
+.rh-drawing-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; margin-top: 8px;
+  background: var(--surface-1, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 6px;
+}
+.rh-tool-btn {
+  background: var(--surface-2, #1e1e1e); border: 1px solid var(--border, #2a2a2a);
+  border-radius: 4px; color: var(--text-secondary, #a0a0a0);
+  font-size: 11px; padding: 4px 10px; cursor: pointer;
+}
+.rh-tool-btn.active { color: var(--amber, #F52776); border-color: var(--amber, #F52776); }
+.rh-toolbar-sep { width: 1px; height: 20px; background: var(--border, #2a2a2a); }
+.rh-color-btn {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+}
+.rh-color-btn.active { border-color: #fff; }
+.rh-size-btn {
+  background: var(--surface-2, #1e1e1e); border: 1px solid var(--border, #2a2a2a);
+  border-radius: 4px; color: var(--text-dim, #666);
+  font-size: 10px; padding: 3px 6px; cursor: pointer;
+}
+.rh-size-btn.active { color: var(--amber, #F52776); border-color: var(--amber, #F52776); }

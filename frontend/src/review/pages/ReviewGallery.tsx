@@ -5,6 +5,7 @@ import { MediaGrid } from '../components/MediaGrid'
 import { FilterBar } from '../components/FilterBar'
 import { FolderManager } from '../components/FolderManager'
 import { Sidebar } from '../components/Sidebar'
+import { Lightbox } from '../components/Lightbox'
 
 interface MediaItem {
   id: number
@@ -19,6 +20,7 @@ export function ReviewGallery() {
   const [items, setItems] = useState<MediaItem[]>([])
   const [directories, setDirectories] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [lightboxId, setLightboxId] = useState<number | null>(null)
   const [directory, setDirectory] = useState('')
   const [sort, setSort] = useState('created_at')
   const [order, setOrder] = useState('DESC')
@@ -75,12 +77,24 @@ export function ReviewGallery() {
           items={items}
           selectedId={selectedId}
           onSelect={setSelectedId}
-          onDoubleClick={(id) => console.log('Open lightbox:', id)}
+          onDoubleClick={setLightboxId}
         />
         {selected && (
           <Sidebar media={selected} onClose={() => setSelectedId(null)} onRefresh={loadMedia} />
         )}
       </div>
+      {lightboxId != null && (() => {
+        const lbMedia = items.find((m) => m.id === lightboxId)
+        if (!lbMedia) return null
+        return (
+          <Lightbox
+            media={lbMedia}
+            items={items}
+            onClose={() => setLightboxId(null)}
+            onNavigate={setLightboxId}
+          />
+        )
+      })()}
     </div>
   )
 }

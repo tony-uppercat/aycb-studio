@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { rhApi } from '../services/api'
 import { useUserStore } from '../stores/userStore'
+import { CommentThread } from './CommentThread'
 
 interface MediaItem {
   id: number
@@ -8,12 +9,6 @@ interface MediaItem {
   width?: number
   height?: number
   file_size?: number
-}
-
-interface Comment {
-  id: number
-  author: string
-  content: string
 }
 
 interface Favorite {
@@ -29,13 +24,9 @@ interface Props {
 
 export function Sidebar({ media, onClose, onRefresh }: Props) {
   const { userName } = useUserStore()
-  const [comments, setComments] = useState<Comment[]>([])
   const [favorites, setFavorites] = useState<Favorite[]>([])
 
   useEffect(() => {
-    rhApi.listComments(media.id)
-      .then(d => setComments(d.comments as Comment[]))
-      .catch(() => { /* swallow */ })
     rhApi.getFavorites(media.id)
       .then(d => setFavorites(d.favorites as Favorite[]))
       .catch(() => { /* swallow */ })
@@ -87,12 +78,8 @@ export function Sidebar({ media, onClose, onRefresh }: Props) {
         </button>
       </div>
       <div className="rh-sidebar-comments">
-        <h4>Comments ({comments.length})</h4>
-        {comments.map(c => (
-          <div key={c.id} className="rh-comment">
-            <strong>{c.author}</strong>: {c.content}
-          </div>
-        ))}
+        <h4>Comments</h4>
+        <CommentThread mediaId={media.id} />
       </div>
     </div>
   )

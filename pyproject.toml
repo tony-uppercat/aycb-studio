@@ -43,6 +43,10 @@ aycb = "src.cli:app"
 where = ["."]
 include = ["src*", "config*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"

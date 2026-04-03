@@ -1,18 +1,7 @@
 """Tests for review_hub query modules."""
 import asyncio
 import pytest
-from pathlib import Path
-
-
-@pytest.fixture
-def tmp_db(tmp_path, monkeypatch):
-    import src.review_hub.db as db_mod
-    monkeypatch.setattr(db_mod, "_DB_PATH", tmp_path / "test.db")
-    return tmp_path / "test.db"
-
-
-def _run(coro):
-    return asyncio.run(coro)
+from tests.conftest import _run
 
 
 # ── 1. media insert + list ──────────────────────────────────────────
@@ -106,6 +95,25 @@ def test_toggle_and_get_favorites(tmp_db):
             favs = await get_favorites(db, mid)
             assert len(favs) == 1
             assert favs[0]["user_name"] == "carol"
+        finally:
+            await db.close()
+
+    _run(go())
+
+
+# ── 4b. toggle favorite on nonexistent media → FK error ─────────────
+def test_toggle_favorite_nonexistent_media(tmp_db):
+    import aiosqlite
+    from src.review_hub.db import init_db, get_db
+    from src.review_hub.queries.favorites import toggle_favorite
+
+    _run(init_db())
+
+    async def go():
+        db = await get_db()
+        try:
+            with pytest.raises(aiosqlite.IntegrityError):
+                await toggle_favorite(db, media_id=9999, user_name="ghost")
         finally:
             await db.close()
 

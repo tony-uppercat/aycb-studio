@@ -40,6 +40,16 @@ async def end_session(
     await db.commit()
 
 
+async def clear_stale_sessions(db: aiosqlite.Connection) -> int:
+    """Mark all active sessions as disconnected (call on server startup)."""
+    cursor = await db.execute(
+        """UPDATE sessions SET disconnected_at = datetime('now')
+           WHERE disconnected_at IS NULL"""
+    )
+    await db.commit()
+    return cursor.rowcount
+
+
 async def get_active_sessions(
     db: aiosqlite.Connection,
 ) -> list[dict]:

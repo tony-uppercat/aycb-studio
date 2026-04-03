@@ -51,6 +51,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   const [gpuLoading, setGpuLoading] = useState(false)
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null)
   const [ollamaLoading, setOllamaLoading] = useState(false)
+  const [localIp, setLocalIp] = useState('')
   const backendStatus = useCanvasStore(s => s.backendStatus)
 
   const hardRestart = useCallback(async () => {
@@ -144,11 +145,15 @@ export function SettingsPanel({ open, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  // Fetch GPU + Ollama info when Local tab is shown
+  // Fetch GPU + Ollama + LAN IP info when Local tab is shown
   useEffect(() => {
     if (open && activeTab === 'local') {
       fetchGpuInfo()
       checkOllama()
+      fetch('/api/health', { signal: AbortSignal.timeout(3000) })
+        .then(r => r.json())
+        .then(d => setLocalIp(d.local_ip ?? ''))
+        .catch(() => {})
     }
   }, [open, activeTab, fetchGpuInfo, checkOllama])
 
@@ -224,6 +229,20 @@ export function SettingsPanel({ open, onClose }: Props) {
           {/* ===== Local Tab ===== */}
           {activeTab === 'local' && (
             <>
+              {localIp && (
+                <div className={styles.field}>
+                  <label className={styles.label}>LAN Access</label>
+                  <div className={styles.infoCard}>
+                    <code style={{ fontSize: 13, userSelect: 'all' }}>
+                      http://{localIp}:5100
+                    </code>
+                    <p className={styles.hint} style={{ marginTop: 4 }}>
+                      Open this URL on iPad or other LAN devices. Review Hub at /review.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className={styles.field}>
                 <label className={styles.label}>Local Server URL</label>
                 <input
@@ -381,7 +400,7 @@ export function SettingsPanel({ open, onClose }: Props) {
                   </span>
                 </div>
                 <p className={styles.hint}>
-                  Backend server on port 3001.
+                  Backend server on port 5101.
                 </p>
               </div>
 
@@ -396,7 +415,7 @@ export function SettingsPanel({ open, onClose }: Props) {
                     {restarting ? 'Restarting...' : 'Hard Restart Backend'}
                   </button>
                   <p className={styles.hint}>
-                    Kill and respawn the Python backend process on port 3001.
+                    Kill and respawn the Python backend process on port 5101.
                   </p>
                 </div>
               )}

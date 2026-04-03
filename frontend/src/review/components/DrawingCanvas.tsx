@@ -175,7 +175,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     rhApi.getDrawing(mediaId)
       .then((data) => {
         if (cancelled) return
-        const rec = data as { strokes_json?: string } | null
+        const rec = (data as { drawing?: { strokes_json?: string } | null })?.drawing
         if (rec?.strokes_json) {
           const parsed = JSON.parse(rec.strokes_json) as Stroke[]
           if (Array.isArray(parsed)) {

@@ -1,10 +1,11 @@
 """Routes for favorites / approval status."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.review_hub.db import get_db
 from src.review_hub.queries import favorites as q
+from src.review_hub.queries import media as mq
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -19,6 +20,9 @@ class ToggleBody(BaseModel):
 async def toggle_favorite(body: ToggleBody):
     db = await get_db()
     try:
+        item = await mq.get_media(db, body.media_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Media not found")
         row = await q.toggle_favorite(
             db,
             media_id=body.media_id,

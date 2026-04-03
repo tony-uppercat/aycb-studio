@@ -1,12 +1,5 @@
 import asyncio
 import pytest
-from pathlib import Path
-
-@pytest.fixture
-def tmp_db(tmp_path, monkeypatch):
-    import src.review_hub.db as db_mod
-    monkeypatch.setattr(db_mod, "_DB_PATH", tmp_path / "test.db")
-    return tmp_path / "test.db"
 
 def test_init_db_creates_tables(tmp_db):
     from src.review_hub.db import init_db, get_db

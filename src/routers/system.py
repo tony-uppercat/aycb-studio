@@ -21,7 +21,16 @@ router = APIRouter(prefix="/api", tags=["system"])
 
 @router.get("/health")
 def health():
-    return {"status": "ok"}
+    import socket
+    local_ip = ""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+    return {"status": "ok", "local_ip": local_ip}
 
 
 @router.post("/restart")

@@ -1,0 +1,115 @@
+"""Tests for pure utility functions in src.shared."""
+import pytest
+
+
+# ── _sanitize_filename ──────────────────────────────────────────────────────
+
+def test_sanitize_filename_normal():
+    from src.shared import _sanitize_filename
+    assert _sanitize_filename("photo.png") == "photo.png"
+
+
+def test_sanitize_filename_strips_path_separators():
+    from src.shared import _sanitize_filename
+    result = _sanitize_filename('../../etc/passwd')
+    assert "/" not in result
+    assert "\\" not in result
+
+
+def test_sanitize_filename_strips_control_chars():
+    from src.shared import _sanitize_filename
+    result = _sanitize_filename("file\x00name\x1f.png")
+    assert "\x00" not in result
+    assert "\x1f" not in result
+
+
+def test_sanitize_filename_empty():
+    from src.shared import _sanitize_filename
+    assert _sanitize_filename(None) == "file"
+    assert _sanitize_filename("") == "file"
+
+
+def test_sanitize_filename_truncates_long():
+    from src.shared import _sanitize_filename
+    result = _sanitize_filename("a" * 300)
+    assert len(result) <= 200
+
+
+# ── _safe_video_suffix ──────────────────────────────────────────────────────
+
+def test_safe_video_suffix_valid():
+    from src.shared import _safe_video_suffix
+    assert _safe_video_suffix("clip.mp4") == ".mp4"
+    assert _safe_video_suffix("clip.mov") == ".mov"
+
+
+def test_safe_video_suffix_invalid():
+    from src.shared import _safe_video_suffix
+    assert _safe_video_suffix("clip.exe") == ".mp4"
+
+
+def test_safe_video_suffix_none():
+    from src.shared import _safe_video_suffix
+    assert _safe_video_suffix(None) == ".mp4"
+
+
+# ── _classify_error ─────────────────────────────────────────────────────────
+
+def test_classify_error_invalid():
+    from src.shared import _classify_error
+    code, msg = _classify_error(ValueError("Invalid parameter"))
+    assert code == 400
+
+
+def test_classify_error_auth():
+    from src.shared import _classify_error
+    code, msg = _classify_error(Exception("API key not found"))
+    assert code == 401
+
+
+def test_classify_error_rate_limit():
+    from src.shared import _classify_error
+    code, msg = _classify_error(Exception("429 RESOURCE_EXHAUSTED"))
+    assert code == 429
+
+
+def test_classify_error_generic():
+    from src.shared import _classify_error
+    code, msg = _classify_error(Exception("something broke"))
+    assert code == 500
+
+
+# ── _estimate_cost ──────────────────────────────────────────────────────────
+
+def test_estimate_cost_known_model():
+    from src.shared import _estimate_cost
+    result = _estimate_cost("gemini-2.5-flash", {"input_tokens": 1_000_000, "output_tokens": 1_000_000})
+    assert result is not None
+    assert result["cost_usd"] == pytest.approx(0.30 + 2.50, abs=0.01)
+
+
+def test_estimate_cost_unknown_model():
+    from src.shared import _estimate_cost
+    result = _estimate_cost("unknown-model", {"input_tokens": 100, "output_tokens": 100})
+    assert result is not None
+    assert result["cost_usd"] == 0
+
+
+def test_estimate_cost_none_usage():
+    from src.shared import _estimate_cost
+    assert _estimate_cost("gemini-2.5-flash", None) is None
+
+
+# ── _require_prompt ─────────────────────────────────────────────────────────
+
+def test_require_prompt_valid():
+    from src.shared import _require_prompt
+    assert _require_prompt("  hello  ") == "hello"
+
+
+def test_require_prompt_empty():
+    from src.shared import _require_prompt
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        _require_prompt("   ")
+    assert exc_info.value.status_code == 400

@@ -85,6 +85,22 @@ async def _get_users():
     finally:
         await db.close()
 
+async def rh_startup() -> None:
+    """Initialize Review Hub DB, clear stale sessions, start scanner."""
+    await init_db()
+    from src.review_hub.db import get_db
+    from src.review_hub.queries.sessions import clear_stale_sessions
+    from src.shared import _log
+    db = await get_db()
+    try:
+        cleared = await clear_stale_sessions(db)
+        if cleared:
+            _log(f"Cleared {cleared} stale session(s)")
+    finally:
+        await db.close()
+    asyncio.create_task(run_scanner())
+
+
 def mount_review_hub(app: FastAPI) -> None:
     """Mount Review Hub routes, socket.io, static files, and scanner onto FastAPI app."""
     # Routes (BEFORE static mounts to prevent path interception)
@@ -96,11 +112,7 @@ def mount_review_hub(app: FastAPI) -> None:
     sio_asgi = socketio.ASGIApp(sio)
     app.mount("/socket.io", sio_asgi)
 
-    # DB init + scanner background task on startup
-    @app.on_event("startup")
-    async def _rh_startup():
-        await init_db()
-        asyncio.create_task(run_scanner())
+    # Nothing else needed — startup logic is in rh_startup(), called from main lifespan
 
     # Static file mounts (AFTER routes)
     from config.settings import settings

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.review_hub.db import get_db
 from src.review_hub.queries import comments as q
+from src.review_hub.queries import media as mq
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -35,6 +36,9 @@ async def list_comments(media_id: int):
 async def add_comment(body: CommentBody):
     db = await get_db()
     try:
+        item = await mq.get_media(db, body.media_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Media not found")
         new_id = await q.add_comment(
             db,
             media_id=body.media_id,

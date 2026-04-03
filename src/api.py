@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -19,8 +20,25 @@ from src.shared import _log
 import importlib
 import pkgutil
 
+
+# ── Lifespan ───────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──
+    _log("AYCB backend ready")
+    if not settings.media_dir.exists():
+        try:
+            settings.media_dir.mkdir(parents=True, exist_ok=True)
+            _log(f"Created shared media dir: {settings.media_dir}")
+        except Exception as e:
+            _log(f"WARNING: shared media dir not available: {e}")
+    from src.review_hub.app import rh_startup
+    await rh_startup()
+    yield
+
+
 # ── App ─────────────────────────────────────────────────────────────────────
-app = FastAPI(title="AYCB API", version="2.0.0")
+app = FastAPI(title="AYCB API", version="2.0.0", lifespan=lifespan)
 
 # ── CORS ────────────────────────────────────────────────────────────────────
 _CORS_ORIGINS = os.environ.get("AYCB_CORS_ORIGINS", "").split(",") if os.environ.get("AYCB_CORS_ORIGINS") else [
@@ -34,17 +52,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ── Startup ─────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def _on_startup():
-    _log("AYCB backend ready")
-    if not settings.media_dir.exists():
-        try:
-            settings.media_dir.mkdir(parents=True, exist_ok=True)
-            _log(f"Created shared media dir: {settings.media_dir}")
-        except Exception as e:
-            _log(f"WARNING: shared media dir not available: {e}")
 
 # ── Request logging middleware ──────────────────────────────────────────────
 @app.middleware("http")

@@ -1,10 +1,11 @@
 """Routes for drawings / annotations overlay."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.review_hub.db import get_db
 from src.review_hub.queries import drawings as q
+from src.review_hub.queries import media as mq
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -21,7 +22,7 @@ async def get_drawing(media_id: int):
     db = await get_db()
     try:
         drawing = await q.get_drawing(db, media_id)
-        return drawing
+        return {"drawing": drawing}
     finally:
         await db.close()
 
@@ -30,6 +31,9 @@ async def get_drawing(media_id: int):
 async def save_drawing(body: DrawingBody):
     db = await get_db()
     try:
+        item = await mq.get_media(db, body.media_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Media not found")
         new_id = await q.save_drawing(
             db,
             media_id=body.media_id,

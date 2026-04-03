@@ -226,3 +226,30 @@
   font-size: 10px; padding: 3px 6px; cursor: pointer;
 }
 .rh-size-btn.active { color: var(--amber, #F52776); border-color: var(--amber, #F52776); }
+
+/* References page */
+.rh-refs { display: flex; flex-direction: column; height: 100%; }
+.rh-refs-bar { display: flex; gap: 8px; padding: 8px 0; align-items: center; flex-shrink: 0; }
+.rh-upload-btn {
+  background: var(--amber, #F52776); border: none; border-radius: 4px;
+  color: #fff; font-size: 12px; padding: 6px 16px; cursor: pointer; white-space: nowrap;
+}
+.rh-refs-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim, #666); font-size: 13px;
+}
+.rh-refs-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; padding: 8px 0; overflow-y: auto; flex: 1;
+}
+.rh-ref-card {
+  border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--border, #2a2a2a);
+  background: var(--surface-1, #1a1a1a);
+}
+.rh-ref-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.rh-ref-info { padding: 6px 8px; display: flex; align-items: center; gap: 4px; }
+.rh-ref-name { font-size: 11px; color: var(--text-secondary, #a0a0a0); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-ref-tags { font-size: 10px; color: var(--text-dim, #666); }
+.rh-ref-delete { background: none; border: none; color: var(--text-dim, #666); font-size: 14px; cursor: pointer; padding: 0 2px; }
+.rh-ref-delete:hover { color: var(--error, #ef4444); }

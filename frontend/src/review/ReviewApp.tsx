@@ -3,9 +3,9 @@ import { socket } from './services/socket'
 import { useUserStore } from './stores/userStore'
 import { useSocketStore } from './stores/socketStore'
 import { ReviewGallery } from './pages/ReviewGallery'
+import { ReferencePage } from './pages/ReferencePage'
+import { ConnectionStatus } from './components/ConnectionStatus'
 import './styles/review.css'
-
-function ReferencePage() { return <div className="rh-placeholder">References — coming in Task 12</div> }
 
 export default function ReviewApp() {
   const { userName, setUserName } = useUserStore()
@@ -57,7 +57,7 @@ export default function ReviewApp() {
           <a href="/review/references" className={`rh-nav-link ${isReferences ? 'rh-nav-active' : ''}`}>References</a>
         </div>
         <div className="rh-nav-right">
-          <span className={`rh-status-dot ${connected ? 'rh-connected' : 'rh-disconnected'}`} />
+          <ConnectionStatus connected={connected} />
           <span className="rh-user-count">{userCount}</span>
           <input
             className="rh-username-input"

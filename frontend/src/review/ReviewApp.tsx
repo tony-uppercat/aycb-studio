@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { socket } from './services/socket'
 import { useUserStore } from './stores/userStore'
+import { useSocketStore } from './stores/socketStore'
+import { ReviewGallery } from './pages/ReviewGallery'
 import './styles/review.css'
 
-// Lazy-load pages (they'll be created in later tasks)
-// For now, render placeholder divs
-function ReviewGallery() { return <div className="rh-placeholder">Gallery — coming in Task 9</div> }
 function ReferencePage() { return <div className="rh-placeholder">References — coming in Task 12</div> }
 
 export default function ReviewApp() {
@@ -22,6 +21,7 @@ export default function ReviewApp() {
     })
     socket.on('disconnect', () => setConnected(false))
     socket.on('users_update', (users: unknown[]) => setUserCount(users.length))
+    socket.on('media_update', () => useSocketStore.getState().bumpMediaVersion())
     socket.connect()
 
     return () => {
@@ -29,6 +29,7 @@ export default function ReviewApp() {
       socket.off('connect')
       socket.off('disconnect')
       socket.off('users_update')
+      socket.off('media_update')
       socket.disconnect()
     }
   }, [userName])

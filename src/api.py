@@ -76,6 +76,10 @@ def _discover_routers(package_path: str, package_name: str) -> None:
 _discover_routers("routers", "src.routers")
 _discover_routers("plugins", "src.plugins")
 
+# ── Review Hub ─────────────────────────────────────────────────────────
+from src.review_hub.app import mount_review_hub
+mount_review_hub(app)
+
 # ── Static files (production) ──────────────────────────────────────────────
 _FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 

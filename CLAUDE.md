@@ -212,6 +212,22 @@ Single source of truth: `config/settings.py` → `settings.shared_root`. All bac
 
 ---
 
+## Data Sources of Truth
+
+| Data | Source | Access |
+|---|---|---|
+| Generation metadata (prompt, model, cost) | PNG tEXt chunks | `_find_png_meta()` in bridge.py |
+| Review status (approved/rejected/favorite) | Review Hub SQLite DB | `queries/favorites.py` |
+| Comments, drawings | Review Hub SQLite DB | `queries/comments.py`, `queries/drawings.py` |
+
+**No sidecar files.** All review data lives in the DB. No `.review.json` files.
+
+## Admin Auth (Review Hub)
+
+Pin-based: `ADMIN_PIN` constant in `frontend/src/review/stores/userStore.ts` and `src/review_hub/routes/media.py`. Frontend sends `X-Admin-Pin` header on delete requests. Backend verifies.
+
+---
+
 ## Git
 
 - Work on `dev` branch. Never commit directly to `main`.

@@ -13,6 +13,8 @@ from src.review_hub.queries import media as q
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
+ADMIN_PIN = "1312"
+
 
 class BulkDeleteBody(BaseModel):
     ids: list[int]
@@ -110,12 +112,25 @@ async def get_media(media_id: int):
 
 
 @router.delete("/media/{media_id}")
-async def delete_media(media_id: int):
+async def delete_media(
+    media_id: int,
+    x_admin_pin: str | None = Header(default=None),
+):
+    """Delete a media item. Requires X-Admin-Pin header."""
+    if x_admin_pin != ADMIN_PIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     db = await get_db()
     try:
         item = await q.get_media(db, media_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Media not found")
+
+        # Remove source file from disk
+        if item.get("filepath"):
+            source = Path(item["filepath"])
+            if source.is_file():
+                source.unlink()
 
         # Remove thumbnail file if it exists
         if item.get("thumbnail_path"):
@@ -132,10 +147,10 @@ async def delete_media(media_id: int):
 @router.post("/media/bulk-delete")
 async def bulk_delete_media(
     body: BulkDeleteBody,
-    x_username: str | None = Header(default=None),
+    x_admin_pin: str | None = Header(default=None),
 ):
-    """Delete multiple media items. Requires X-Username: admin header."""
-    if x_username != "admin":
+    """Delete multiple media items. Requires X-Admin-Pin header."""
+    if x_admin_pin != ADMIN_PIN:
         raise HTTPException(status_code=403, detail="Admin access required")
 
     db = await get_db()
@@ -145,6 +160,11 @@ async def bulk_delete_media(
             item = await q.get_media(db, mid)
             if item is None:
                 continue
+            # Remove source file from disk
+            if item.get("filepath"):
+                source = Path(item["filepath"])
+                if source.is_file():
+                    source.unlink()
             if item.get("thumbnail_path"):
                 thumb = Path(item["thumbnail_path"])
                 if thumb.is_file():

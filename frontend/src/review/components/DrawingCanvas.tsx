@@ -33,7 +33,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     strokes, remote_strokes, remote_cursors, drawing_visible,
     addStroke, undo, redo,
   } = useDrawingStore()
-  const userName = useUserStore((s) => s.userName) || 'Anonymous'
+  const user_name = useUserStore((s) => s.user_name) || 'Anonymous'
 
   const w = imageWidth || 1920
   const h = imageHeight || 1080
@@ -117,7 +117,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     const pos = getPos(e)
     const now = performance.now()
     if (now - lastEmitRef.current > THROTTLE_MS) {
-      emitEvent('cursor_move', { x: pos.x, y: pos.y, user_id: userName })
+      emitEvent('cursor_move', { x: pos.x, y: pos.y, user_id: user_name })
       lastEmitRef.current = now
     }
     if (!downRef.current) return
@@ -138,7 +138,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     if (!rafRef.current) {
       rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; redrawLocal() })
     }
-  }, [getPos, current_tool, userName, redrawLocal])
+  }, [getPos, current_tool, user_name, redrawLocal])
 
   const onUp = useCallback((e: React.PointerEvent) => {
     if (!downRef.current) return
@@ -148,7 +148,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     if ((current_tool === 'line' || current_tool === 'arrow') && lineStartRef.current && lineEndRef.current) {
       const stroke: Stroke = {
         id: makeId(), tool: current_tool, color, stroke_width, opacity,
-        points: [lineStartRef.current, lineEndRef.current], author: userName,
+        points: [lineStartRef.current, lineEndRef.current], author: user_name,
       }
       addStroke(stroke)
       emitEvent('drawing_stroke', stroke)
@@ -160,13 +160,13 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     if (pathRef.current.length >= 2) {
       const stroke: Stroke = {
         id: makeId(), tool: current_tool, color, stroke_width, opacity,
-        points: pathRef.current, author: userName,
+        points: pathRef.current, author: user_name,
       }
       addStroke(stroke)
       emitEvent('drawing_stroke', stroke)
     }
     pathRef.current = []
-  }, [current_tool, color, stroke_width, opacity, userName, addStroke])
+  }, [current_tool, color, stroke_width, opacity, user_name, addStroke])
 
   // -- Load existing drawings on mount ----------------------------------------
   useEffect(() => {
@@ -193,7 +193,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     win.__drawingCanvasSave = async () => {
       const all = useDrawingStore.getState().strokes
       await rhApi.saveDrawing({
-        media_id: mediaId, author: userName, strokes_json: JSON.stringify(all),
+        media_id: mediaId, author: user_name, strokes_json: JSON.stringify(all),
       })
     }
     win.__drawingCanvasExportOverlay = () => {
@@ -235,7 +235,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
       delete win.__drawingCanvasExportOverlay
       delete win.__drawingCanvasExportMerged
     }
-  }, [mediaId, userName, w, h])
+  }, [mediaId, user_name, w, h])
 
   // -- Cleanup raf on unmount -------------------------------------------------
   useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
@@ -258,7 +258,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
         style={{ touchAction: 'none' }}
       />
       {Object.entries(remote_cursors).map(([uid, pos]) => {
-        if (uid === userName) return null
+        if (uid === user_name) return null
         const c = localRef.current
         const rect = c?.getBoundingClientRect()
         const sx = rect ? rect.width / w : 1

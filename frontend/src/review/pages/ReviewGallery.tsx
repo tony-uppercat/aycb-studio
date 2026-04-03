@@ -44,8 +44,8 @@ export function ReviewGallery() {
   const [refTag, setRefTag] = useState('')
 
   const bumpMedia = useSocketStore(s => s.bumpMediaVersion)
-  const isAdmin = useUserStore(s => s.isAdmin())
-  const userName = useUserStore(s => s.userName)
+  const is_admin = useUserStore(s => s.is_admin)
+  const user_name = useUserStore(s => s.user_name)
 
   const { mediaList, directories, subfolders, loadMedia, loadDirs } = useGalleryData(activeDirectory)
   const { filteredMedia, stats } = useFilteredMedia(mediaList, activeFilter, sortBy, search)
@@ -115,7 +115,7 @@ export function ReviewGallery() {
     return [
       { label: 'Open in Lightbox', on_click: () => setLightboxIndex(filteredMedia.findIndex(x => x.id === mid)) },
       { label: 'Move', on_click: () => setMoveTarget([mid]) },
-      ...(isAdmin ? [{ label: 'Delete', danger: true, on_click: () => setDeleteConfirm({ id: mid, filename: m?.filename }) }] : []),
+      ...(is_admin ? [{ label: 'Delete', danger: true, on_click: () => setDeleteConfirm({ id: mid, filename: m?.filename }) }] : []),
     ]
   }
 
@@ -127,11 +127,11 @@ export function ReviewGallery() {
   const handleSelectAll = () => setSelectedIds(new Set(filteredMedia.map(m => m.id)))
 
   const handleBulkApprove = async () => {
-    for (const id of selectedIds) await rhApi.toggleFavorite({ media_id: id, user_name: userName, status: 'approved' })
+    for (const id of selectedIds) await rhApi.toggleFavorite({ media_id: id, user_name: user_name, status: 'approved' })
     toast.success(`${selectedIds.size} items approved`); handleClearSelection(); bumpMedia()
   }
   const handleBulkReject = async () => {
-    for (const id of selectedIds) await rhApi.toggleFavorite({ media_id: id, user_name: userName, status: 'rejected' })
+    for (const id of selectedIds) await rhApi.toggleFavorite({ media_id: id, user_name: user_name, status: 'rejected' })
     toast.success(`${selectedIds.size} items rejected`); handleClearSelection(); bumpMedia()
   }
   const handleBulkDownload = () => { for (const id of selectedIds) window.open(rhApi.downloadUrl(id), '_blank') }
@@ -143,14 +143,14 @@ export function ReviewGallery() {
     if (!deleteConfirm) return
     try {
       if (deleteConfirm.ids) {
-        await rhApi.bulkDeleteMedia(deleteConfirm.ids, userName)
+        await rhApi.bulkDeleteMedia(deleteConfirm.ids)
         toast.success(`${deleteConfirm.ids.length} items deleted`)
       } else if (deleteConfirm.id != null) {
         await rhApi.deleteMedia(deleteConfirm.id)
         toast.success('Item deleted')
       }
       handleClearSelection(); bumpMedia()
-    } catch { toast.error('Delete failed') }
+    } catch (e) { toast.error(`Delete failed: ${e instanceof Error ? e.message : e}`) }
     setDeleteConfirm(null)
   }
 
@@ -198,7 +198,7 @@ export function ReviewGallery() {
           <FilterBar search={search} active_filter={activeFilter} sort_by={sortBy}
             on_search_change={setSearch} on_filter_change={setActiveFilter} on_sort_change={setSortBy} />
           {selectedIds.size > 0 && (
-            <BulkBar selected_count={selectedIds.size} total_count={filteredMedia.length} is_admin={isAdmin}
+            <BulkBar selected_count={selectedIds.size} total_count={filteredMedia.length} is_admin={is_admin}
               on_select_all={handleSelectAll} on_clear={handleClearSelection}
               on_approve={handleBulkApprove} on_reject={handleBulkReject}
               on_download={handleBulkDownload} on_delete={handleBulkDelete} on_move={handleBulkMove} />
@@ -208,7 +208,7 @@ export function ReviewGallery() {
             <MediaGrid items={filteredMedia} selectedId={selectedMediaId}
               onSelect={setSelectedMediaId}
               onDoubleClick={(id) => setLightboxIndex(filteredMedia.findIndex(m => m.id === id))}
-              selected_ids={selectedIds} show_checkboxes={selectedIds.size > 0} is_admin={isAdmin}
+              selected_ids={selectedIds} show_checkboxes={selectedIds.size > 0} is_admin={is_admin}
               on_card_select={handleSelect} on_context_menu={handleContextMenu}
               on_delete={handleSingleDelete} />
           </div>

@@ -1,3 +1,5 @@
+import { ADMIN_PIN } from '../stores/userStore'
+
 const BASE = '/api/rh'
 
 async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
@@ -26,7 +28,11 @@ async function del(path: string): Promise<void> {
 export const rhApi = {
   listMedia: (params?: { directory?: string; sort?: string; order?: string }) =>
     get<{ items: unknown[]; total: number }>('/media', params as Record<string, string>),
-  deleteMedia: (id: number) => del(`/media/${id}`),
+  deleteMedia: (id: number) =>
+    fetch(BASE + `/media/${id}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Pin': ADMIN_PIN },
+    }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
   getDirectories: () => get<{ directories: string[] }>('/media/directories'),
   listComments: (mediaId: number) => get<{ comments: unknown[] }>(`/comments/${mediaId}`),
   addComment: (body: { media_id: number; author: string; content: string; x_position?: number; y_position?: number; annotation_type?: string; parent_id?: number }) =>
@@ -53,10 +59,10 @@ export const rhApi = {
     post<unknown>('/folders/move', body),
 
   // Admin
-  bulkDeleteMedia: (ids: number[], username: string) =>
+  bulkDeleteMedia: (ids: number[]) =>
     fetch(BASE + '/media/bulk-delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Username': username },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': ADMIN_PIN },
       body: JSON.stringify({ ids }),
     }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
 

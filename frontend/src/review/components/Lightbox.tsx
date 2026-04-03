@@ -28,7 +28,7 @@ interface LightboxProps {
 }
 
 export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: LightboxProps) {
-  const { userName, isAdmin } = useUserStore()
+  const { user_name, is_admin } = useUserStore()
   const { is_drawing_mode, toggleDrawingMode, resetForMedia } = useDrawingStore()
   const [show_comments, set_show_comments] = useState(false)
 
@@ -44,26 +44,16 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
     if (current_index < items.length - 1) on_navigate(items[current_index + 1].id)
   }, [current_index, items, on_navigate])
 
-  const handle_toggle_fav = useCallback(async () => {
+  const handle_status = useCallback(async (status?: string) => {
     try {
-      await rhApi.toggleFavorite({ media_id: media.id, user_name: userName || 'anonymous' })
+      await rhApi.toggleFavorite({ media_id: media.id, user_name: user_name || 'anonymous', status })
       on_refresh()
-    } catch { toast.error('Failed to update favorite') }
-  }, [media.id, userName, on_refresh])
+    } catch (e) { toast.error(`Status update failed: ${e instanceof Error ? e.message : e}`) }
+  }, [media.id, user_name, on_refresh])
 
-  const handle_approve = useCallback(async () => {
-    try {
-      await rhApi.toggleFavorite({ media_id: media.id, user_name: userName || 'anonymous', status: 'approved' })
-      on_refresh()
-    } catch { toast.error('Failed to approve') }
-  }, [media.id, userName, on_refresh])
-
-  const handle_reject = useCallback(async () => {
-    try {
-      await rhApi.toggleFavorite({ media_id: media.id, user_name: userName || 'anonymous', status: 'rejected' })
-      on_refresh()
-    } catch { toast.error('Failed to reject') }
-  }, [media.id, userName, on_refresh])
+  const handle_toggle_fav = useCallback(() => handle_status(), [handle_status])
+  const handle_approve = useCallback(() => handle_status('approved'), [handle_status])
+  const handle_reject = useCallback(() => handle_status('rejected'), [handle_status])
 
   const handle_download = useCallback(() => {
     window.open(rhApi.downloadUrl(media.id))
@@ -75,7 +65,7 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
       on_refresh()
       on_close()
       toast.success('Deleted')
-    } catch { toast.error('Failed to delete') }
+    } catch (e) { toast.error(`Delete failed: ${e instanceof Error ? e.message : e}`) }
   }, [media.id, on_refresh, on_close])
 
   const handle_keydown = useCallback(
@@ -116,7 +106,7 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
           media={media}
           show_comments={show_comments}
           is_drawing={is_drawing_mode}
-          is_admin={isAdmin()}
+          is_admin={is_admin}
           on_toggle_fav={handle_toggle_fav}
           on_approve={handle_approve}
           on_reject={handle_reject}

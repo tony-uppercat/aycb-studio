@@ -13,7 +13,7 @@ import './styles/review.css'
 const STORAGE_KEY = 'aycb_review_user'
 
 export default function ReviewApp() {
-  const { userName, setUserName, getInitials } = useUserStore()
+  const { user_name, set_user_name, get_initials } = useUserStore()
   const [console_open, setConsoleOpen] = useState(false)
   const [show_name_modal, setShowNameModal] = useState(false)
 
@@ -33,7 +33,7 @@ export default function ReviewApp() {
       setReconnecting(false)
       socket.emit('join_room', {
         room: 'review',
-        user: userName,
+        user: user_name,
         device: navigator.userAgent.includes('iPad') ? 'iPad' : 'desktop',
       })
     }
@@ -80,7 +80,7 @@ export default function ReviewApp() {
       socket.off('feedback_new', on_feedback_new)
       socket.disconnect()
     }
-  }, [userName])
+  }, [user_name])
 
   // Backtick shortcut to toggle console
   useEffect(() => {
@@ -108,13 +108,13 @@ export default function ReviewApp() {
   }, [])
 
   const handle_confirm_name = (name: string) => {
-    setUserName(name)
+    set_user_name(name)
     setShowNameModal(false)
   }
 
   const toggle_console = () => setConsoleOpen(v => !v)
 
-  const initials = getInitials()
+  const initials = get_initials()
 
   return (
     <div className="rh-app">
@@ -138,7 +138,7 @@ export default function ReviewApp() {
             title="Change name"
           >
             <span className="rh-user-avatar">{initials}</span>
-            <span className="rh-user-name">{userName || 'Guest'}</span>
+            <span className="rh-user-name">{user_name || 'Guest'}</span>
           </button>
         </div>
       </nav>
@@ -148,7 +148,7 @@ export default function ReviewApp() {
       <ConsolePanel is_open={console_open} on_close={toggle_console} />
       <ToastContainer />
       {show_name_modal && (
-        <NameModal initial_name={userName} on_confirm={handle_confirm_name} />
+        <NameModal initial_name={user_name} on_confirm={handle_confirm_name} />
       )}
     </div>
   )

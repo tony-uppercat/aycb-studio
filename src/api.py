@@ -58,10 +58,11 @@ async def log_requests(request, call_next):
     return response
 
 # ── Auto-discover routers ──────────────────────────────────────────────────
-def _discover_routers(package_path: str, package_name: str) -> None:
+def _discover_routers(package_path: str, package_name: str) -> list[str]:
+    loaded: list[str] = []
     pkg_dir = Path(__file__).resolve().parent / package_path
     if not pkg_dir.exists():
-        return
+        return loaded
     for _, name, _ in pkgutil.iter_modules([str(pkg_dir)]):
         if name.startswith("_"):
             continue
@@ -69,12 +70,15 @@ def _discover_routers(package_path: str, package_name: str) -> None:
             mod = importlib.import_module(f"{package_name}.{name}")
             if hasattr(mod, "router"):
                 app.include_router(mod.router)
-                _log(f"Router loaded: {name}")
+                loaded.append(name)
         except Exception as e:
             _log(f"Router {name} failed to load: {e}")
+    return loaded
 
-_discover_routers("routers", "src.routers")
-_discover_routers("plugins", "src.plugins")
+_loaded = _discover_routers("routers", "src.routers")
+_loaded += _discover_routers("plugins", "src.plugins")
+if _loaded:
+    _log(f"{len(_loaded)} routers loaded")
 
 # ── Review Hub ─────────────────────────────────────────────────────────
 from src.review_hub.app import mount_review_hub

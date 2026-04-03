@@ -1740,6 +1740,18 @@
 }
 .rh-name-modal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .rh-name-modal-btn:not(:disabled):hover { opacity: 0.88; }
+.rh-name-modal-btn-secondary {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border, #27272a);
+  background: transparent;
+  color: var(--color-text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.rh-name-modal-btn-secondary:hover { border-color: var(--color-text-secondary, #a1a1aa); }
+.rh-name-modal-input--error { border-color: var(--color-error, #ef4444) !important; }
 
 /* ============================================================
    ConnectionStatus

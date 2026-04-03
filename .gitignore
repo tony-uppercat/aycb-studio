@@ -10,3 +10,4 @@ shared/References/
 *.egg-info/
 _reload_trigger.py
 _restart.bat
+feedback/

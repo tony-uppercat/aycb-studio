@@ -66,7 +66,7 @@ function sanitize(text: string): string {
 // ---------------------------------------------------------------------------
 
 export function CommentThread({ mediaId, position }: CommentThreadProps) {
-  const { userName, getInitials } = useUserStore()
+  const { user_name, get_initials } = useUserStore()
   const [comments, setComments] = useState<Comment[]>([])
   const [text, setText] = useState('')
   const [replyTo, setReplyTo] = useState<number | null>(null)
@@ -113,19 +113,19 @@ export function CommentThread({ mediaId, position }: CommentThreadProps) {
   // -------------------------------------------------------------------------
   const handleSubmit = useCallback(async () => {
     const trimmed = sanitize(text.trim())
-    if (!trimmed || submitting || !userName) return
+    if (!trimmed || submitting || !user_name) return
     setSubmitting(true)
     try {
       const created = await rhApi.addComment({
         media_id: mediaId,
-        author: userName,
+        author: user_name,
         content: trimmed,
         parent_id: replyTo ?? undefined,
         x_position: position?.x,
         y_position: position?.y,
       })
       setComments(prev => prev.find(c => c.id === created.id) ? prev : [...prev, {
-        id: created.id, media_id: mediaId, author: userName, content: trimmed,
+        id: created.id, media_id: mediaId, author: user_name, content: trimmed,
         parent_id: replyTo, x_position: position?.x ?? null, y_position: position?.y ?? null,
         created_at: new Date().toISOString(),
       }])
@@ -136,7 +136,7 @@ export function CommentThread({ mediaId, position }: CommentThreadProps) {
     } finally {
       setSubmitting(false)
     }
-  }, [text, submitting, userName, mediaId, replyTo, position])
+  }, [text, submitting, user_name, mediaId, replyTo, position])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
@@ -159,7 +159,7 @@ export function CommentThread({ mediaId, position }: CommentThreadProps) {
   // -------------------------------------------------------------------------
   function renderComment(c: CommentNode, isReply = false) {
     const initial = (c.author || '?').charAt(0).toUpperCase()
-    const isOwn = c.author === userName
+    const isOwn = c.author === user_name
     return (
       <div key={c.id} className={`rh-comment-item${isReply ? ' rh-comment-reply' : ''}`}>
         <div className="rh-comment-avatar">{initial}</div>
@@ -210,17 +210,17 @@ export function CommentThread({ mediaId, position }: CommentThreadProps) {
         <div className="rh-comment-input-row">
           <textarea
             className="rh-comment-input"
-            placeholder={userName ? 'Add a comment...' : 'Set your name to comment'}
+            placeholder={user_name ? 'Add a comment...' : 'Set your name to comment'}
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            disabled={!userName}
+            disabled={!user_name}
           />
           <button
             className="rh-comment-send"
             onClick={handleSubmit}
-            disabled={!text.trim() || submitting || !userName}
+            disabled={!text.trim() || submitting || !user_name}
           >
             {submitting ? '...' : 'Send'}
           </button>

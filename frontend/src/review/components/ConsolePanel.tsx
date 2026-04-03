@@ -63,7 +63,7 @@ export function ConsolePanel({ is_open, on_close }: ConsolePanelProps) {
 
   // Network fetch patch
   useEffect(() => {
-    orig_fetch.current = window.fetch
+    orig_fetch.current = window.fetch.bind(window)
     const patched: typeof fetch = async (input, init) => {
       const start = Date.now()
       const method = (init?.method || 'GET').toUpperCase()

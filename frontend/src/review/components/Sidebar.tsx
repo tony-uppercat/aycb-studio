@@ -24,7 +24,7 @@ interface Props {
 }
 
 export function Sidebar({ media, onClose, onRefresh }: Props) {
-  const { userName } = useUserStore()
+  const { user_name } = useUserStore()
   const [favorites, setFavorites] = useState<Favorite[]>([])
 
   useEffect(() => {
@@ -34,14 +34,14 @@ export function Sidebar({ media, onClose, onRefresh }: Props) {
   }, [media.id])
 
   const toggleFav = async (status: string) => {
-    if (!userName) return
-    await rhApi.toggleFavorite({ media_id: media.id, user_name: userName, status })
+    if (!user_name) return
+    await rhApi.toggleFavorite({ media_id: media.id, user_name: user_name, status })
     const d = await rhApi.getFavorites(media.id)
     setFavorites(d.favorites as Favorite[])
     onRefresh()
   }
 
-  const myFav = favorites.find(f => f.user_name === userName)
+  const myFav = favorites.find(f => f.user_name === user_name)
 
   return (
     <div className="rh-sidebar">

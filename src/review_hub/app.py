@@ -73,7 +73,7 @@ async def favorite_toggle(sid, data):
 
 @sio.event
 async def ping_check(sid, data):
-    return data
+    await sio.emit('pong_check', data, to=sid)
 
 async def _get_users():
     from src.review_hub.db import get_db

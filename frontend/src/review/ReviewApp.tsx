@@ -10,8 +10,6 @@ import { NameModal } from './components/NameModal'
 import { ToastContainer } from './components/Toast'
 import './styles/review.css'
 
-const STORAGE_KEY = 'aycb_review_user'
-
 export default function ReviewApp() {
   const { user_name, set_user_name, get_initials } = useUserStore()
   const [console_open, setConsoleOpen] = useState(false)
@@ -19,8 +17,7 @@ export default function ReviewApp() {
 
   // Show name modal on first visit or missing name
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved || saved.trim().length < 2) {
+    if (!user_name || user_name.trim().length < 2) {
       setShowNameModal(true)
     }
   }, [])

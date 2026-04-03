@@ -73,7 +73,9 @@ async def delete_media(db: aiosqlite.Connection, media_id: int) -> None:
 
 async def get_directories(db: aiosqlite.Connection) -> list[str]:
     cursor = await db.execute(
-        "SELECT DISTINCT directory FROM media ORDER BY directory"
+        "SELECT DISTINCT directory FROM media"
+        " WHERE directory IS NOT NULL AND directory != '.'"
+        " ORDER BY directory"
     )
     rows = await cursor.fetchall()
     return [r[0] for r in rows]

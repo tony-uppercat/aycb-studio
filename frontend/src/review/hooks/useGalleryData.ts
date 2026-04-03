@@ -22,8 +22,20 @@ export function useGalleryData(activeDirectory: string | null) {
   const loadDirs = useCallback(async () => {
     try {
       const data = await rhApi.getDirectories()
-      const dirs = (data.directories || []).map((d: string) => ({ name: d }))
-      setDirectories(dirs)
+      const all: string[] = (data.directories || []).filter(
+        (d: any) => d != null && d !== '.'
+      )
+      const topLevel = all
+        .filter((d) => !d.includes('/'))
+        .map((d) => ({ name: d }))
+      const subs = all
+        .filter((d) => d.includes('/'))
+        .map((d) => {
+          const parts = d.split('/')
+          return { name: parts[parts.length - 1], path: d }
+        })
+      setDirectories(topLevel)
+      setSubfolders(subs)
     } catch { /* swallow */ }
   }, [])
 

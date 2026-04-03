@@ -77,12 +77,11 @@ export function CommentThread({ mediaId, position }: CommentThreadProps) {
   // Fetch on mount / mediaId change
   // -------------------------------------------------------------------------
   useEffect(() => {
-    let cancelled = false
     const ctrl = new AbortController()
-    rhApi.listComments(mediaId)
-      .then(data => { if (!cancelled) setComments((data.comments as Comment[]) || []) })
-      .catch(err => { if (!cancelled) console.warn('[CommentThread] fetch failed:', err.message) })
-    return () => { cancelled = true; ctrl.abort() }
+    rhApi.listComments(mediaId, ctrl.signal)
+      .then(data => { if (!ctrl.signal.aborted) setComments((data.comments as Comment[]) || []) })
+      .catch(err => { if (!ctrl.signal.aborted) console.warn('[CommentThread] fetch failed:', err.message) })
+    return () => { ctrl.abort() }
   }, [mediaId])
 
   // -------------------------------------------------------------------------

@@ -2,10 +2,10 @@ import { ADMIN_PIN } from '../stores/userStore'
 
 const BASE = '/api/rh'
 
-async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
+async function get<T>(path: string, params?: Record<string, string>, signal?: AbortSignal): Promise<T> {
   const url = new URL(BASE + path, window.location.origin)
   if (params) Object.entries(params).forEach(([k, v]) => { if (v) url.searchParams.set(k, v) })
-  const res = await fetch(url.toString())
+  const res = await fetch(url.toString(), { signal })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   return res.json()
 }
@@ -34,7 +34,7 @@ export const rhApi = {
       headers: { 'X-Admin-Pin': ADMIN_PIN },
     }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
   getDirectories: () => get<{ directories: string[] }>('/media/directories'),
-  listComments: (mediaId: number) => get<{ comments: unknown[] }>(`/comments/${mediaId}`),
+  listComments: (mediaId: number, signal?: AbortSignal) => get<{ comments: unknown[] }>(`/comments/${mediaId}`, undefined, signal),
   addComment: (body: { media_id: number; author: string; content: string; x_position?: number; y_position?: number; annotation_type?: string; parent_id?: number }) =>
     post<{ id: number }>('/comments', body),
   deleteComment: (id: number) => del(`/comments/${id}`),
@@ -67,7 +67,7 @@ export const rhApi = {
     }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
 
   // Download/stream URLs
-  downloadUrl: (id: number) => `${BASE}/download/media/${id}`,
+  downloadUrl: (id: number) => `${BASE}/download/${id}`,
 
   // Logs
   getLogs: () => get<{ logs: string[] }>('/logs'),

@@ -39,7 +39,8 @@ export function ReviewGallery() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id?: number; ids?: number[]; filename?: string } | null>(null)
 
   // References
-  const [refs, setRefs] = useState<any[]>([])
+  interface ReferenceItem { id: number; filename: string; tags?: string[] }
+  const [refs, setRefs] = useState<ReferenceItem[]>([])
   const [refSearch, setRefSearch] = useState('')
   const [refTag, setRefTag] = useState('')
 
@@ -228,7 +229,7 @@ export function ReviewGallery() {
               <div className="rh-refs-empty">No references yet. Upload images to build your library.</div>
             ) : (
               <div className="rh-refs-grid">
-                {refs.map((item: any) => (
+                {refs.map((item) => (
                   <div key={item.id} className="rh-ref-card">
                     <img src={`/references/${item.filename}`} alt={item.filename} className="rh-ref-img" loading="lazy" />
                     <div className="rh-ref-info">
@@ -246,8 +247,9 @@ export function ReviewGallery() {
 
       {lightboxMedia && (
         <Lightbox media={lightboxMedia} items={filteredMedia}
-          onClose={() => setLightboxIndex(-1)}
-          onNavigate={(id) => setLightboxIndex(filteredMedia.findIndex(m => m.id === id))} />
+          on_close={() => setLightboxIndex(-1)}
+          on_navigate={(id) => setLightboxIndex(filteredMedia.findIndex(m => m.id === id))}
+          on_refresh={loadMedia} />
       )}
       {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} items={buildContextItems()} on_close={() => setContextMenu(null)} />}
       {moveTarget && <MoveDialog folders={moveFolders} on_select={confirmMove} on_close={() => setMoveTarget(null)} />}

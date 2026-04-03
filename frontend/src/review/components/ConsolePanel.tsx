@@ -61,15 +61,19 @@ export function ConsolePanel({ is_open, on_close }: ConsolePanelProps) {
     rhApi.listFeedback().then(r => setFeedbackItems(r.items as FeedbackItem[])).catch(() => {})
   }, [is_open])
 
-  // Network fetch patch
+  // Network fetch patch — only intercepts when console is open
   useEffect(() => {
-    orig_fetch.current = window.fetch.bind(window)
+    if (!orig_fetch.current) {
+      orig_fetch.current = window.fetch.bind(window)
+    }
+    const saved_orig = orig_fetch.current
     const patched: typeof fetch = async (input, init) => {
+      if (!is_open) return saved_orig(input, init)
       const start = Date.now()
       const method = (init?.method || 'GET').toUpperCase()
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
       try {
-        const res = await orig_fetch.current!(input, init)
+        const res = await saved_orig(input, init)
         const entry: NetworkEntry = { id: ++_entry_id, method, url, status: res.status, duration: Date.now() - start, ts: new Date().toLocaleTimeString() }
         setNetworkLogs(prev => [entry, ...prev].slice(0, 200))
         return res
@@ -80,8 +84,8 @@ export function ConsolePanel({ is_open, on_close }: ConsolePanelProps) {
       }
     }
     window.fetch = patched
-    return () => { if (orig_fetch.current) window.fetch = orig_fetch.current }
-  }, [])
+    return () => { window.fetch = saved_orig }
+  }, [is_open])
 
   // Error listeners
   useEffect(() => {

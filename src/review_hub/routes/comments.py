@@ -1,0 +1,62 @@
+"""Routes for comments / annotations."""
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from src.review_hub.db import get_db
+from src.review_hub.queries import comments as q
+
+router = APIRouter(prefix="/api/rh", tags=["review-hub"])
+
+
+class CommentBody(BaseModel):
+    media_id: int
+    author: str
+    content: str
+    x_position: float | None = None
+    y_position: float | None = None
+    annotation_type: str = "pin"
+    box_width: float | None = None
+    box_height: float | None = None
+    parent_id: int | None = None
+
+
+@router.get("/comments/{media_id}")
+async def list_comments(media_id: int):
+    db = await get_db()
+    try:
+        rows = await q.list_comments(db, media_id)
+        return {"comments": rows}
+    finally:
+        await db.close()
+
+
+@router.post("/comments")
+async def add_comment(body: CommentBody):
+    db = await get_db()
+    try:
+        new_id = await q.add_comment(
+            db,
+            media_id=body.media_id,
+            author=body.author,
+            content=body.content,
+            x_position=body.x_position,
+            y_position=body.y_position,
+            annotation_type=body.annotation_type,
+            box_width=body.box_width,
+            box_height=body.box_height,
+            parent_id=body.parent_id,
+        )
+        return {"id": new_id}
+    finally:
+        await db.close()
+
+
+@router.delete("/comments/{comment_id}")
+async def delete_comment(comment_id: int):
+    db = await get_db()
+    try:
+        await q.delete_comment(db, comment_id)
+        return {"ok": True}
+    finally:
+        await db.close()

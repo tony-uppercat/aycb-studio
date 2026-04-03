@@ -1,66 +1,81 @@
 # AYCB v2 — Technical Report 2026-04-03 (Session 5)
 
 ## Summary
-Review Hub audit (12 bugs fixed), backend test suite built from scratch (10 → 98 tests), multiple runtime bugs caught by new tests.
+Review Hub audit (12 frontend bugs), backend test suite (10 → 98), FK guards on all write routes, silent failure cleanup, CLAUDE.md contradiction fixes, Socket.IO transport fix for LAN/iPad.
 
 ## Commits
-- `9930a92` [fix] Review Hub audit — 12 bugs fixed
-- `df4a6d8` [docs] Session 5 reports — Review Hub audit fixes
-- `2fbc9e6` [test] Backend test suite — 98 tests, zero warnings
+- `9930a92` [fix] Review Hub audit — 12 frontend bugs
+- `2fbc9e6` [test] Backend test suite — 98 tests, zero deprecation warnings
+- `5f3f4b9` [docs] Session 5 reports
+- (uncommitted) Silent failure cleanup, Socket.IO transport, CLAUDE.md fixes
 
-## Files Created
-- `tests/conftest.py` — shared tmp_db fixture, _run helper
-- `tests/test_shared_utils.py` — _sanitize_filename, _safe_video_suffix, _classify_error, _estimate_cost, _require_prompt
-- `tests/test_bridge_helpers.py` — _ext_to_mime, _scan_media_list, _find_png_meta, _delete_bridge_media
-- `tests/test_save_to_bridge.py` — _save_to_bridge with bytes, PIL, sanitization
-- `tests/test_thumbnails.py` — generate_thumbnail, get_image_dimensions
-- `tests/test_router_system.py` — health, logs, clear_logs via TestClient
-- `tests/test_router_review.py` — full CRUD: add, batch, update, delete, clear, carry-over
-- `tests/test_router_feedback.py` — feedback CRUD, urgent, resolve, console notify
-- `tests/test_sessions_clear.py` — clear_stale_sessions on startup
-- `tests/test_review_hub_drawings.py` — save, upsert, get nonexistent
-- `tests/test_review_hub_media_queries.py` — directory filter, sort/order, SQL injection guard, null filter, stats
-- `tests/test_rh_routes.py` — 23 integration tests: media CRUD, admin pin auth, favorites, comments, drawings
+## Bugs Fixed (17 total)
 
-## Files Modified
-- `src/api.py` — on_event("startup") → lifespan context manager
-- `src/review_hub/app.py` — rh_startup() extracted, called from lifespan
-- `src/review_hub/queries/sessions.py` — added clear_stale_sessions()
-- `src/review_hub/routes/favorites.py` — check media exists before FK insert
-- `src/review_hub/routes/comments.py` — check media exists before FK insert
-- `src/review_hub/routes/drawings.py` — check media exists, return envelope not raw null
-- `src/routers/system.py` — local_ip in health response
-- `frontend/src/components/SettingsPanel.tsx` — LAN IP in Local tab, port 3001→5101
-- `frontend/src/review/components/DrawingCanvas.tsx` — unwrap drawing envelope
-- `pyproject.toml` — testpaths, asyncio_mode config
+### Critical (from audit)
+1. Lightbox props camelCase vs snake_case — close/navigate/refresh all broken
+2. Download URL extra `/media/` segment — all downloads 404
 
-## Bugs Found and Fixed
-| # | Source | Issue |
-|---|---|---|
-| 1 | Audit | Lightbox props camelCase vs snake_case — completely broken |
-| 2 | Audit | Download URL extra /media/ segment — all 404 |
-| 3 | Audit | subfolders never populated |
-| 4 | Audit | null/dot directories in sidebar |
-| 5 | Audit | AbortController signal never passed |
-| 6 | Audit | ConsolePanel fetch patch always active |
-| 7 | Audit | drawingToolStore.ts dead code |
-| 8 | Audit | Sidebar image fallback wrong for subdirs |
-| 9 | Audit | STORAGE_KEY duplicated |
-| 10 | Audit | ping_check ack vs emit |
-| 11 | Live 500 | Favorites toggle on nonexistent media — FK violation |
-| 12 | Live 500 | Comments add on nonexistent media — FK violation |
-| 13 | Live 500 | Drawings save on nonexistent media — FK violation |
-| 14 | Live null | GET /drawings returns raw null — frontend breaks |
-| 15 | Deprecation | on_event("startup") warnings in test output |
-| 16 | Stale | 8 phantom users from server restarts |
-| 17 | Stale | Backend tab says port 3001 instead of 5101 |
+### Important (from audit)
+3. subfolders state never populated — sidebar always empty
+4. null/dot directories in sidebar — broken row
+5. AbortController signal never passed to fetch in CommentThread
+6. ConsolePanel fetch patch always active + HMR chain risk
+7. drawingToolStore.ts dead code (deleted)
+8. Sidebar image fallback broken for subdirectory files
 
-## Tests
-- Backend: 98 passing (14 test files)
-- Frontend: 115 passing (23 test files)
-- Total: 213 passing, 0 warnings
+### Found by tests (not audit)
+9. POST /favorites/toggle 500 on nonexistent media (FK violation)
+10. POST /comments 500 on nonexistent media (FK violation)
+11. POST /drawings 500 on nonexistent media (FK violation)
+12. GET /drawings returns raw `null` instead of `{"drawing": null}`
+13. 8 phantom users from server restarts (stale sessions)
+
+### Infrastructure
+14. `on_event("startup")` deprecation warnings — migrated to lifespan
+15. pytest not auto-discovering tests — added testpaths config
+16. Backend tab UI said "port 3001" instead of 5101
+17. All `except: pass` replaced with `_log()` calls
+
+### LAN/iPad
+18. Socket.IO transport order `['websocket', 'polling']` → `['polling', 'websocket']` — polling-first avoids ECONNRESET through Vite proxy
+19. LAN IP shown in Settings > Local tab via `/api/health`
+
+## CLAUDE.md Contradictions Fixed
+1. "Review Hub planned for Phase 2" — removed (already ported)
+2. Architecture diagram — added Review Hub, Socket.IO, /api/rh/*
+3. Directory structure — added src/review_hub/, frontend/src/review/, tests/
+4. Rule 3 — added Review Hub routes path alongside plugins
+5. `--amber` variable — renamed to `--accent` (it's pink, not amber)
+6. "Commit after each task" — aligned with feedback memory (on request)
+7. Testing command — `cd . && pytest` → `python -m pytest`
+8. Added `_DB_PATH` inconsistency note
+9. Added Rule 12: never `except: pass`
+
+## Silent Failure Cleanup
+Every `except: pass` in scanner.py, bridge.py, feedback.py, review.py, drawings.py, feedback routes now logs via `_log()`. Corrupt JSON files get backed up to `.json.corrupt` instead of silently returning empty.
+
+## Test Suite
+- Backend: 98 tests across 14 files
+  - conftest.py (shared fixtures)
+  - test_rh_routes.py (23 integration tests — admin pin, FK guards, CRUD)
+  - test_shared_utils.py (13 pure function tests)
+  - test_bridge_helpers.py (11 tests — scan, meta, delete)
+  - test_router_review.py (9 CRUD tests)
+  - test_router_feedback.py (7 tests)
+  - test_save_to_bridge.py (5 tests)
+  - test_review_hub_media_queries.py (5 tests — sort, filter, SQL injection)
+  - test_review_hub_drawings.py (3 tests — save, upsert, empty)
+  - test_thumbnails.py (3 tests)
+  - test_sessions_clear.py (2 tests)
+  - test_router_system.py (3 tests)
+  - test_review_hub_db.py (2 existing)
+  - test_review_hub_queries.py (8 existing + 1 new FK test)
+  - test_review_hub_scanner.py (1 existing)
+- Frontend: 115 tests across 23 files
+- Total: 213 tests, 0 warnings
 
 ## Next Tasks
-1. Restart backend to pick up all changes (lifespan, LAN IP, FK guards)
-2. Browser smoke test Review Hub at /review
-3. Test admin delete, drawing, comments end-to-end
+1. Restart backend to pick up all session changes
+2. Browser smoke test Review Hub at /review (desktop + iPad)
+3. Test real-time updates across devices (Socket.IO polling transport)
+4. Migrate `db.py` `_DB_PATH` to use `settings.db_path`

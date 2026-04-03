@@ -1,6 +1,11 @@
 import { io } from 'socket.io-client'
 
-export const socket = io({ autoConnect: false, transports: ['websocket', 'polling'] })
+// In dev, Vite proxies /socket.io to the backend. Connect to same origin.
+// On LAN (iPad etc.), the proxy handles it — but use polling first for reliability.
+export const socket = io({
+  autoConnect: false,
+  transports: ['polling', 'websocket'],
+})
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const onEvent = (event: string, cb: (...args: any[]) => void) => socket.on(event, cb)

@@ -31,7 +31,10 @@ def _load_items() -> list[dict]:
         return []
     try:
         return _json.loads(REVIEW_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    except _json.JSONDecodeError as e:
+        from src.shared import _log
+        _log(f"Review file corrupt — backing up and resetting: {e}")
+        REVIEW_FILE.rename(REVIEW_FILE.with_suffix(".json.corrupt"))
         return []
 
 

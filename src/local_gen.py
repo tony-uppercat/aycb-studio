@@ -92,8 +92,8 @@ def _load_pipeline(model_id: str):
         if device == "cuda":
             try:
                 pipe.enable_model_cpu_offload()
-            except Exception:
-                pass  # Not all pipelines support this
+            except Exception as e:
+                logger.debug("cpu_offload not supported for %s: %s", model_id, e)
 
         _loaded[model_id] = pipe
         logger.info("Loaded %s successfully", model_id)

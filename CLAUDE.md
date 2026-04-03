@@ -24,7 +24,7 @@ When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 
 1. Max 300 lines per file. Plan the split at 250.
 2. New node = new folder in `frontend/src/nodes/` with `node.manifest.ts`. Touch zero other files.
-3. New backend endpoint = new file in `src/plugins/`. Auto-discovered. Touch zero other files.
+3. New backend endpoint = new file in `src/plugins/` (AYCB) or `src/review_hub/routes/` (Review Hub). Auto-discovered. Touch zero other files.
 4. All data fields: `snake_case`. API payloads, TypeScript interfaces. No camelCase for data properties.
 5. No emoji in UI. Lucide icons (16px, stroke 1.5) + plain text. Title Case for labels.
 6. `AbortController` on every frontend fetch call.
@@ -33,6 +33,7 @@ When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 9. Interfaces before implementations. Check `types.ts` before creating services.
 10. One task = one thing. Never mix node creation + bug fix + refactor in one task.
 11. When in doubt, add a new file. Never extend an existing one past 250 lines.
+12. Never `except: pass`. Always log the error. Corrupt data files: backup to `.corrupt` and reset.
 
 ---
 
@@ -40,18 +41,27 @@ When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 
 ```
 Frontend (:5100)                    Backend (:5101)
-Vite dev server                     FastAPI + uvicorn
+Vite dev server                     FastAPI + uvicorn (lifespan)
 ├── React 19 + TypeScript 5.9       ├── src/routers/*.py    Auto-discovered
 ├── @xyflow/react 12                ├── src/plugins/*.py    Auto-discovered
 ├── Zustand 5                       ├── /api/generate/*     Generation
 ├── Providers (Gemini, Flux, etc)   ├── /api/analyze/*      Analysis
-└── Proxy /api → :5101              ├── /api/llm/*          LLM
-                                    ├── /api/bridge/*       Bridge
-                                    ├── /api/effects/*      Effects
-                                    └── /api/health         Health check
+├── Proxy /api → :5101              ├── /api/llm/*          LLM
+└── Review Hub (/review)            ├── /api/bridge/*       Bridge
+    ├── Gallery + Lightbox          ├── /api/effects/*      Effects
+    ├── Drawing + Comments          ├── /api/rh/*           Review Hub API
+    ├── Socket.IO real-time         ├── /socket.io          Socket.IO
+    └── Admin delete (pin auth)     └── /api/health         Health + LAN IP
+
+Review Hub (mounted on same backend):
+  src/review_hub/app.py       Socket.IO server + mount
+  src/review_hub/routes/      10 route modules (/api/rh/*)
+  src/review_hub/queries/     DB query modules (aiosqlite)
+  src/review_hub/scanner.py   Polls shared/Media/ every 5s
+  src/review_hub/db.py        SQLite (WAL mode, FK cascade)
 
 Shared data (outside repo, not in git):
-  ../shared/Media/   ../shared/References/   ../shared/data/
+  ../../shared/Media/   ../../shared/References/   ../../shared/data/
 ```
 
 ---
@@ -70,6 +80,14 @@ Shared data (outside repo, not in git):
 │       │   ├── json-parser/        JsonParserNode
 │       │   ├── batch/              BatchNode
 │       │   └── index.ts            Auto-discovery via import.meta.glob
+│       ├── review/                 Review Hub SPA (lazy-loaded at /review)
+│       │   ├── components/         Gallery, Lightbox, Drawing, Comments, etc.
+│       │   ├── hooks/              useGalleryData, useFilteredMedia
+│       │   ├── pages/              ReviewGallery
+│       │   ├── services/           api.ts, socket.ts
+│       │   ├── stores/             userStore, socketStore, drawingStore, toastStore
+│       │   ├── styles/             review.css
+│       │   └── ReviewApp.tsx       Entry point
 │       ├── components/             UI components
 │       │   ├── canvas/             FlowCanvas, CanvasContextMenu
 │       │   ├── console/            ConsolePanel, ReviewTab
@@ -84,11 +102,21 @@ Shared data (outside repo, not in git):
 │       ├── events/                 Event system
 │       └── styles/                 design-tokens.css, globals.css
 ├── src/                            Python backend
-│   ├── api.py                      FastAPI app + router auto-discovery
+│   ├── api.py                      FastAPI app + lifespan + router auto-discovery
 │   ├── routers/                    API routers (auto-discovered)
-│   └── plugins/                    Plugin routers (auto-discovered)
+│   ├── plugins/                    Plugin routers (auto-discovered)
+│   └── review_hub/                 Review Hub backend
+│       ├── app.py                  Socket.IO + mount + startup
+│       ├── db.py                   SQLite connection + schema init
+│       ├── scanner.py              Media directory poller (5s interval)
+│       ├── thumbnails.py           300px JPEG thumbnail generation
+│       ├── routes/                 10 route modules (prefix /api/rh)
+│       └── queries/                DB query helpers (aiosqlite)
+├── tests/                          Backend tests (98 tests, 14 files)
+│   ├── conftest.py                 Shared fixtures (tmp_db)
+│   ├── test_rh_routes.py           Review Hub HTTP integration tests
+│   └── test_*.py                   Unit + integration tests
 ├── config/                         Settings, prompts
-├── shared/                         Media, data (gitignored)
 ├── reports/                        Session reports
 └── pyproject.toml                  Python dependencies
 ```
@@ -141,7 +169,7 @@ Dark theme. Accent: `#F52776`. System fonts. Minimal border-radius.
 
 ```
 --color-accent: #F52776             --color-accent-hover: #d41f64
---amber: #F52776                    --amber-glow: #F5277630
+--accent: #F52776                   --accent-glow: #F5277630
 --color-bg-primary: #0a0a0b        --color-text-primary: #fafafa
 --color-bg-secondary: #111113       --color-text-secondary: #a1a1aa
 --color-border: #27272a             --color-success: #22c55e
@@ -154,7 +182,6 @@ Full set in `frontend/src/styles/design-tokens.css` and `frontend/src/styles/glo
 
 ## Not Yet Ported
 
-- **Review Hub** — LAN review system for iPad (Express + Socket.io + React). Planned for Phase 2.
 - **Remaining 12 nodes** — ImageUpload, ImageCompare, Inpainting, VideoAnalysis, VideoGenerate, ComfyUI, Switch, Collage, and others. Same pattern as existing 5.
 
 ---
@@ -162,8 +189,8 @@ Full set in `frontend/src/styles/design-tokens.css` and `frontend/src/styles/glo
 ## Testing
 
 ```bash
-cd frontend && npx vitest run          # Frontend tests
-cd . && pytest                          # Python backend tests
+cd frontend && npx vitest run          # Frontend tests (115 tests)
+python -m pytest                        # Backend tests (98 tests)
 ```
 
 ---
@@ -210,6 +237,8 @@ Single source of truth: `config/settings.py` → `settings.shared_root`. All bac
 
 **Never hardcode shared paths with `Path(__file__)`** — always use `settings.media_dir`, `settings.references_dir`, etc.
 
+**Known exception:** `src/review_hub/db.py` uses `_DB_PATH = Path(__file__)...` instead of `settings.db_path`. Tests monkeypatch `_DB_PATH` directly. This should be migrated to use `settings.db_path` when touched next.
+
 ---
 
 ## Data Sources of Truth
@@ -231,7 +260,7 @@ Pin-based: `ADMIN_PIN` constant in `frontend/src/review/stores/userStore.ts` and
 ## Git
 
 - Work on `dev` branch. Never commit directly to `main`.
-- Commit after each successful task.
+- Commit on request or when a feature is complete (not micro-commits per task).
 - Prefixes: `[node]`, `[fix]`, `[feat]`, `[refactor]`, `[test]`, `[docs]`, `[styles]`
 - Run tests before every commit.
 

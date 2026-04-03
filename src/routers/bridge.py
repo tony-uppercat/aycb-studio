@@ -90,7 +90,8 @@ def _get_review_from_db(stem: str) -> dict | None:
             "comments_count": comment_count,
             "drawings_count": drawing_count,
         }
-    except Exception:
+    except Exception as e:
+        _log(f"Review DB query error for '{stem}': {e}")
         return None
 
 
@@ -117,7 +118,8 @@ def _find_png_meta(stem: str) -> dict | None:
             except (ValueError, TypeError):
                 pass
         return meta
-    except Exception:
+    except Exception as e:
+        _log(f"PNG meta read error for '{stem}': {e}")
         return None
 
 
@@ -200,7 +202,8 @@ def _lookup_media_id(stem: str) -> int | None:
         ).fetchone()
         con.close()
         return row[0] if row else None
-    except Exception:
+    except Exception as e:
+        _log(f"Media lookup error for '{stem}': {e}")
         return None
 
 

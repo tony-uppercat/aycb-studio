@@ -42,8 +42,9 @@ async def add_feedback(body: FeedbackBody):
     from src.review_hub.app import sio
     try:
         await sio.emit("feedback_new", {"id": fid, "category": body.category, "urgent": body.urgent}, room="review")
-    except Exception:
-        pass
+    except Exception as e:
+        from src.shared import _log
+        _log(f"Socket emit feedback_new failed: {e}")
     return {"id": fid}
 
 

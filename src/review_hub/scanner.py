@@ -10,6 +10,7 @@ from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries.media import insert_media, list_media, delete_media
 from src.review_hub.thumbnails import generate_thumbnail, get_image_dimensions
+from src.shared import _log
 SCAN_INTERVAL = 5
 SETTLE_TIME = 2
 
@@ -49,8 +50,8 @@ async def scan_once() -> int:
             if p.suffix.lower() in IMAGE_EXTS:
                 try:
                     w, h = get_image_dimensions(p)
-                except Exception:
-                    pass
+                except Exception as e:
+                    _log(f"Scanner: dimensions failed for {p.name}: {e}")
             media_id = await insert_media(
                 db,
                 filename=p.name,
@@ -65,8 +66,8 @@ async def scan_once() -> int:
                 try:
                     thumb = generate_thumbnail(p, media_id)
                     await db.execute("UPDATE media SET thumbnail_path=? WHERE id=?", (thumb, media_id))
-                except Exception:
-                    pass
+                except Exception as e:
+                    _log(f"Scanner: thumbnail failed for {p.name}: {e}")
             changes += 1
 
         for filepath in known - on_disk:
@@ -88,6 +89,6 @@ async def run_scanner():
             changes = await scan_once()
             if changes and _sio:
                 await _sio.emit("media_update", {"changes": changes}, room="review")
-        except Exception:
-            pass
+        except Exception as e:
+            _log(f"Scanner: error in scan loop: {e}")
         await asyncio.sleep(SCAN_INTERVAL)

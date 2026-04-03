@@ -28,8 +28,8 @@ def health():
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
         s.close()
-    except Exception:
-        pass
+    except Exception as e:
+        _log(f"LAN IP detection failed: {e}")
     return {"status": "ok", "local_ip": local_ip}
 
 
@@ -70,7 +70,8 @@ def save_session_report(payload: SessionReportPayload):
         minutes = int((duration_s % 3600) // 60)
         duration_str = f"{hours}h {minutes}m" if hours else f"{minutes}m"
         duration_hours = duration_s / 3600 if duration_s > 0 else 0
-    except Exception:
+    except Exception as e:
+        _log(f"Session report time parse error: {e}")
         duration_str = "unknown"
         duration_hours = 0
 

@@ -46,6 +46,7 @@ async def save_drawing(body: DrawingBody):
     from src.review_hub.app import sio
     try:
         await sio.emit("drawing_save", {"media_id": body.media_id, "author": body.author}, room="review")
-    except Exception:
-        pass
+    except Exception as e:
+        from src.shared import _log
+        _log(f"Socket emit drawing_save failed: {e}")
     return {"id": new_id}

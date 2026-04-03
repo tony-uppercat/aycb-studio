@@ -26,10 +26,8 @@ async function del(path: string): Promise<void> {
 export const rhApi = {
   listMedia: (params?: { directory?: string; sort?: string; order?: string }) =>
     get<{ items: unknown[]; total: number }>('/media', params as Record<string, string>),
-  getMedia: (id: number) => get<unknown>(`/media/${id}`),
   deleteMedia: (id: number) => del(`/media/${id}`),
   getDirectories: () => get<{ directories: string[] }>('/media/directories'),
-  getStats: () => get<{ count: number; total_size: number }>('/media/stats'),
   listComments: (mediaId: number) => get<{ comments: unknown[] }>(`/comments/${mediaId}`),
   addComment: (body: { media_id: number; author: string; content: string; x_position?: number; y_position?: number; annotation_type?: string; parent_id?: number }) =>
     post<{ id: number }>('/comments', body),
@@ -43,22 +41,13 @@ export const rhApi = {
   listReferences: (params?: { search?: string; tag?: string }) =>
     get<{ items: unknown[] }>('/references', params as Record<string, string>),
   deleteReference: (id: number) => del(`/references/${id}`),
-  uploadMedia: (file: File) => {
-    const fd = new FormData(); fd.append('file', file)
-    return post<{ filename: string; path: string }>('/upload/media', fd)
-  },
   uploadReference: (file: File) => {
     const fd = new FormData(); fd.append('file', file)
     return post<{ filename: string; id: number }>('/upload/reference', fd)
   },
   // Folders
-  listFolders: () => get<{ folders: string[] }>('/folders'),
-  getSubfolders: (project: string) =>
-    get<unknown[]>('/folders', { project }),
   createFolder: (body: { project: string; name: string }) =>
     post<unknown>('/folders', body),
-  renameFolder: (name: string, body: { new_name: string }) =>
-    post<unknown>(`/folders/${encodeURIComponent(name)}/rename`, body),
   deleteFolder: (name: string) => del(`/folders/${encodeURIComponent(name)}`),
   moveToFolder: (body: { media_id: number; target_dir: string }) =>
     post<unknown>('/folders/move', body),
@@ -73,7 +62,6 @@ export const rhApi = {
 
   // Download/stream URLs
   downloadUrl: (id: number) => `${BASE}/download/media/${id}`,
-  streamUrl: (id: number) => `${BASE}/media/${id}/stream`,
 
   // Logs
   getLogs: () => get<{ logs: string[] }>('/logs'),

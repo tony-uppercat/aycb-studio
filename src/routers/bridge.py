@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import glob as _glob
-import io
 import re
 import time
 from datetime import datetime, timezone
@@ -13,9 +12,8 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image as PILImage
-from PIL.PngImagePlugin import PngInfo
 from config.settings import settings
-from src.shared import _log
+from src.shared import _log, _save_to_bridge
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
 
@@ -28,73 +26,6 @@ _MEDIA_LIST_CACHE_TTL = 10.0  # seconds
 
 
 # ── Bridge helpers ────────────────────────────────────────────────────────────
-
-def _save_to_bridge(
-    img_bytes: bytes | None = None,
-    prompt: str = "",
-    model: str = "",
-    model_name: str = "",
-    aspect_ratio: str = "",
-    image_size: str = "",
-    cost_usd: float = 0.0,
-    project_name: str = "",
-    pil_image: PILImage.Image | None = None,
-) -> dict | None:
-    """Save image with embedded PNG tEXt metadata to shared/Media/ for Review Hub."""
-    try:
-        if project_name.strip():
-            folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
-        else:
-            folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.media_dir / folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"generated_{int(time.time() * 1000)}"
-        img_path = target_dir / f"{stem}.png"
-
-        # Build metadata dict
-        generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        meta = {
-            "source": "aycb",
-            "project": project_name.strip() or None,
-            "prompt": prompt,
-            "model": model,
-            "model_name": model_name,
-            "aspect_ratio": aspect_ratio,
-            "image_size": image_size,
-            "cost_usd": cost_usd,
-            "generated_at": generated_at,
-        }
-
-        # Get or create PIL image
-        if pil_image is None and img_bytes is not None:
-            pil_img = PILImage.open(io.BytesIO(img_bytes))
-        elif pil_image is not None:
-            pil_img = pil_image
-        else:
-            _log("Review Hub bridge — error: no image data provided")
-            return None
-
-        # Embed metadata as PNG tEXt chunks
-        png_info = PngInfo()
-        png_info.add_text("source", "aycb")
-        png_info.add_text("project", project_name.strip() or "")
-        png_info.add_text("prompt", prompt)
-        png_info.add_text("model", model)
-        png_info.add_text("model_name", model_name)
-        png_info.add_text("aspect_ratio", aspect_ratio)
-        png_info.add_text("image_size", image_size)
-        png_info.add_text("cost_usd", str(cost_usd))
-        png_info.add_text("generated_at", generated_at)
-
-        # Save PNG with embedded metadata
-        pil_img.save(str(img_path), format="PNG", pnginfo=png_info)
-
-        _log(f"Review Hub bridge — saved {folder}/{img_path.name} + embedded meta")
-        return {"status": "ok", "path": str(img_path.name), "stem": stem, "folder": folder}
-    except Exception as e:
-        _log(f"Review Hub bridge — error: {e}")
-        return None
-
 
 def _delete_bridge_media(stem: str) -> str | None:
     """Delete PNG for a given stem from shared/Media/. Returns deleted path or None."""

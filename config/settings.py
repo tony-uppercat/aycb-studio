@@ -18,7 +18,23 @@ class Settings(BaseSettings):
     project_root: Path = Path(__file__).resolve().parent.parent
     output_dir: Path = project_root / "output"
     prompts_dir: Path = project_root / "config" / "prompts"
-    shared_media_path: Path = project_root.parent / "shared" / "Media"
+    shared_root: Path = project_root.parent / "shared"
+
+    @property
+    def media_dir(self) -> Path:
+        return self.shared_root / "Media"
+
+    @property
+    def references_dir(self) -> Path:
+        return self.shared_root / "References"
+
+    @property
+    def thumbnails_dir(self) -> Path:
+        return self.shared_root / "data" / "thumbnails"
+
+    @property
+    def db_path(self) -> Path:
+        return self.shared_root / "data" / "review-hub.db"
 
     # ── Gemini ────────────────────────────────────────────────────────
     gemini_api_key: str = ""
@@ -52,10 +68,10 @@ class Settings(BaseSettings):
             self.gemini_flash_model = os.getenv("GEMINISHOT_GEMINI_FLASH_MODEL") or "gemini-3-flash-preview"
         if self.gemini_embedding_model == "gemini-embedding-exp-03-07":
             self.gemini_embedding_model = os.getenv("GEMINISHOT_GEMINI_EMBEDDING_MODEL") or "gemini-embedding-exp-03-07"
-        if not self.shared_media_path.exists():
+        if not self.shared_root.exists():
             old_path = os.getenv("GEMINISHOT_SHARED_MEDIA_PATH")
             if old_path:
-                self.shared_media_path = Path(old_path)
+                self.shared_root = Path(old_path).parent
 
 
 settings = Settings()

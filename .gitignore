@@ -8,3 +8,5 @@ shared/Media/
 shared/References/
 .vite/
 *.egg-info/
+_reload_trigger.py
+_restart.bat

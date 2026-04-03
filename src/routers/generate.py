@@ -18,13 +18,9 @@ from src.shared import (
     _read_upload,
     IMAGE_MODELS, MODEL_PRICING, MAX_IMAGE_BYTES,
 )
-from src.gemini import generate_image, get_last_usage
-from src.video_gen import (
-    VideoGenError,
-    get_result as videogen_get_result,
-    submit_image_to_video,
-    submit_text_to_video,
-)
+# Lazy imports — src.gemini pulls cv2/numpy which may fail at boot on Windows
+# from src.gemini import generate_image, get_last_usage  → inside endpoints
+# from src.video_gen import ...                          → inside endpoints
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
@@ -39,6 +35,8 @@ async def generate_image_endpoint(
     project_name: str = Form(""),
     ref_images: list[UploadFile] | None = File(default=None),
 ):
+    from src.gemini import generate_image, get_last_usage
+
     clean_prompt = _require_prompt(prompt)
     effective_key = _require_api_key(api_key)
 
@@ -105,6 +103,8 @@ async def generate_video(
     image_urls: str = Form(""),  # comma-separated URLs for i2v mode
 ):
     """Submit a video generation request (Seedance 2.0 / Kling 3.0). Returns request_id for polling."""
+    from src.video_gen import VideoGenError, submit_image_to_video, submit_text_to_video
+
     key = api_key or os.environ.get("AYCB_MUAPI_KEY", "")
     if not key:
         raise HTTPException(400, "MuAPI key required. Set AYCB_MUAPI_KEY or pass api_key.")
@@ -139,6 +139,8 @@ async def generate_video(
 @router.get("/video/status/{request_id}")
 async def video_generation_status(request_id: str, api_key: str = ""):
     """Poll video generation status. Returns {status, url?, ...}."""
+    from src.video_gen import VideoGenError, get_result as videogen_get_result
+
     key = api_key or os.environ.get("AYCB_MUAPI_KEY", "")
     if not key:
         raise HTTPException(400, "MuAPI key required.")

@@ -1,8 +1,6 @@
 import styles from './Header.module.css'
 
 export function Header() {
-  const reviewHubUrl = `http://${window.location.hostname}:3003`
-
   return (
     <header className={styles.header}>
       <div>
@@ -10,9 +8,7 @@ export function Header() {
         <p className={styles.subtitle}>Cinematic analysis · Gemini Vision + Embedding</p>
       </div>
       <a
-        href={reviewHubUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+        href="/review"
         className={styles.reviewLink}
         title="Open Review Hub"
       >

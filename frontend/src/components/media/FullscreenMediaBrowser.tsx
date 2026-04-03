@@ -119,9 +119,7 @@ export function FullscreenMediaBrowser({ open, onClose }: Props) {
   }, [])
 
   const handleCtxReviewHub = useCallback((entry: DiskMediaEntry) => {
-    const host = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'localhost' : window.location.hostname
-    window.open(`http://${host}:3003/?media=${encodeURIComponent(entry.id)}`, '_blank')
+    window.open(`/review?media=${encodeURIComponent(entry.id)}`, '_blank')
   }, [])
 
   // Load — loaded resets via cleanup, avoiding sync setState in the effect body

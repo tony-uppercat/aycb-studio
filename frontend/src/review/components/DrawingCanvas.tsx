@@ -1,13 +1,275 @@
-import { useRef } from 'react'
-import { useDrawing } from '../hooks/useDrawing'
+import { useRef, useEffect, useCallback } from 'react'
+import { useDrawingStore, type Stroke } from '../stores/drawingStore'
+import { emitEvent } from '../services/socket'
+import { rhApi } from '../services/api'
+import { useUserStore } from '../stores/userStore'
+import { renderStroke, cursorColor } from '../utils/drawingUtils'
 
-interface Props {
+// ---------------------------------------------------------------------------
+// DrawingCanvas -- dual-canvas freehand drawing with pressure sensitivity,
+// bezier smoothing, line/arrow tools, and real-time collaboration.
+// ---------------------------------------------------------------------------
+
+interface DrawingCanvasProps {
   mediaId: number
+  imageWidth?: number
+  imageHeight?: number
 }
 
-export function DrawingCanvas({ mediaId }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  useDrawing(mediaId, containerRef)
+const THROTTLE_MS = 1000 / 60
 
-  return <div ref={containerRef} className="rh-drawing-container" />
+export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanvasProps) {
+  const localRef = useRef<HTMLCanvasElement>(null)
+  const remoteRef = useRef<HTMLCanvasElement>(null)
+  const pathRef = useRef<{ x: number; y: number; pressure?: number }[]>([])
+  const downRef = useRef(false)
+  const rafRef = useRef(0)
+  const lastEmitRef = useRef(0)
+  const lineStartRef = useRef<{ x: number; y: number } | null>(null)
+  const lineEndRef = useRef<{ x: number; y: number } | null>(null)
+
+  const {
+    current_tool, color, stroke_width, opacity,
+    strokes, remote_strokes, remote_cursors, drawing_visible,
+    addStroke, undo, redo,
+  } = useDrawingStore()
+  const userName = useUserStore((s) => s.userName) || 'Anonymous'
+
+  const w = imageWidth || 1920
+  const h = imageHeight || 1080
+
+  // -- Canvas coordinate helper -----------------------------------------------
+  const getPos = useCallback((e: PointerEvent | React.PointerEvent) => {
+    const c = localRef.current
+    if (!c) return { x: 0, y: 0, pressure: 0 }
+    const r = c.getBoundingClientRect()
+    return {
+      x: (e.clientX - r.left) * (c.width / r.width),
+      y: (e.clientY - r.top) * (c.height / r.height),
+      pressure: e.pressure || 0,
+    }
+  }, [])
+
+  // -- Redraw helpers ---------------------------------------------------------
+  const redrawLocal = useCallback(() => {
+    const c = localRef.current
+    if (!c) return
+    const ctx = c.getContext('2d')!
+    ctx.clearRect(0, 0, c.width, c.height)
+    strokes.forEach((s) => renderStroke(ctx, s))
+
+    // In-progress preview
+    const tool = current_tool
+    if ((tool === 'line' || tool === 'arrow') && lineStartRef.current && lineEndRef.current) {
+      renderStroke(ctx, {
+        id: '_preview', tool, color, stroke_width, opacity,
+        points: [lineStartRef.current, lineEndRef.current],
+      })
+    } else if (pathRef.current.length > 1) {
+      renderStroke(ctx, {
+        id: '_preview', tool, color, stroke_width, opacity,
+        points: pathRef.current,
+      })
+    }
+  }, [strokes, current_tool, color, stroke_width, opacity])
+
+  const redrawRemote = useCallback(() => {
+    const c = remoteRef.current
+    if (!c) return
+    const ctx = c.getContext('2d')!
+    ctx.clearRect(0, 0, c.width, c.height)
+    remote_strokes.forEach((s) => renderStroke(ctx, s))
+  }, [remote_strokes])
+
+  useEffect(() => { redrawLocal() }, [redrawLocal])
+  useEffect(() => { redrawRemote() }, [redrawRemote])
+
+  // -- Keyboard shortcuts (undo/redo) ----------------------------------------
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') { e.preventDefault(); redo() }
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [undo, redo])
+
+  // -- Stroke ID helper -------------------------------------------------------
+  const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+  // -- Pointer handlers -------------------------------------------------------
+  const onDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    localRef.current?.setPointerCapture(e.pointerId)
+    const pt = getPos(e)
+    downRef.current = true
+
+    if (current_tool === 'line' || current_tool === 'arrow') {
+      lineStartRef.current = pt
+      lineEndRef.current = pt
+      return
+    }
+    pathRef.current = [pt]
+  }, [getPos, current_tool])
+
+  const onMove = useCallback((e: React.PointerEvent) => {
+    const pos = getPos(e)
+    const now = performance.now()
+    if (now - lastEmitRef.current > THROTTLE_MS) {
+      emitEvent('cursor_move', { x: pos.x, y: pos.y, user_id: userName })
+      lastEmitRef.current = now
+    }
+    if (!downRef.current) return
+    e.preventDefault()
+
+    if (current_tool === 'line' || current_tool === 'arrow') {
+      lineEndRef.current = pos
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; redrawLocal() })
+      }
+      return
+    }
+
+    // Coalesced events for Apple Pencil smoothness
+    const events = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [e.nativeEvent]
+    for (const ce of events) pathRef.current.push(getPos(ce as PointerEvent))
+
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; redrawLocal() })
+    }
+  }, [getPos, current_tool, userName, redrawLocal])
+
+  const onUp = useCallback((e: React.PointerEvent) => {
+    if (!downRef.current) return
+    e.preventDefault()
+    downRef.current = false
+
+    if ((current_tool === 'line' || current_tool === 'arrow') && lineStartRef.current && lineEndRef.current) {
+      const stroke: Stroke = {
+        id: makeId(), tool: current_tool, color, stroke_width, opacity,
+        points: [lineStartRef.current, lineEndRef.current], author: userName,
+      }
+      addStroke(stroke)
+      emitEvent('drawing_stroke', stroke)
+      lineStartRef.current = null
+      lineEndRef.current = null
+      return
+    }
+
+    if (pathRef.current.length >= 2) {
+      const stroke: Stroke = {
+        id: makeId(), tool: current_tool, color, stroke_width, opacity,
+        points: pathRef.current, author: userName,
+      }
+      addStroke(stroke)
+      emitEvent('drawing_stroke', stroke)
+    }
+    pathRef.current = []
+  }, [current_tool, color, stroke_width, opacity, userName, addStroke])
+
+  // -- Load existing drawings on mount ----------------------------------------
+  useEffect(() => {
+    let cancelled = false
+    useDrawingStore.getState().resetForMedia()
+    rhApi.getDrawing(mediaId)
+      .then((data) => {
+        if (cancelled) return
+        const rec = data as { strokes_json?: string } | null
+        if (rec?.strokes_json) {
+          const parsed = JSON.parse(rec.strokes_json) as Stroke[]
+          if (Array.isArray(parsed)) {
+            parsed.forEach((s) => useDrawingStore.getState().addRemoteStroke(s))
+          }
+        }
+      })
+      .catch((err: unknown) => console.warn('[DrawingCanvas] load failed:', err))
+    return () => { cancelled = true }
+  }, [mediaId])
+
+  // -- Expose save/export on window for toolbar -------------------------------
+  useEffect(() => {
+    const win = window as Record<string, unknown>
+    win.__drawingCanvasSave = async () => {
+      const all = useDrawingStore.getState().strokes
+      await rhApi.saveDrawing({
+        media_id: mediaId, author: userName, strokes_json: JSON.stringify(all),
+      })
+    }
+    win.__drawingCanvasExportOverlay = () => {
+      const c = localRef.current
+      if (!c) return
+      const exp = document.createElement('canvas')
+      exp.width = c.width; exp.height = c.height
+      const ctx = exp.getContext('2d')!
+      const all = [...useDrawingStore.getState().remote_strokes, ...useDrawingStore.getState().strokes]
+      all.forEach((s) => renderStroke(ctx, s))
+      exp.toBlob((blob) => {
+        if (!blob) return
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `drawing-overlay-${mediaId}.png`
+        a.click()
+      }, 'image/png')
+    }
+    win.__drawingCanvasExportMerged = () => {
+      const wrap = localRef.current?.parentElement
+      const img = wrap?.closest('.rh-lightbox-image-wrap')?.querySelector('img')
+      if (!img) return
+      const exp = document.createElement('canvas')
+      exp.width = w; exp.height = h
+      const ctx = exp.getContext('2d')!
+      ctx.drawImage(img, 0, 0, w, h)
+      const all = [...useDrawingStore.getState().remote_strokes, ...useDrawingStore.getState().strokes]
+      all.forEach((s) => renderStroke(ctx, s))
+      exp.toBlob((blob) => {
+        if (!blob) return
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `drawing-merged-${mediaId}.png`
+        a.click()
+      }, 'image/png')
+    }
+    return () => {
+      delete win.__drawingCanvasSave
+      delete win.__drawingCanvasExportOverlay
+      delete win.__drawingCanvasExportMerged
+    }
+  }, [mediaId, userName, w, h])
+
+  // -- Cleanup raf on unmount -------------------------------------------------
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
+
+  // -- Render -----------------------------------------------------------------
+  const wrapStyle: React.CSSProperties = drawing_visible
+    ? {} : { opacity: 0, pointerEvents: 'none' }
+
+  return (
+    <div className="rh-drawing-wrap" style={wrapStyle}>
+      <canvas ref={remoteRef} className="rh-drawing-remote" width={w} height={h} />
+      <canvas
+        ref={localRef}
+        width={w}
+        height={h}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        style={{ touchAction: 'none' }}
+      />
+      {Object.entries(remote_cursors).map(([uid, pos]) => {
+        if (uid === userName) return null
+        const c = localRef.current
+        const rect = c?.getBoundingClientRect()
+        const sx = rect ? rect.width / w : 1
+        const sy = rect ? rect.height / h : 1
+        return (
+          <div key={uid} className="rh-drawing-cursor" style={{ left: pos.x * sx, top: pos.y * sy }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: cursorColor(uid) }} />
+            <span className="rh-drawing-cursor-label">{uid}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }

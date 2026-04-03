@@ -432,9 +432,7 @@ function FlowCanvasInner() {
           </button>
           {exportStatus && <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 2 }}>{exportStatus}</span>}
           <a
-            href={`http://${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:3003`}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/review"
             className={styles.iconBtn}
             title="Review Hub"
             aria-label="Review Hub"

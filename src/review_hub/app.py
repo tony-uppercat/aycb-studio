@@ -5,11 +5,10 @@ import asyncio
 import socketio
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
 from src.review_hub.db import init_db
 from src.review_hub.scanner import run_scanner, set_sio
-from src.review_hub.routes import media, comments, favorites, drawings, references, upload, download, folders
+from src.review_hub.routes import media, comments, favorites, drawings, references, upload, download, folders, feedback, logs
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=[])
 
@@ -89,7 +88,7 @@ async def _get_users():
 def mount_review_hub(app: FastAPI) -> None:
     """Mount Review Hub routes, socket.io, static files, and scanner onto FastAPI app."""
     # Routes (BEFORE static mounts to prevent path interception)
-    for router_mod in [media, comments, favorites, drawings, references, upload, download, folders]:
+    for router_mod in [media, comments, favorites, drawings, references, upload, download, folders, feedback, logs]:
         app.include_router(router_mod.router)
 
     # Socket.io ASGI mount
@@ -104,9 +103,13 @@ def mount_review_hub(app: FastAPI) -> None:
         asyncio.create_task(run_scanner())
 
     # Static file mounts (AFTER routes)
-    media_dir = Path(__file__).resolve().parent.parent.parent / "shared" / "Media"
-    refs_dir = Path(__file__).resolve().parent.parent.parent / "shared" / "References"
+    from config.settings import settings
+    media_dir = settings.media_dir
+    refs_dir = settings.references_dir
+    thumb_dir = settings.thumbnails_dir
     media_dir.mkdir(parents=True, exist_ok=True)
     refs_dir.mkdir(parents=True, exist_ok=True)
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/thumbnails", StaticFiles(directory=str(thumb_dir)), name="rh-thumbnails")
     app.mount("/media", StaticFiles(directory=str(media_dir)), name="rh-media")
     app.mount("/references", StaticFiles(directory=str(refs_dir)), name="rh-references")

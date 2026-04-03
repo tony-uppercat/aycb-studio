@@ -49,7 +49,7 @@ def _save_to_bridge(
             folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
         else:
             folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.shared_media_path / folder
+        target_dir = settings.media_dir / folder
         target_dir.mkdir(parents=True, exist_ok=True)
         stem = f"generated_{int(time.time() * 1000)}"
         img_path = target_dir / f"{stem}.png"
@@ -101,7 +101,7 @@ def _save_to_bridge(
 
 def _delete_bridge_media(stem: str) -> str | None:
     """Delete PNG + .review.json for a given stem from shared/Media/. Returns deleted path or None."""
-    pattern = str(settings.shared_media_path / "**" / f"{stem}.png")
+    pattern = str(settings.media_dir / "**" / f"{stem}.png")
     matches = _glob.glob(pattern, recursive=True)
     if not matches:
         return None
@@ -117,7 +117,7 @@ def _delete_bridge_media(stem: str) -> str | None:
 
 def _find_review_json(stem: str) -> dict | None:
     """Search shared/Media/ recursively for {stem}.review.json and return parsed data, or None."""
-    pattern = str(settings.shared_media_path / "**" / f"{stem}.review.json")
+    pattern = str(settings.media_dir / "**" / f"{stem}.review.json")
     matches = _glob.glob(pattern, recursive=True)
     if not matches:
         return None
@@ -130,7 +130,7 @@ def _find_png_meta(stem: str) -> dict | None:
     safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
     if not safe_id:
         return None
-    pattern = str(settings.shared_media_path / "**" / f"{safe_id}.png")
+    pattern = str(settings.media_dir / "**" / f"{safe_id}.png")
     matches = _glob.glob(pattern, recursive=True)
     if not matches:
         return None
@@ -167,7 +167,7 @@ def _ext_to_mime(ext: str) -> str:
 
 def _scan_media_list() -> list[dict]:
     """Walk shared/Media/ recursively and return a list of media entry dicts."""
-    base = settings.shared_media_path
+    base = settings.media_dir
     if not base.exists():
         return []
     entries: list[dict] = []
@@ -219,7 +219,7 @@ def _lookup_media_id(stem: str) -> int | None:
     if not stem:
         return None
 
-    db_path = settings.shared_media_path.parent / "data" / "review-hub.db"
+    db_path = settings.db_path
     if not db_path.exists():
         return None
     uri = db_path.as_uri() + "?mode=ro"
@@ -236,11 +236,11 @@ def _lookup_media_id(stem: str) -> int | None:
 
 
 def _get_references_db_path() -> Path:
-    return settings.shared_media_path.parent / "data" / "review-hub.db"
+    return settings.db_path
 
 
 def _get_references_base_path() -> Path:
-    return settings.shared_media_path.parent / "References"
+    return settings.references_dir
 
 
 def _query_references(search: str = "", tag: str = "") -> list[dict]:
@@ -443,7 +443,7 @@ async def serve_media_thumb(path: str):
     path is like 'Maserati/generated_1774537520830.jpg'.
     Path traversal guard: resolved path must start with shared_media_path.
     """
-    base = settings.shared_media_path.resolve()
+    base = settings.media_dir.resolve()
     # path is 'project[/sub]/stem.jpg' — inject .thumbs/ before filename
     clean = path.replace("\\", "/")
     slash_idx = clean.rfind("/")
@@ -468,7 +468,7 @@ async def serve_media_file(path: str):
     path is like 'Maserati/generated_1774537520830.png'.
     Path traversal guard: resolved path must start with shared_media_path.
     """
-    base = settings.shared_media_path.resolve()
+    base = settings.media_dir.resolve()
     abs_path = (base / path).resolve()
     if not str(abs_path).startswith(str(base)):
         raise HTTPException(status_code=400, detail="Path traversal detected")
@@ -483,7 +483,7 @@ async def serve_media_file(path: str):
 async def explore_in_file_manager(path: str):
     """Open the file's parent folder in Windows Explorer and select it."""
     import subprocess
-    target = settings.shared_media_path / path
+    target = settings.media_dir / path
     if not target.exists():
         return {"status": "not_found"}
     abs_path = str(target.resolve())
@@ -496,7 +496,7 @@ async def explore_stem_in_file_manager(stem: str):
     """Find a file by stem name and open in Windows Explorer."""
     import subprocess
     import glob as globmod
-    pattern = str(settings.shared_media_path / "**" / f"{stem}.png")
+    pattern = str(settings.media_dir / "**" / f"{stem}.png")
     matches = globmod.glob(pattern, recursive=True)
     if not matches:
         return {"status": "not_found"}

@@ -39,10 +39,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def _on_startup():
     _log("AYCB backend ready")
-    if not settings.shared_media_path.exists():
+    if not settings.media_dir.exists():
         try:
-            settings.shared_media_path.mkdir(parents=True, exist_ok=True)
-            _log(f"Created shared media dir: {settings.shared_media_path}")
+            settings.media_dir.mkdir(parents=True, exist_ok=True)
+            _log(f"Created shared media dir: {settings.media_dir}")
         except Exception as e:
             _log(f"WARNING: shared media dir not available: {e}")
 

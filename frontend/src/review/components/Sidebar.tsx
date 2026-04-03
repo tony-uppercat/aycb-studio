@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { rhApi } from '../services/api'
 import { useUserStore } from '../stores/userStore'
-import { CommentThread } from './CommentThread'
+import CommentThread from './CommentThread'
 
 interface MediaItem {
   id: number
   filename: string
+  media_url?: string
   width?: number
   height?: number
   file_size?: number
@@ -48,7 +49,7 @@ export function Sidebar({ media, onClose, onRefresh }: Props) {
         <span className="rh-sidebar-title">{media.filename}</span>
         <button className="rh-sidebar-close" onClick={onClose}>&times;</button>
       </div>
-      <img src={`/media/${media.filename}`} alt="" className="rh-sidebar-preview" />
+      <img src={media.media_url ?? `/media/${media.filename}`} alt="" className="rh-sidebar-preview" />
       <div className="rh-sidebar-meta">
         {media.width != null && media.height != null && (
           <span>{media.width}&times;{media.height}</span>

@@ -1,8 +1,6 @@
 """System router — health, restart, logs, reports."""
 from __future__ import annotations
 
-import os
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -28,33 +26,10 @@ def health():
 
 @router.post("/restart")
 def restart_backend():
-    """Spawn a fresh backend process and kill the current one."""
-    import subprocess
-    import sys
-    import platform
-
-    python = sys.executable
-    project_root = Path(__file__).resolve().parent.parent.parent
-    if platform.system() == "Windows":
-        bat = project_root / "_restart.bat"
-        bat.write_text(
-            f'@echo off\nping -n 3 127.0.0.1 >nul\ncd /d "{project_root}"\n"{python}" -m src.cli ui-react --no-open\n',
-            encoding="utf-8",
-        )
-        subprocess.Popen(
-            [str(bat)],
-            shell=True,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-        )
-    else:
-        cmd = f'sleep 2 && cd "{project_root}" && "{python}" -m src.cli ui-react --no-open'
-        subprocess.Popen(cmd, shell=True, cwd=str(project_root), start_new_session=True)
-
-    def _exit():
-        time.sleep(0.3)
-        os._exit(0)
-
-    threading.Thread(target=_exit, daemon=True).start()
+    """Touch a .py file to trigger uvicorn's --reload file watcher."""
+    sentinel = Path(__file__).resolve().parent / "_reload_trigger.py"
+    sentinel.write_text(f"# Reload trigger — {time.time()}\n", encoding="utf-8")
+    _log("Restart requested — reload trigger touched")
     return {"status": "restarting"}
 
 

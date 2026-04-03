@@ -4,12 +4,13 @@ import { useCanvasStore } from '../stores/canvasStore'
 import { MODELS } from '../presets'
 import styles from './SettingsPanel.module.css'
 
-type Tab = 'api' | 'local' | 'defaults' | 'backend'
+type Tab = 'api' | 'local' | 'defaults' | 'paths' | 'backend'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'api', label: 'API Keys' },
   { id: 'local', label: 'Local' },
   { id: 'defaults', label: 'Defaults' },
+  { id: 'paths', label: 'Paths' },
   { id: 'backend', label: 'Backend' },
 ]
 
@@ -43,6 +44,9 @@ export function SettingsPanel({ open, onClose }: Props) {
 
   const [activeTab, setActiveTab] = useState<Tab>('api')
   const [restarting, setRestarting] = useState(false)
+  const [sharedPath, setSharedPath] = useState('')
+  const [sharedPathExists, setSharedPathExists] = useState(false)
+  const [pathSaving, setPathSaving] = useState(false)
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null)
   const [gpuLoading, setGpuLoading] = useState(false)
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null)
@@ -104,6 +108,35 @@ export function SettingsPanel({ open, onClose }: Props) {
     }
   }, [ollamaUrl])
 
+  const fetchPaths = useCallback(async () => {
+    try {
+      const r = await fetch('/api/settings/paths', { signal: AbortSignal.timeout(3000) })
+      if (r.ok) {
+        const d = await r.json()
+        setSharedPath(d.shared_root ?? '')
+        setSharedPathExists(d.exists ?? false)
+      }
+    } catch { /* offline */ }
+  }, [])
+
+  const savePath = useCallback(async () => {
+    if (!sharedPath.trim()) return
+    setPathSaving(true)
+    try {
+      const r = await fetch('/api/settings/paths', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shared_root: sharedPath }),
+        signal: AbortSignal.timeout(3000),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        setSharedPathExists(d.exists ?? false)
+      }
+    } catch { /* offline */ }
+    finally { setPathSaving(false) }
+  }, [sharedPath])
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -118,6 +151,11 @@ export function SettingsPanel({ open, onClose }: Props) {
       checkOllama()
     }
   }, [open, activeTab, fetchGpuInfo, checkOllama])
+
+  // Fetch paths when Paths tab is shown
+  useEffect(() => {
+    if (open && activeTab === 'paths') fetchPaths()
+  }, [open, activeTab, fetchPaths])
 
   if (!open) return null
 
@@ -284,6 +322,45 @@ export function SettingsPanel({ open, onClose }: Props) {
                   <label htmlFor="embed-check" className={styles.checkLabel}>
                     Include embeddings in analysis
                   </label>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ===== Paths Tab ===== */}
+          {activeTab === 'paths' && (
+            <>
+              <div className={styles.field}>
+                <label className={styles.label}>Shared Root</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="C:\path\to\shared"
+                  value={sharedPath}
+                  onChange={e => setSharedPath(e.target.value)}
+                />
+                <div className={styles.status}>
+                  <span className={`${styles.dot} ${sharedPathExists ? styles.dotOk : styles.dotEmpty}`} />
+                  {sharedPathExists ? 'Directory exists' : 'Directory not found'}
+                </div>
+                <p className={styles.hint}>
+                  Root shared directory. Contains Media/, References/, and data/. Saved to .env.
+                </p>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    className={styles.refreshBtn}
+                    onClick={savePath}
+                    disabled={pathSaving || !sharedPath.trim()}
+                  >
+                    {pathSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    className={styles.refreshBtn}
+                    onClick={() => fetch('/api/settings/open-folder', { method: 'POST' })}
+                    disabled={!sharedPathExists}
+                  >
+                    Open in Explorer
+                  </button>
                 </div>
               </div>
             </>

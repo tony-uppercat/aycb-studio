@@ -2,7 +2,9 @@
 from pathlib import Path
 from PIL import Image
 
-THUMB_DIR = Path(__file__).resolve().parent.parent.parent / "shared" / "data" / "thumbnails"
+from config.settings import settings
+
+THUMB_DIR = settings.thumbnails_dir
 THUMB_WIDTH = 300
 
 def generate_thumbnail(source_path: Path, media_id: int) -> str:

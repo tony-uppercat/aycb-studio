@@ -6,11 +6,10 @@ import mimetypes
 import time
 from pathlib import Path
 
+from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries.media import insert_media, list_media, delete_media
 from src.review_hub.thumbnails import generate_thumbnail, get_image_dimensions
-
-MEDIA_DIR = Path(__file__).resolve().parent.parent.parent / "shared" / "Media"
 SCAN_INTERVAL = 5
 SETTLE_TIME = 2
 
@@ -26,7 +25,7 @@ def set_sio(sio):
 
 async def scan_once() -> int:
     """Scan directory, index new files, remove deleted. Returns change count."""
-    if not MEDIA_DIR.exists():
+    if not settings.media_dir.exists():
         return 0
     now = time.time()
     db = await get_db()
@@ -36,7 +35,7 @@ async def scan_once() -> int:
         known = {row["filepath"] for row in existing}
 
         on_disk = set()
-        for f in MEDIA_DIR.rglob("*"):
+        for f in settings.media_dir.rglob("*"):
             if f.suffix.lower() not in ALL_EXTS:
                 continue
             if now - f.stat().st_mtime < SETTLE_TIME:
@@ -56,7 +55,7 @@ async def scan_once() -> int:
                 db,
                 filename=p.name,
                 filepath=filepath,
-                directory=str(p.parent.relative_to(MEDIA_DIR)) if p.is_relative_to(MEDIA_DIR) else str(p.parent),
+                directory=str(p.parent.relative_to(settings.media_dir)) if p.is_relative_to(settings.media_dir) else str(p.parent),
                 file_size=p.stat().st_size,
                 mime_type=mime,
                 width=w,

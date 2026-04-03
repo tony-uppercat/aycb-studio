@@ -2,24 +2,20 @@
 from __future__ import annotations
 
 import mimetypes
-from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File
+from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries import media as mq
 from src.review_hub.queries import references as rq
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
-_SHARED = Path(__file__).resolve().parent.parent.parent.parent / "shared"
-MEDIA_DIR = _SHARED / "Media"
-REF_DIR = _SHARED / "References"
-
 
 @router.post("/upload/media")
 async def upload_media(file: UploadFile = File(...)):
-    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-    dest = MEDIA_DIR / file.filename
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    dest = settings.media_dir / file.filename
     content = await file.read()
     dest.write_bytes(content)
 
@@ -43,8 +39,8 @@ async def upload_media(file: UploadFile = File(...)):
 
 @router.post("/upload/reference")
 async def upload_reference(file: UploadFile = File(...)):
-    REF_DIR.mkdir(parents=True, exist_ok=True)
-    dest = REF_DIR / file.filename
+    settings.references_dir.mkdir(parents=True, exist_ok=True)
+    dest = settings.references_dir / file.filename
     content = await file.read()
     dest.write_bytes(content)
 

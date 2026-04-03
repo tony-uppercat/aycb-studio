@@ -50,8 +50,8 @@ Vite dev server                     FastAPI + uvicorn
                                     ├── /api/effects/*      Effects
                                     └── /api/health         Health check
 
-Shared data (local, not in git):
-  shared/data/    shared/Media/    shared/References/
+Shared data (outside repo, not in git):
+  ../shared/Media/   ../shared/References/   ../shared/data/
 ```
 
 ---
@@ -170,9 +170,11 @@ cd . && pytest                          # Python backend tests
 
 ## Running
 
+**Desktop launcher:** `AYCB Studio.bat` on Desktop — starts backend + frontend + opens browser.
+
 ```bash
-# Backend
-python -m uvicorn src.api:app --host 0.0.0.0 --port 5101
+# Backend (--reload is MANDATORY for hot restart to work)
+python -m uvicorn src.api:app --host 0.0.0.0 --port 5101 --reload
 
 # Frontend
 cd frontend && npm run dev
@@ -180,6 +182,33 @@ cd frontend && npm run dev
 
 Frontend: http://localhost:5100
 Backend:  http://localhost:5101
+
+### Restart Mechanism
+
+The backend restart (`POST /api/restart` or Settings > Backend > Hard Restart) works by touching `src/routers/_reload_trigger.py`. Uvicorn's `--reload` file watcher detects the change and respawns the worker process. **This only works if uvicorn was started with `--reload`.**
+
+Checklist if restart is broken:
+1. Was uvicorn started with `--reload`? Without it, touch has no effect.
+2. Is `_reload_trigger.py` inside the watched directory (`src/`)? It must be.
+3. Frontend polls `/api/health` every 1.5s for up to 30s. Backend should be back in ~2-3s.
+4. If stuck: kill the "AYCB Backend" CMD window, relaunch `AYCB Studio.bat`.
+
+### Shared Root
+
+All shared data lives **outside the repo** at `C:\Users\upper\Documents\shared\`:
+
+```
+Documents/shared/          ← settings.shared_root
+├── Media/                 ← settings.media_dir (scanner, bridge, uploads)
+├── References/            ← settings.references_dir
+└── data/
+    ├── thumbnails/        ← settings.thumbnails_dir
+    └── review-hub.db      ← settings.db_path
+```
+
+Single source of truth: `config/settings.py` → `settings.shared_root`. All backend modules import from `config.settings`. Editable from UI: Settings > Paths. Persisted to `.env` as `AYCB_SHARED_ROOT`.
+
+**Never hardcode shared paths with `Path(__file__)`** — always use `settings.media_dir`, `settings.references_dir`, etc.
 
 ---
 

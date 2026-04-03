@@ -120,7 +120,7 @@ async def analyze_video_endpoint(
     video_stem = video_name or Path(fname).stem
     export_dir = None
     if export_folder:
-        export_dir = settings.shared_media_path / export_folder
+        export_dir = settings.media_dir / export_folder
         export_dir.mkdir(parents=True, exist_ok=True)
 
     try:

@@ -7,8 +7,8 @@ from PIL import Image
 @pytest.fixture
 def scan_env(tmp_path, monkeypatch):
     import src.review_hub.db as db_mod
-    import src.review_hub.scanner as scanner_mod
     import src.review_hub.thumbnails as thumb_mod
+    from config.settings import settings
 
     db_path = tmp_path / "test.db"
     media_dir = tmp_path / "Media"
@@ -16,7 +16,7 @@ def scan_env(tmp_path, monkeypatch):
     media_dir.mkdir()
 
     monkeypatch.setattr(db_mod, "_DB_PATH", db_path)
-    monkeypatch.setattr(scanner_mod, "MEDIA_DIR", media_dir)
+    monkeypatch.setattr(settings, "shared_root", media_dir.parent)
     monkeypatch.setattr(thumb_mod, "THUMB_DIR", thumb_dir)
 
     return media_dir, thumb_dir

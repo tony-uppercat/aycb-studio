@@ -23,6 +23,9 @@ async def llm_chat_endpoint(
     media_files: list[UploadFile] | None = File(default=None),
 ):
     import time
+    from google import genai
+    from google.genai import types as genai_types
+    from src.gemini import _call_with_gemini_retries
 
     clean_prompt = _require_prompt(prompt)
     effective_key = _require_api_key(api_key)

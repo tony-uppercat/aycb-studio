@@ -20,6 +20,10 @@ export default defineConfig({
         target: 'http://localhost:5101',
         changeOrigin: true,
       },
+      '/thumbnails': {
+        target: 'http://localhost:5101',
+        changeOrigin: true,
+      },
       '/references': {
         target: 'http://localhost:5101',
         changeOrigin: true,

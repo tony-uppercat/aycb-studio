@@ -260,7 +260,7 @@ def _save_to_bridge(
             folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
         else:
             folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.shared_media_path / folder
+        target_dir = settings.media_dir / folder
         target_dir.mkdir(parents=True, exist_ok=True)
         stem = f"generated_{int(time.time() * 1000)}"
         img_path = target_dir / f"{stem}.png"

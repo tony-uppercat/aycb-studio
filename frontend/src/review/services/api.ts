@@ -51,7 +51,37 @@ export const rhApi = {
     const fd = new FormData(); fd.append('file', file)
     return post<{ filename: string; id: number }>('/upload/reference', fd)
   },
+  // Folders
   listFolders: () => get<{ folders: string[] }>('/folders'),
+  getSubfolders: (project: string) =>
+    get<unknown[]>('/folders', { project }),
+  createFolder: (body: { project: string; name: string }) =>
+    post<unknown>('/folders', body),
+  renameFolder: (name: string, body: { new_name: string }) =>
+    post<unknown>(`/folders/${encodeURIComponent(name)}/rename`, body),
+  deleteFolder: (name: string) => del(`/folders/${encodeURIComponent(name)}`),
   moveToFolder: (body: { media_id: number; target_dir: string }) =>
     post<unknown>('/folders/move', body),
+
+  // Admin
+  bulkDeleteMedia: (ids: number[], username: string) =>
+    fetch(BASE + '/media/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Username': username },
+      body: JSON.stringify({ ids }),
+    }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
+
+  // Download/stream URLs
+  downloadUrl: (id: number) => `${BASE}/download/media/${id}`,
+  streamUrl: (id: number) => `${BASE}/media/${id}/stream`,
+
+  // Logs
+  getLogs: () => get<{ logs: string[] }>('/logs'),
+
+  // Feedback
+  listFeedback: (urgentOnly?: boolean) =>
+    get<{ items: unknown[]; total: number }>('/feedback', urgentOnly ? { urgent_only: 'true' } : undefined),
+  addFeedback: (body: { message: string; category?: string; author?: string; urgent?: boolean }) =>
+    post<{ id: number }>('/feedback', body),
+  resolveFeedback: (id: number) => post<{ ok: boolean }>(`/feedback/${id}/resolve`),
 }

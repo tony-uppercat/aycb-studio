@@ -1,25 +1,48 @@
-interface MediaItem {
-  id: number
-  filename: string
-  thumbnail_path?: string
-}
+import React, { useRef, useCallback } from 'react'
+import { MediaCard, type MediaCardMedia } from './MediaCard'
 
 interface Props {
-  items: MediaItem[]
+  items: MediaCardMedia[]
   selectedId: number | null
   onSelect: (id: number) => void
   onDoubleClick: (id: number) => void
+  selected_ids?: Set<number>
+  show_checkboxes?: boolean
+  is_admin?: boolean
+  on_card_select?: (id: number, e: React.MouseEvent) => void
+  on_context_menu?: (id: number, e: React.MouseEvent) => void
+  on_delete?: (id: number) => void
 }
 
-function thumbnailSrc(item: MediaItem): string {
-  if (item.thumbnail_path) {
-    const name = item.thumbnail_path.split('/').pop() ?? item.filename
-    return `/media/${name}`
-  }
-  return `/media/${item.filename}`
-}
+const DBLCLICK_MS = 250
 
-export function MediaGrid({ items, selectedId, onSelect, onDoubleClick }: Props) {
+export function MediaGrid({
+  items,
+  selectedId,
+  onSelect,
+  onDoubleClick,
+  selected_ids,
+  show_checkboxes = false,
+  is_admin = false,
+  on_card_select,
+  on_context_menu,
+  on_delete,
+}: Props) {
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleClick = useCallback((id: number) => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+      onDoubleClick(id)
+    } else {
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null
+        onSelect(id)
+      }, DBLCLICK_MS)
+    }
+  }, [onSelect, onDoubleClick])
+
   if (items.length === 0) {
     return <div className="rh-grid-empty">No media found</div>
   }
@@ -27,20 +50,17 @@ export function MediaGrid({ items, selectedId, onSelect, onDoubleClick }: Props)
   return (
     <div className="rh-grid">
       {items.map(item => (
-        <div
+        <MediaCard
           key={item.id}
-          className={`rh-grid-item ${selectedId === item.id ? 'rh-grid-selected' : ''}`}
-          onClick={() => onSelect(item.id)}
-          onDoubleClick={() => onDoubleClick(item.id)}
-        >
-          <img
-            src={thumbnailSrc(item)}
-            alt={item.filename}
-            loading="lazy"
-            className="rh-grid-thumb"
-          />
-          <span className="rh-grid-name">{item.filename}</span>
-        </div>
+          media={item}
+          selected={selected_ids?.has(item.id) ?? selectedId === item.id}
+          show_checkbox={show_checkboxes}
+          is_admin={is_admin}
+          on_click={() => handleClick(item.id)}
+          on_select={(e) => on_card_select?.(item.id, e)}
+          on_context_menu={(e) => on_context_menu?.(item.id, e)}
+          on_delete={on_delete ? () => on_delete(item.id) : undefined}
+        />
       ))}
     </div>
   )

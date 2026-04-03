@@ -72,8 +72,10 @@ export function MediaCard({
   return (
     <div
       className={`rh-card${selected ? ' rh-card--selected' : ''}`}
+      tabIndex={0}
       onClick={on_click}
       onContextMenu={on_context_menu}
+      onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); on_click() } }}
     >
       {show_checkbox && (
         <div className="rh-card-checkbox" onClick={on_select}>

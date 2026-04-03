@@ -43,6 +43,7 @@ export function ReviewGallery() {
   const [refs, setRefs] = useState<ReferenceItem[]>([])
   const [refSearch, setRefSearch] = useState('')
   const [refTag, setRefTag] = useState('')
+  const [draggingOver, setDraggingOver] = useState(false)
 
   const bumpMedia = useSocketStore(s => s.bumpMediaVersion)
   const is_admin = useUserStore(s => s.is_admin)
@@ -170,10 +171,39 @@ export function ReviewGallery() {
   }, [mediaList])
 
   // --- References handlers ---
+  const uploadRefFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    try {
+      await rhApi.uploadReference(file, activeDirectory ?? undefined)
+    } catch { toast.error(`Failed to upload ${file.name}`) }
+  }, [activeDirectory])
+
   const handleRefUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return
-    await rhApi.uploadReference(file); loadRefs(); e.target.value = ''
+    const files = e.target.files; if (!files || files.length === 0) return
+    await Promise.all(Array.from(files).map(uploadRefFile))
+    loadRefs(); e.target.value = ''
   }
+
+  const handleRefDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); e.stopPropagation()
+    if (e.dataTransfer.types.includes('Files')) setDraggingOver(true)
+  }
+
+  const handleRefDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); e.stopPropagation()
+    // Only clear if leaving the drop zone entirely (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDraggingOver(false)
+  }
+
+  const handleRefDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); e.stopPropagation()
+    setDraggingOver(false)
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    await Promise.all(files.map(uploadRefFile))
+    loadRefs()
+  }
+
   const handleRefDelete = async (id: number) => { await rhApi.deleteReference(id); loadRefs() }
 
   // --- Derived ---
@@ -207,7 +237,7 @@ export function ReviewGallery() {
           <StatsBar total={stats.total} favorite_count={stats.favorite_count} comment_count={stats.comment_count} />
           <div className="rh-gallery-area">
             <MediaGrid items={filteredMedia} selectedId={selectedMediaId}
-              onSelect={setSelectedMediaId}
+              onSelect={(id) => setLightboxIndex(filteredMedia.findIndex(m => m.id === id))}
               onDoubleClick={(id) => setLightboxIndex(filteredMedia.findIndex(m => m.id === id))}
               selected_ids={selectedIds} show_checkboxes={selectedIds.size > 0} is_admin={is_admin}
               on_card_select={handleSelect} on_context_menu={handleContextMenu}
@@ -217,16 +247,26 @@ export function ReviewGallery() {
         </>}
 
         {tab === 'references' && (
-          <div className="rh-refs">
+          <div
+            className={`rh-refs${draggingOver ? ' rh-refs-drop-active' : ''}`}
+            onDragOver={handleRefDragOver}
+            onDragLeave={handleRefDragLeave}
+            onDrop={handleRefDrop}
+          >
+            {draggingOver && (
+              <div className="rh-refs-drop-overlay">
+                <span className="rh-refs-drop-label">Drop to upload</span>
+              </div>
+            )}
             <div className="rh-refs-bar">
               <input className="rh-search" placeholder="Search references..." value={refSearch}
                 onChange={e => setRefSearch(e.target.value)} />
               <input className="rh-search" placeholder="Filter by tag..." value={refTag}
                 onChange={e => setRefTag(e.target.value)} style={{ maxWidth: 150 }} />
-              <label className="rh-upload-btn">Upload<input type="file" accept="image/*" onChange={handleRefUpload} hidden /></label>
+              <label className="rh-upload-btn">Upload<input type="file" accept="image/*" multiple onChange={handleRefUpload} hidden /></label>
             </div>
             {refs.length === 0 ? (
-              <div className="rh-refs-empty">No references yet. Upload images to build your library.</div>
+              <div className="rh-refs-empty">No references yet. Upload images or drag files here.</div>
             ) : (
               <div className="rh-refs-grid">
                 {refs.map((item) => (
@@ -235,7 +275,7 @@ export function ReviewGallery() {
                     <div className="rh-ref-info">
                       <span className="rh-ref-name">{item.filename}</span>
                       {item.tags && <span className="rh-ref-tags">{item.tags}</span>}
-                      <button className="rh-ref-delete" onClick={() => handleRefDelete(item.id)}>x</button>
+                      {is_admin && <button className="rh-ref-delete" onClick={() => handleRefDelete(item.id)}>x</button>}
                     </div>
                   </div>
                 ))}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { socket } from './services/socket'
 import { useUserStore } from './stores/userStore'
 import { useSocketStore } from './stores/socketStore'
@@ -11,9 +11,40 @@ import { ToastContainer } from './components/Toast'
 import './styles/review.css'
 
 export default function ReviewApp() {
-  const { user_name, set_user_name, get_initials } = useUserStore()
+  const { user_name, set_user_name, get_initials, is_admin } = useUserStore()
   const [console_open, setConsoleOpen] = useState(false)
   const [show_name_modal, setShowNameModal] = useState(false)
+  const [restarting, setRestarting] = useState(false)
+
+  const handleRestart = useCallback(async () => {
+    setRestarting(true)
+    // Get current startup time to detect actual restart
+    let oldStart = 0
+    try {
+      const h = await fetch('/api/health', { signal: AbortSignal.timeout(2000) })
+      const d = await h.json()
+      oldStart = d.started_at ?? 0
+    } catch { /* offline */ }
+    try { await fetch('/api/restart', { method: 'POST' }) } catch { /* backend dies */ }
+    const t0 = Date.now()
+    const poll = setInterval(async () => {
+      if (Date.now() - t0 > 15_000) {
+        clearInterval(poll); setRestarting(false)
+        toast.error('Restart failed — backend may not be running with --reload')
+        return
+      }
+      try {
+        const r = await fetch('/api/health', { signal: AbortSignal.timeout(2000) })
+        if (!r.ok) return
+        const d = await r.json()
+        if (d.started_at && d.started_at !== oldStart) {
+          clearInterval(poll); setRestarting(false)
+          toast.success('Backend restarted')
+          window.location.reload()
+        }
+      } catch { /* still down */ }
+    }, 1500)
+  }, [])
 
   // Show name modal on first visit or missing name
   useEffect(() => {
@@ -121,6 +152,16 @@ export default function ReviewApp() {
           <span className="rh-brand-title">Review Hub</span>
         </div>
         <div className="rh-nav-right">
+          {is_admin && (
+            <button
+              className="rh-console-toggle"
+              onClick={handleRestart}
+              disabled={restarting}
+              title="Restart backend (admin)"
+            >
+              {restarting ? 'Restarting...' : 'Restart'}
+            </button>
+          )}
           <button
             className={`rh-console-toggle${console_open ? ' rh-console-toggle--active' : ''}`}
             onClick={toggle_console}

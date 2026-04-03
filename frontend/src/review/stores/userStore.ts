@@ -18,7 +18,13 @@ export const useUserStore = create<UserState>((set, get) => ({
   is_admin: localStorage.getItem(ADMIN_KEY) === '1',
   set_user_name: (name: string) => {
     localStorage.setItem(STORAGE_KEY, name)
-    set({ user_name: name })
+    // Clear admin when switching to non-admin user
+    if (name.trim().toLowerCase() !== 'admin') {
+      localStorage.removeItem(ADMIN_KEY)
+      set({ user_name: name, is_admin: false })
+    } else {
+      set({ user_name: name })
+    }
   },
   get_initials: () => {
     const name = get().user_name

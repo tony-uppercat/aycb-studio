@@ -1,3 +1,5 @@
+import { Star, Check, X, MessageSquare, Pencil, Download, Trash2 } from 'lucide-react'
+
 interface LightboxToolbarProps {
   media: { id: number; filename: string; is_favorite?: boolean; status?: string }
   show_comments: boolean
@@ -39,42 +41,46 @@ export function LightboxToolbar({
           onClick={on_toggle_fav}
           title="Favorite (F)"
         >
-          &#9733;
+          <Star
+            size={16}
+            strokeWidth={1.5}
+            fill={media.is_favorite ? 'currentColor' : 'none'}
+          />
         </button>
         <button
           className={`rh-lb-btn${is_approved ? ' rh-lb-btn-approved' : ''}`}
           onClick={on_approve}
           title="Approve (A)"
         >
-          &#10003;
+          <Check size={16} strokeWidth={1.5} />
         </button>
         <button
           className={`rh-lb-btn${is_rejected ? ' rh-lb-btn-rejected' : ''}`}
           onClick={on_reject}
           title="Reject (R)"
         >
-          &#10007;
+          <X size={16} strokeWidth={1.5} />
         </button>
         <button
           className={`rh-lb-btn${show_comments ? ' rh-lb-btn-accent' : ''}`}
           onClick={on_toggle_comments}
           title="Comments (C)"
         >
-          C
+          <MessageSquare size={16} strokeWidth={1.5} />
         </button>
         <button
           className={`rh-lb-btn${is_drawing ? ' rh-lb-btn-accent' : ''}`}
           onClick={on_toggle_drawing}
           title="Draw (D)"
         >
-          D
+          <Pencil size={16} strokeWidth={1.5} />
         </button>
         <button
           className="rh-lb-btn"
           onClick={on_download}
           title="Download (S)"
         >
-          S
+          <Download size={16} strokeWidth={1.5} />
         </button>
         {is_admin && (
           <button
@@ -82,7 +88,7 @@ export function LightboxToolbar({
             onClick={on_delete}
             title="Delete"
           >
-            Del
+            <Trash2 size={16} strokeWidth={1.5} />
           </button>
         )}
         <button
@@ -90,7 +96,7 @@ export function LightboxToolbar({
           onClick={on_close}
           title="Close (Esc)"
         >
-          &times;
+          <X size={16} strokeWidth={1.5} />
         </button>
       </div>
     </div>

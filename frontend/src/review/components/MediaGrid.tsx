@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react'
+import React, { useCallback } from 'react'
 import { MediaCard, type MediaCardMedia } from './MediaCard'
 
 interface Props {
@@ -14,8 +14,6 @@ interface Props {
   on_delete?: (id: number) => void
 }
 
-const DBLCLICK_MS = 250
-
 export function MediaGrid({
   items,
   selectedId,
@@ -28,20 +26,9 @@ export function MediaGrid({
   on_context_menu,
   on_delete,
 }: Props) {
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   const handleClick = useCallback((id: number) => {
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current)
-      clickTimerRef.current = null
-      onDoubleClick(id)
-    } else {
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null
-        onSelect(id)
-      }, DBLCLICK_MS)
-    }
-  }, [onSelect, onDoubleClick])
+    onDoubleClick(id)
+  }, [onDoubleClick])
 
   if (items.length === 0) {
     return <div className="rh-grid-empty">No media found</div>

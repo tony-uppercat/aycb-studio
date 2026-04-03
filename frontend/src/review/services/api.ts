@@ -47,8 +47,9 @@ export const rhApi = {
   listReferences: (params?: { search?: string; tag?: string }) =>
     get<{ items: unknown[] }>('/references', params as Record<string, string>),
   deleteReference: (id: number) => del(`/references/${id}`),
-  uploadReference: (file: File) => {
+  uploadReference: (file: File, directory?: string) => {
     const fd = new FormData(); fd.append('file', file)
+    if (directory) fd.append('directory', directory)
     return post<{ filename: string; id: number }>('/upload/reference', fd)
   },
   // Folders

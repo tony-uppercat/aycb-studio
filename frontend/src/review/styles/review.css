@@ -288,7 +288,18 @@
 .rh-modal-save { background: var(--accent, #F52776); border: none; border-radius: 4px; color: #fff; padding: 6px 16px; cursor: pointer; }
 
 /* References page */
-.rh-refs { display: flex; flex-direction: column; height: 100%; }
+.rh-refs { display: flex; flex-direction: column; height: 100%; position: relative; }
+.rh-refs-drop-active { outline: 2px dashed var(--accent, #F52776); outline-offset: -2px; }
+.rh-refs-drop-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(245, 39, 118, 0.12);
+  pointer-events: none;
+}
+.rh-refs-drop-label {
+  font-size: 18px; font-weight: 600; color: var(--accent, #F52776);
+  letter-spacing: 0.01em;
+}
 .rh-refs-bar { display: flex; gap: 8px; padding: 8px 0; align-items: center; flex-shrink: 0; }
 .rh-upload-btn {
   background: var(--accent, #F52776); border: none; border-radius: 4px;
@@ -299,15 +310,16 @@
   color: var(--text-dim, #666); font-size: 13px;
 }
 .rh-refs-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fill, 180px);
   gap: 12px; padding: 8px 0; overflow-y: auto; flex: 1;
 }
 .rh-ref-card {
+  width: 180px;
   border-radius: 6px; overflow: hidden;
   border: 1px solid var(--border, #2a2a2a);
   background: var(--surface-1, #1a1a1a);
 }
-.rh-ref-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.rh-ref-img { width: 100%; height: 180px; aspect-ratio: 1; object-fit: cover; object-position: center; display: block; }
 .rh-ref-info { padding: 6px 8px; display: flex; align-items: center; gap: 4px; }
 .rh-ref-name { font-size: 11px; color: var(--text-secondary, #a0a0a0); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rh-ref-tags { font-size: 10px; color: var(--text-dim, #666); }
@@ -527,11 +539,11 @@
 .rh-card-thumb {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
   background: var(--surface-2, #1e1e1e);
   overflow: hidden;
 }
-.rh-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rh-card-img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
 
 .rh-card-play-overlay {
   position: absolute; inset: 0;

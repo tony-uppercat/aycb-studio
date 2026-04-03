@@ -4,6 +4,7 @@ import { emitEvent } from '../services/socket'
 import { rhApi } from '../services/api'
 import { useUserStore } from '../stores/userStore'
 import { renderStroke, cursorColor } from '../utils/drawingUtils'
+import { toast } from '../stores/toastStore'
 
 // ---------------------------------------------------------------------------
 // DrawingCanvas -- dual-canvas freehand drawing with pressure sensitivity,
@@ -27,6 +28,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
   const lastEmitRef = useRef(0)
   const lineStartRef = useRef<{ x: number; y: number } | null>(null)
   const lineEndRef = useRef<{ x: number; y: number } | null>(null)
+  const redrawLocalRef = useRef(redrawLocal)
 
   const {
     current_tool, color, stroke_width, opacity,
@@ -81,6 +83,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     remote_strokes.forEach((s) => renderStroke(ctx, s))
   }, [remote_strokes])
 
+  redrawLocalRef.current = redrawLocal
   useEffect(() => { redrawLocal() }, [redrawLocal])
   useEffect(() => { redrawRemote() }, [redrawRemote])
 
@@ -93,6 +96,17 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [undo, redo])
+
+  // -- Auto-save after each stroke (backend upserts, notify on save) -----------
+  const scheduleAutoSave = useCallback(() => {
+    const all = useDrawingStore.getState().strokes
+    if (all.length === 0) return
+    rhApi.saveDrawing({
+      media_id: mediaId, author: user_name, strokes_json: JSON.stringify(all),
+    })
+      .then(() => toast.success('Drawing saved'))
+      .catch(e => toast.error(`Drawing save failed: ${e instanceof Error ? e.message : e}`))
+  }, [mediaId, user_name])
 
   // -- Stroke ID helper -------------------------------------------------------
   const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -136,9 +150,9 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     for (const ce of events) pathRef.current.push(getPos(ce as PointerEvent))
 
     if (!rafRef.current) {
-      rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; redrawLocal() })
+      rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; redrawLocalRef.current() })
     }
-  }, [getPos, current_tool, user_name, redrawLocal])
+  }, [getPos, current_tool, user_name])
 
   const onUp = useCallback((e: React.PointerEvent) => {
     if (!downRef.current) return
@@ -151,7 +165,11 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
         points: [lineStartRef.current, lineEndRef.current], author: user_name,
       }
       addStroke(stroke)
+      // Immediate canvas render — don't wait for React useEffect cycle
+      const c = localRef.current
+      if (c) renderStroke(c.getContext('2d')!, stroke)
       emitEvent('drawing_stroke', stroke)
+      scheduleAutoSave()
       lineStartRef.current = null
       lineEndRef.current = null
       return
@@ -163,10 +181,18 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
         points: pathRef.current, author: user_name,
       }
       addStroke(stroke)
+      // Immediate canvas render — don't wait for React useEffect cycle
+      const c = localRef.current
+      if (c) {
+        const ctx = c.getContext('2d')!
+        ctx.clearRect(0, 0, c.width, c.height)
+        useDrawingStore.getState().strokes.forEach(s => renderStroke(ctx, s))
+      }
       emitEvent('drawing_stroke', stroke)
+      scheduleAutoSave()
     }
     pathRef.current = []
-  }, [current_tool, color, stroke_width, opacity, user_name, addStroke])
+  }, [current_tool, color, stroke_width, opacity, user_name, addStroke, scheduleAutoSave])
 
   // -- Load existing drawings on mount ----------------------------------------
   useEffect(() => {
@@ -237,8 +263,10 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     }
   }, [mediaId, user_name, w, h])
 
-  // -- Cleanup raf on unmount -------------------------------------------------
-  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
+  // -- Cleanup on unmount -----------------------------------------------------
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+  }, [])
 
   // -- Render -----------------------------------------------------------------
   const wrapStyle: React.CSSProperties = drawing_visible

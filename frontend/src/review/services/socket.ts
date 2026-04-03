@@ -1,10 +1,12 @@
 import { io } from 'socket.io-client'
 
-// In dev, Vite proxies /socket.io to the backend. Connect to same origin.
-// On LAN (iPad etc.), the proxy handles it — but use polling first for reliability.
-export const socket = io({
+// Connect directly to backend port for real WebSocket (no Vite proxy latency).
+// In dev: same hostname, port 5101. Vite proxy adds latency + breaks WS upgrade.
+const backendUrl = `${window.location.protocol}//${window.location.hostname}:5101`
+
+export const socket = io(backendUrl, {
   autoConnect: false,
-  transports: ['polling', 'websocket'],
+  transports: ['websocket', 'polling'],
 })
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -19,18 +19,20 @@ router = APIRouter(prefix="/api", tags=["system"])
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+_START_TIME = time.time()
+
 @router.get("/health")
 def health():
-    import socket
+    import socket as _socket
     local_ip = ""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
         s.close()
     except Exception as e:
         _log(f"LAN IP detection failed: {e}")
-    return {"status": "ok", "local_ip": local_ip}
+    return {"status": "ok", "local_ip": local_ip, "started_at": _START_TIME}
 
 
 @router.post("/restart")
@@ -190,3 +192,4 @@ def save_session_report(payload: SessionReportPayload):
         "totalCost": total_cost,
         "feedbackCount": fb_total,
     }
+

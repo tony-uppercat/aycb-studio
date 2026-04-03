@@ -10,7 +10,7 @@ from src.review_hub.db import init_db
 from src.review_hub.scanner import run_scanner, set_sio
 from src.review_hub.routes import media, comments, favorites, drawings, references, upload, download, folders, feedback, logs
 
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=[])
+sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
 @sio.event
 async def connect(sid, environ):

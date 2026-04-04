@@ -5,10 +5,14 @@ export function Header() {
   const [lanIp, setLanIp] = useState('')
 
   useEffect(() => {
-    fetch('/api/health', { signal: AbortSignal.timeout(3000) })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+    fetch('/api/health', { signal: controller.signal })
       .then(r => r.json())
       .then(d => { if (d.local_ip) setLanIp(d.local_ip) })
-      .catch(() => {})
+      .catch(err => { if (err.name !== 'AbortError') console.warn('[Header] health fetch failed:', err) })
+      .finally(() => clearTimeout(timeout))
+    return () => { clearTimeout(timeout); controller.abort() }
   }, [])
 
   const lanUrl = lanIp ? `http://${lanIp}:5100/review` : ''

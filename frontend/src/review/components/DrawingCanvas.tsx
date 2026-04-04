@@ -28,7 +28,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
   const lastEmitRef = useRef(0)
   const lineStartRef = useRef<{ x: number; y: number } | null>(null)
   const lineEndRef = useRef<{ x: number; y: number } | null>(null)
-  const redrawLocalRef = useRef(redrawLocal)
+  const redrawLocalRef = useRef<() => void>(() => {})
 
   const {
     current_tool, color, stroke_width, opacity,
@@ -196,11 +196,11 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
 
   // -- Load existing drawings on mount ----------------------------------------
   useEffect(() => {
-    let cancelled = false
+    const ctrl = new AbortController()
     useDrawingStore.getState().resetForMedia()
-    rhApi.getDrawing(mediaId)
+    rhApi.getDrawing(mediaId, ctrl.signal)
       .then((data) => {
-        if (cancelled) return
+        if (ctrl.signal.aborted) return
         const rec = (data as { drawing?: { strokes_json?: string } | null })?.drawing
         if (rec?.strokes_json) {
           const parsed = JSON.parse(rec.strokes_json) as Stroke[]
@@ -209,8 +209,10 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
           }
         }
       })
-      .catch((err: unknown) => console.warn('[DrawingCanvas] load failed:', err))
-    return () => { cancelled = true }
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name !== 'AbortError') console.warn('[DrawingCanvas] load failed:', err)
+      })
+    return () => { ctrl.abort() }
   }, [mediaId])
 
   // -- Expose save/export on window for toolbar -------------------------------
@@ -283,6 +285,7 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
+        onContextMenu={(e) => e.preventDefault()}
         style={{ touchAction: 'none' }}
       />
       {Object.entries(remote_cursors).map(([uid, pos]) => {

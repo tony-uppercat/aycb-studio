@@ -83,11 +83,12 @@ Shared data (outside repo, not in git):
 │       │   └── index.ts            Auto-discovery via import.meta.glob
 │       ├── review/                 Review Hub SPA (lazy-loaded at /review)
 │       │   ├── components/         Gallery, Lightbox, Drawing, Comments, etc.
-│       │   ├── hooks/              useGalleryData, useFilteredMedia
+│       │   ├── hooks/              useGalleryData (exports useFilteredMedia)
 │       │   ├── pages/              ReviewGallery
 │       │   ├── services/           api.ts, socket.ts
 │       │   ├── stores/             userStore, socketStore, drawingStore, toastStore
 │       │   ├── styles/             review.css
+│       │   ├── utils/              drawingUtils.ts
 │       │   └── ReviewApp.tsx       Entry point
 │       ├── components/             UI components
 │       │   ├── canvas/             FlowCanvas, CanvasContextMenu
@@ -99,13 +100,13 @@ Shared data (outside repo, not in git):
 │       ├── stores/                 Zustand stores
 │       ├── providers/              Image/LLM provider registry
 │       ├── utils/                  Utilities
-│       ├── storage/                IndexedDB, storage keys
+│       ├── storage/                Storage key constants (keys.ts)
 │       ├── events/                 Event system
 │       └── styles/                 design-tokens.css, globals.css
 ├── src/                            Python backend
 │   ├── api.py                      FastAPI app + lifespan + router auto-discovery
 │   ├── routers/                    API routers (auto-discovered)
-│   ├── plugins/                    Plugin routers (auto-discovered)
+│   ├── plugins/                    Plugin routers (auto-discovered, currently empty)
 │   └── review_hub/                 Review Hub backend
 │       ├── app.py                  Socket.IO + mount + startup
 │       ├── db.py                   SQLite connection + schema init

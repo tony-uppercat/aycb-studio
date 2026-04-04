@@ -39,7 +39,7 @@ def health():
 def restart_backend():
     """Touch a .py file to trigger uvicorn's --reload file watcher."""
     sentinel = Path(__file__).resolve().parent / "_reload_trigger.py"
-    sentinel.write_text(f"# Reload trigger — {time.time()}\n", encoding="utf-8")
+    sentinel.write_text(f"# Reload trigger — {time.time()}\n", encoding="utf-8", newline="\n")
     _log("Restart requested — reload trigger touched")
     return {"status": "restarting"}
 

@@ -10,18 +10,21 @@ export function useGalleryData(activeDirectory: string | null) {
   const [subfolders, setSubfolders] = useState<{ name: string; path: string }[]>([])
   const mediaVersion = useSocketStore(s => s.mediaVersion)
 
-  const loadMedia = useCallback(async () => {
+  const loadMedia = useCallback(async (signal?: AbortSignal) => {
     try {
       const params: Record<string, string> = {}
       if (activeDirectory) params.directory = activeDirectory
-      const data = await rhApi.listMedia(params)
-      setMediaList(data.items as MediaCardMedia[])
-    } catch { /* swallow */ }
+      const data = await rhApi.listMedia(params, signal)
+      if (!signal?.aborted) setMediaList(data.items as MediaCardMedia[])
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') { /* swallow */ }
+    }
   }, [activeDirectory])
 
-  const loadDirs = useCallback(async () => {
+  const loadDirs = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await rhApi.getDirectories()
+      const data = await rhApi.getDirectories(signal)
+      if (signal?.aborted) return
       const all: string[] = (data.directories || []).filter(
         (d: any) => d != null && d !== '.'
       )
@@ -36,12 +39,16 @@ export function useGalleryData(activeDirectory: string | null) {
         })
       setDirectories(topLevel)
       setSubfolders(subs)
-    } catch { /* swallow */ }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') { /* swallow */ }
+    }
   }, [])
 
   useEffect(() => {
-    void loadMedia()
-    void loadDirs()
+    const ctrl = new AbortController()
+    void loadMedia(ctrl.signal)
+    void loadDirs(ctrl.signal)
+    return () => { ctrl.abort() }
   }, [loadMedia, loadDirs, mediaVersion])
 
   // Socket listeners for silent refresh

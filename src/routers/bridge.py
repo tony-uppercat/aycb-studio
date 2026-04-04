@@ -115,8 +115,8 @@ def _find_png_meta(stem: str) -> dict | None:
         if "cost_usd" in meta:
             try:
                 meta["cost_usd"] = float(meta["cost_usd"])
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as exc:
+                _log(f"PNG meta cost_usd parse error for '{stem}': {exc}")
         return meta
     except Exception as e:
         _log(f"PNG meta read error for '{stem}': {e}")

@@ -41,7 +41,7 @@ def _load_items() -> list[dict]:
 def _save_items(items: list[dict]) -> None:
     REVIEW_FILE.parent.mkdir(parents=True, exist_ok=True)
     REVIEW_FILE.write_text(
-        _json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8"
+        _json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n"
     )
 
 

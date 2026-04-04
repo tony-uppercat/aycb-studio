@@ -43,7 +43,7 @@ def gpu_info() -> LocalGPUInfo:
                 loaded_models=list(_loaded.keys()),
             )
     except ImportError:
-        pass
+        logger.debug("torch not available — reporting CPU-only")
     return LocalGPUInfo(available=False, device="cpu", name="CPU", vram_gb=0, loaded_models=[])
 
 
@@ -166,6 +166,6 @@ def unload(model_id: str | None = None) -> list[str]:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     except ImportError:
-        pass
+        logger.debug("torch not available — skipping CUDA cache clear")
 
     return unloaded

@@ -26,26 +26,26 @@ async function del(path: string): Promise<void> {
 }
 
 export const rhApi = {
-  listMedia: (params?: { directory?: string; sort?: string; order?: string }) =>
-    get<{ items: unknown[]; total: number }>('/media', params as Record<string, string>),
+  listMedia: (params?: { directory?: string; sort?: string; order?: string }, signal?: AbortSignal) =>
+    get<{ items: unknown[]; total: number }>('/media', params as Record<string, string>, signal),
   deleteMedia: (id: number) =>
     fetch(BASE + `/media/${id}`, {
       method: 'DELETE',
       headers: { 'X-Admin-Pin': ADMIN_PIN },
     }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
-  getDirectories: () => get<{ directories: string[] }>('/media/directories'),
+  getDirectories: (signal?: AbortSignal) => get<{ directories: string[] }>('/media/directories', undefined, signal),
   listComments: (mediaId: number, signal?: AbortSignal) => get<{ comments: unknown[] }>(`/comments/${mediaId}`, undefined, signal),
   addComment: (body: { media_id: number; author: string; content: string; x_position?: number; y_position?: number; annotation_type?: string; parent_id?: number }) =>
     post<{ id: number }>('/comments', body),
   deleteComment: (id: number) => del(`/comments/${id}`),
   toggleFavorite: (body: { media_id: number; user_name: string; status?: string }) =>
     post<unknown>('/favorites/toggle', body),
-  getFavorites: (mediaId: number) => get<{ favorites: unknown[] }>(`/favorites/${mediaId}`),
-  getDrawing: (mediaId: number) => get<unknown>(`/drawings/${mediaId}`),
+  getFavorites: (mediaId: number, signal?: AbortSignal) => get<{ favorites: unknown[] }>(`/favorites/${mediaId}`, undefined, signal),
+  getDrawing: (mediaId: number, signal?: AbortSignal) => get<unknown>(`/drawings/${mediaId}`, undefined, signal),
   saveDrawing: (body: { media_id: number; author: string; strokes_json: string; thumbnail_data?: string }) =>
     post<{ id: number }>('/drawings', body),
-  listReferences: (params?: { search?: string; tag?: string }) =>
-    get<{ items: unknown[] }>('/references', params as Record<string, string>),
+  listReferences: (params?: { search?: string; tag?: string }, signal?: AbortSignal) =>
+    get<{ items: unknown[] }>('/references', params as Record<string, string>, signal),
   deleteReference: (id: number) => del(`/references/${id}`),
   uploadReference: (file: File, directory?: string) => {
     const fd = new FormData(); fd.append('file', file)
@@ -71,11 +71,11 @@ export const rhApi = {
   downloadUrl: (id: number) => `${BASE}/download/${id}`,
 
   // Logs
-  getLogs: () => get<{ logs: string[] }>('/logs'),
+  getLogs: (signal?: AbortSignal) => get<{ logs: string[] }>('/logs', undefined, signal),
 
   // Feedback
-  listFeedback: (urgentOnly?: boolean) =>
-    get<{ items: unknown[]; total: number }>('/feedback', urgentOnly ? { urgent_only: 'true' } : undefined),
+  listFeedback: (urgentOnly?: boolean, signal?: AbortSignal) =>
+    get<{ items: unknown[]; total: number }>('/feedback', urgentOnly ? { urgent_only: 'true' } : undefined, signal),
   addFeedback: (body: { message: string; category?: string; author?: string; urgent?: boolean }) =>
     post<{ id: number }>('/feedback', body),
   resolveFeedback: (id: number) => post<{ ok: boolean }>(`/feedback/${id}/resolve`),

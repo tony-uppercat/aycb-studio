@@ -125,17 +125,18 @@ export function FullscreenMediaBrowser({ open, onClose }: Props) {
   // Load — loaded resets via cleanup, avoiding sync setState in the effect body
   useEffect(() => {
     if (!open) return
-    let dead = false
-    fetch('/api/bridge/media/list', { signal: AbortSignal.timeout(15000) })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+    fetch('/api/bridge/media/list', { signal: controller.signal })
       .then(r => r.json())
       .then((items: DiskMediaEntry[]) => {
-        if (dead) return
         setEntries(items); setProjects([...new Set(items.map(e => e.project))].sort())
         sel.clearSelection(); setLoaded(true)
-        for (const e of items) fetchReviewStatus(e.id).then(st => { if (!dead && st) setRevs(p => ({ ...p, [e.id]: st })) })
+        for (const e of items) fetchReviewStatus(e.id).then(st => { if (!controller.signal.aborted && st) setRevs(p => ({ ...p, [e.id]: st })) })
       })
-      .catch(() => { if (!dead) setLoaded(true) })
-    return () => { dead = true; setLoaded(false) }
+      .catch(err => { if (err.name !== 'AbortError') setLoaded(true) })
+      .finally(() => clearTimeout(timeout))
+    return () => { clearTimeout(timeout); controller.abort(); setLoaded(false) }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onQ = useCallback((v: string) => {

@@ -23,6 +23,7 @@ def local_gpu_info():
             "supported_models": ["flux-schnell", "flux-dev", "flux-2-klein-4b", "sdxl"],
         }
     except ImportError:
+        _log("local_gen not available — diffusers not installed")
         return {
             "available": False,
             "device": "cpu",
@@ -41,4 +42,5 @@ def local_unload(model_id: str = Form("")):
         removed = unload(model_id if model_id else None)
         return {"unloaded": removed}
     except ImportError:
+        _log("local_gen not available — cannot unload models")
         return {"unloaded": []}

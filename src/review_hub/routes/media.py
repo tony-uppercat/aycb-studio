@@ -1,6 +1,7 @@
 """Routes for media items."""
 from __future__ import annotations
 
+import logging
 import mimetypes
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from pydantic import BaseModel
 from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries import media as q
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -27,7 +30,8 @@ def _enrich(item: dict) -> dict:
         try:
             rel = Path(fp).relative_to(settings.media_dir)
             item["media_url"] = "/media/" + rel.as_posix()
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exc:
+            _logger.debug("media_url relative_to failed for %s: %s", fp, exc)
             item["media_url"] = f"/media/{item.get('filename', '')}"
     tp = item.get("thumbnail_path")
     if tp:

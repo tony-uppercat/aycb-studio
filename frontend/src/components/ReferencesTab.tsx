@@ -31,16 +31,16 @@ export function ReferencesTab({ open, onDragStart, onDragEnd }: Props) {
 
   useEffect(() => {
     if (!open) return
-    let cancelled = false
-    fetch('/api/bridge/references')
+    const controller = new AbortController()
+    fetch('/api/bridge/references', { signal: controller.signal })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then((data: ReferenceItem[]) => {
-        if (!cancelled) { setReferences(data); setFetched(true) }
+        setReferences(data); setFetched(true)
       })
       .catch(err => {
-        if (!cancelled) { console.warn('[AYCB] References fetch failed:', err); setFetched(true) }
+        if (err.name !== 'AbortError') { console.warn('[AYCB] References fetch failed:', err); setFetched(true) }
       })
-    return () => { cancelled = true }
+    return () => { controller.abort() }
   }, [open])
 
   const loading = open && !fetched

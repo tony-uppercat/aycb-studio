@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from src.shared import PromptBody
+from src.shared import PromptBody, _log
 
 router = APIRouter(prefix="/api/prompt", tags=["prompt"])
 
@@ -19,9 +19,13 @@ _PROMPT_HISTORY_FILE = _PROMPTS_DIR / "history.json"
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _load_history() -> list[dict]:
+    if not _PROMPT_HISTORY_FILE.exists():
+        return []
     try:
         return _json.loads(_PROMPT_HISTORY_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, _json.JSONDecodeError):
+    except _json.JSONDecodeError as e:
+        _log(f"Prompt history corrupt — backing up and resetting: {e}")
+        _PROMPT_HISTORY_FILE.rename(_PROMPT_HISTORY_FILE.with_suffix(".json.corrupt"))
         return []
 
 
@@ -33,7 +37,7 @@ def _save_to_history(text: str) -> None:
     history = (history + [entry])[-20:]
     _PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
     _PROMPT_HISTORY_FILE.write_text(
-        _json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8"
+        _json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n"
     )
 
 
@@ -41,17 +45,14 @@ def _save_to_history(text: str) -> None:
 
 @router.get("")
 def get_prompt():
-    try:
-        text = _PROMPT_FILE.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        text = ""
+    text = _PROMPT_FILE.read_text(encoding="utf-8") if _PROMPT_FILE.exists() else ""
     return {"prompt": text}
 
 
 @router.put("")
 def put_prompt(body: PromptBody):
     _PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
-    _PROMPT_FILE.write_text(body.text, encoding="utf-8")
+    _PROMPT_FILE.write_text(body.text, encoding="utf-8", newline="\n")
     _save_to_history(body.text)
     return {"status": "saved"}
 

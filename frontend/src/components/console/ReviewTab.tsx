@@ -64,16 +64,17 @@ function isBackendAvailable(): boolean {
   return location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 }
 
-async function fetchItems(): Promise<ReviewItem[]> {
+async function fetchItems(signal?: AbortSignal): Promise<ReviewItem[]> {
   if (!isBackendAvailable()) return loadLocal();
   try {
-    const r = await fetch('/api/review/items');
+    const r = await fetch('/api/review/items', { signal });
     if (!r.ok) return loadLocal();
     const data = await r.json();
     const items: ReviewItem[] = data.items ?? [];
     saveLocal(items);
     return items;
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     return loadLocal();
   }
 }
@@ -122,11 +123,15 @@ export function ReviewTab() {
 
   /* Fetch on mount + auto-refresh every 5s */
   useEffect(() => {
-    let active = true
-    const load = () => { fetchItems().then(data => { if (active) setItems(data) }) }
+    const controller = new AbortController()
+    const load = () => {
+      fetchItems(controller.signal)
+        .then(data => setItems(data))
+        .catch(err => { if (err.name !== 'AbortError') console.warn('[ReviewTab] fetch failed:', err) })
+    }
     load()
     const id = setInterval(load, 5000)
-    return () => { active = false; clearInterval(id) }
+    return () => { controller.abort(); clearInterval(id) }
   }, []);
 
   /* Focus note input when fail mode opens */

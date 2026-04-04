@@ -147,14 +147,17 @@ export function SettingsPanel({ open, onClose }: Props) {
 
   // Fetch GPU + Ollama + LAN IP info when Local tab is shown
   useEffect(() => {
-    if (open && activeTab === 'local') {
-      fetchGpuInfo()
-      checkOllama()
-      fetch('/api/health', { signal: AbortSignal.timeout(3000) })
-        .then(r => r.json())
-        .then(d => setLocalIp(d.local_ip ?? ''))
-        .catch(() => {})
-    }
+    if (!open || activeTab !== 'local') return
+    fetchGpuInfo()
+    checkOllama()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+    fetch('/api/health', { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => setLocalIp(d.local_ip ?? ''))
+      .catch(err => { if (err.name !== 'AbortError') console.warn('[Settings] health fetch failed:', err) })
+      .finally(() => clearTimeout(timeout))
+    return () => { clearTimeout(timeout); controller.abort() }
   }, [open, activeTab, fetchGpuInfo, checkOllama])
 
   // Fetch paths when Paths tab is shown

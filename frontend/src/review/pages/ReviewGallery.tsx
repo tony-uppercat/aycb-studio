@@ -53,17 +53,24 @@ export function ReviewGallery() {
   const { filteredMedia, stats } = useFilteredMedia(mediaList, activeFilter, sortBy, search)
 
   // --- References ---
-  const loadRefs = useCallback(async () => {
+  const loadRefs = useCallback(async (signal?: AbortSignal) => {
     try {
       const params: Record<string, string> = {}
       if (refSearch) params.search = refSearch
       if (refTag) params.tag = refTag
-      const data = await rhApi.listReferences(params)
-      setRefs(data.items || [])
-    } catch { /* swallow */ }
+      const data = await rhApi.listReferences(params, signal)
+      if (!signal?.aborted) setRefs(data.items || [])
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') { /* swallow */ }
+    }
   }, [refSearch, refTag])
 
-  useEffect(() => { if (tab === 'references') void loadRefs() }, [tab, loadRefs])
+  useEffect(() => {
+    if (tab !== 'references') return
+    const ctrl = new AbortController()
+    void loadRefs(ctrl.signal)
+    return () => { ctrl.abort() }
+  }, [tab, loadRefs])
 
   // --- Multi-select ---
   const handleSelect = useCallback((id: number, e: React.MouseEvent) => {

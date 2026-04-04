@@ -115,7 +115,7 @@ def analyze(
             np.save(str(npy_path), np.array(r.embedding))
 
     json_path = out_dir / "analysis.json"
-    json_path.write_text(json.dumps(output_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    json_path.write_text(json.dumps(output_data, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n")
 
     # Prompt text file (ready for copy-paste into Nano Banana 2)
     txt_path = out_dir / "prompts.txt"
@@ -124,7 +124,7 @@ def analyze(
         lines.append(f"=== GS_{i + 1:02d} ===")
         lines.append(r.prompt_text)
         lines.append("")
-    txt_path.write_text("\n".join(lines), encoding="utf-8")
+    txt_path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
     # ── Summary table ────────────────────────────────────────────────
     table = Table(title="AYCB Results")

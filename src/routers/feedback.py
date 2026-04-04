@@ -27,7 +27,7 @@ def add_feedback(item: FeedbackItem):
     entries = _read_json(FEEDBACK_ALL_FILE, "feedback/all.json")
     entries.append(item.model_dump())
     FEEDBACK_ALL_FILE.write_text(
-        _json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8"
+        _json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n"
     )
     return {"status": "ok", "count": len(entries)}
 
@@ -38,7 +38,7 @@ def add_urgent_feedback(item: FeedbackItem):
     entries = _read_json(FEEDBACK_FILE, "feedback/urgent.json")
     entries.append(item.model_dump())
     FEEDBACK_FILE.write_text(
-        _json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8"
+        _json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n"
     )
     _log(f"URGENT feedback: {item.text[:80]}")
     return {"status": "ok", "count": len(entries)}
@@ -57,7 +57,7 @@ def resolve_urgent_feedback(item_id: str):
     entries = _read_json(FEEDBACK_FILE, "feedback/urgent.json")
     entries = [e for e in entries if e.get("id") != item_id]
     FEEDBACK_FILE.write_text(
-        _json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8"
+        _json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n"
     )
     return {"status": "ok", "remaining": len(entries)}
 

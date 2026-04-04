@@ -64,7 +64,8 @@ def _parse_retry_delay_seconds(err: Exception) -> float | None:
         return None
     try:
         return float(match.group("secs"))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        console.print(f"[yellow]Gemini retry-delay parse error: {exc}[/]")
         return None
 
 
@@ -178,8 +179,8 @@ def _parse_response(text: str) -> tuple[str, dict]:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             return text.strip(), parsed
-    except (json.JSONDecodeError, TypeError, ValueError):
-        pass
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        console.print(f"[dim]Gemini structured-output parse miss (falling back to legacy): {exc}[/]")
 
     # Legacy path: look for ---JSON--- separator or ```json … ``` block.
     prompt_text = ""
@@ -204,8 +205,8 @@ def _parse_response(text: str) -> tuple[str, dict]:
         if obj_match:
             try:
                 prompt_json = json.loads(obj_match.group())
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as exc:
+                console.print(f"[yellow]Gemini JSON extraction failed after fallback: {exc}[/]")
 
     return prompt_text, prompt_json
 

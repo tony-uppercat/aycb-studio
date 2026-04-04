@@ -49,16 +49,23 @@ export function ConsolePanel({ is_open, on_close }: ConsolePanelProps) {
   // Server log polling
   useEffect(() => {
     if (!is_open || tab !== 'server') return
-    const load = () => rhApi.getLogs().then(r => setServerLogs(r.logs)).catch(() => {})
+    const ctrl = new AbortController()
+    const load = () => rhApi.getLogs(ctrl.signal)
+      .then(r => { if (!ctrl.signal.aborted) setServerLogs(r.logs) })
+      .catch(err => { if (err instanceof Error && err.name !== 'AbortError') { /* swallow */ } })
     load()
     poll_ref.current = setInterval(load, 3000)
-    return () => { if (poll_ref.current) clearInterval(poll_ref.current) }
+    return () => { ctrl.abort(); if (poll_ref.current) clearInterval(poll_ref.current) }
   }, [is_open, tab])
 
   // Feedback load
   useEffect(() => {
     if (!is_open) return
-    rhApi.listFeedback().then(r => setFeedbackItems(r.items as FeedbackItem[])).catch(() => {})
+    const ctrl = new AbortController()
+    rhApi.listFeedback(undefined, ctrl.signal)
+      .then(r => { if (!ctrl.signal.aborted) setFeedbackItems(r.items as FeedbackItem[]) })
+      .catch(err => { if (err instanceof Error && err.name !== 'AbortError') { /* swallow */ } })
+    return () => { ctrl.abort() }
   }, [is_open])
 
   // Network fetch patch — only intercepts when console is open

@@ -29,9 +29,11 @@ export function Sidebar({ media, onClose, onRefresh }: Props) {
   const [favorites, setFavorites] = useState<Favorite[]>([])
 
   useEffect(() => {
-    rhApi.getFavorites(media.id)
-      .then(d => setFavorites(d.favorites as Favorite[]))
-      .catch(() => { /* swallow */ })
+    const ctrl = new AbortController()
+    rhApi.getFavorites(media.id, ctrl.signal)
+      .then(d => { if (!ctrl.signal.aborted) setFavorites(d.favorites as Favorite[]) })
+      .catch(err => { if (err instanceof Error && err.name !== 'AbortError') { /* swallow */ } })
+    return () => { ctrl.abort() }
   }, [media.id])
 
   const toggleFav = async (status: string) => {

@@ -155,6 +155,17 @@ export interface JsonParserNodeData extends Record<string, unknown> {
   pinsCollapsed?: boolean  // collapse dynamic output pins (show only main text-out)
 }
 
+export interface BracketParserNodeData extends Record<string, unknown> {
+  text?: string
+  outputText?: string
+  output_mode?: 'items' | 'template'
+  excluded_keys?: string[]
+  output_limit?: number
+  overrides?: Record<string, string>
+  output_override?: string | null
+  pins_collapsed?: boolean
+}
+
 export interface JsonParserBlendNodeData extends Record<string, unknown> {
   text?: string
   prompt?: string

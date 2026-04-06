@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { extractBrackets, rebuildTemplate } from './bracketParserUtils'
+import manifest from './node.manifest'
 
 describe('extractBrackets', () => {
   it('extracts single bracket', () => {
@@ -88,5 +89,25 @@ describe('rebuildTemplate', () => {
   it('returns original text when no brackets', () => {
     const result = rebuildTemplate('no brackets', [], {})
     expect(result).toBe('no brackets')
+  })
+})
+
+describe('bracket-parser manifest', () => {
+  it('has required fields', () => {
+    expect(manifest.type).toBe('bracketParser')
+    expect(manifest.label).toBe('Bracket Parser')
+    expect(manifest.category).toBe('utility')
+    expect(manifest.description).toBeTruthy()
+  })
+
+  it('has correct inputs and outputs', () => {
+    expect(manifest.inputs).toHaveLength(1)
+    expect(manifest.inputs[0]).toEqual({ type: 'text', handleId: 'text-in' })
+    expect(manifest.outputs).toHaveLength(1)
+    expect(manifest.outputs[0]).toEqual({ type: 'text', handleId: 'text-out' })
+  })
+
+  it('has defaultData', () => {
+    expect(manifest.defaultData).toEqual({})
   })
 })

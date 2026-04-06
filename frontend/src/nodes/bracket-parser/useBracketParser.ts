@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useReactFlow, useStore, useUpdateNodeInternals, type Node } from '@xyflow/react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
-import { extractBrackets, rebuildTemplate, type BracketEntry } from './bracketParserUtils'
+import { extractBrackets, rebuildTemplate } from './bracketParserUtils'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { pullText } from '../../hooks/useDataPropagation'
 import type { BracketParserNodeData } from '../../types'
-
-type BracketParserNodeType = Node<BracketParserNodeData, 'bracketParser'>
 
 export type OutputMode = 'items' | 'template'
 

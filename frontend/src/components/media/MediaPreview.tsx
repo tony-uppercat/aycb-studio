@@ -5,6 +5,12 @@ import { type DiskMediaEntry } from './FullscreenMediaBrowser'
 import { FullscreenViewer } from './FullscreenViewer'
 import styles from './MediaPreview.module.css'
 
+interface GalleryOpts {
+  urls: string[]
+  mediaIds?: string[]
+  index: number
+}
+
 interface PreviewOpts {
   onCapture?: (blob: Blob, timecode: number) => void
   onClear?: () => void
@@ -12,6 +18,7 @@ interface PreviewOpts {
   onEdit?: (text: string) => void
   initialFrames?: string[]
   mediaId?: string
+  gallery?: GalleryOpts
 }
 
 interface MediaPreviewState {
@@ -23,6 +30,7 @@ interface MediaPreviewState {
   onEdit?: (text: string) => void
   initialFrames?: string[]
   mediaId?: string
+  gallery?: GalleryOpts
 }
 
 interface MediaPreviewContextType {
@@ -92,7 +100,7 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
   }, [media])
 
   const openPreview = useCallback((url: string, type: 'image' | 'video' | 'text', opts?: PreviewOpts) => {
-    setMedia({ url, type, onCapture: opts?.onCapture, onClear: opts?.onClear, onImport: opts?.onImport, onEdit: opts?.onEdit, initialFrames: opts?.initialFrames, mediaId: opts?.mediaId })
+    setMedia({ url, type, onCapture: opts?.onCapture, onClear: opts?.onClear, onImport: opts?.onImport, onEdit: opts?.onEdit, initialFrames: opts?.initialFrames, mediaId: opts?.mediaId, gallery: opts?.gallery })
     setCaptureMsg('')
     setCaptures(opts?.initialFrames ?? [])
     if (type === 'text') setEditText(isJson(url) ? formatJson(url) : url)
@@ -106,26 +114,51 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
   // Stable ID for preview entries without mediaId
   const [stableId] = useState(() => `preview-${Date.now()}`)
 
-  // Build a DiskMediaEntry for FullscreenViewer (image/video only) — memoized
-  const viewerEntry = useMemo<DiskMediaEntry | null>(() => {
-    if (!media || media.type === 'text') return null
-    // Resolve IDB mediaId to bridge stem for metadata lookup
+  // Build DiskMediaEntry array for FullscreenViewer — gallery mode or single
+  const viewerEntries = useMemo<DiskMediaEntry[]>(() => {
+    if (!media || media.type === 'text') return []
+    if (media.gallery) {
+      return media.gallery.urls.map((url, i) => {
+        const mid = media.gallery!.mediaIds?.[i]
+        const stem = mid ? (getStemForMedia(mid) ?? mid) : ''
+        return {
+          id: mid || `gallery-${i}`,
+          filename: url.split('/').pop()?.split('?')[0] || `image-${i}`,
+          project: '', path: '', size: 0,
+          type: (media.type === 'image' ? 'image/png' : 'video/mp4') as string,
+          modified: '', thumb: null,
+          meta: stem ? `/api/bridge/meta/${encodeURIComponent(stem)}` : '',
+        }
+      })
+    }
     const stem = media.mediaId ? (getStemForMedia(media.mediaId) ?? media.mediaId) : ''
-    return {
+    return [{
       id: media.mediaId || stableId,
       filename: media.url.split('/').pop()?.split('?')[0] || 'preview',
-      project: '',
-      path: '',
-      size: 0,
+      project: '', path: '', size: 0,
       type: media.type === 'image' ? 'image/png' : 'video/mp4',
-      modified: '',
-      thumb: null,
+      modified: '', thumb: null,
       meta: stem ? `/api/bridge/meta/${encodeURIComponent(stem)}` : '',
-    }
+    }]
   }, [media, stableId])
 
-  const viewerEntries = useMemo(() => viewerEntry ? [viewerEntry] : [], [viewerEntry])
-  const getViewerSrc = useCallback(() => media?.url, [media?.url])
+  const viewerInitialIndex = media?.gallery?.index ?? 0
+
+  // Map entry ID to its src URL for gallery mode
+  const gallerySrcMap = useMemo(() => {
+    if (!media?.gallery) return null
+    const map = new Map<string, string>()
+    media.gallery.urls.forEach((url, i) => {
+      const mid = media.gallery!.mediaIds?.[i]
+      map.set(mid || `gallery-${i}`, url)
+    })
+    return map
+  }, [media?.gallery])
+
+  const getViewerSrc = useCallback((entry: DiskMediaEntry) => {
+    if (gallerySrcMap) return gallerySrcMap.get(entry.id)
+    return media?.url
+  }, [media?.url, gallerySrcMap])
 
   // Keyboard handler for text mode only
   useEffect(() => {
@@ -151,10 +184,10 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
       {children}
 
       {/* Image/Video: delegate to FullscreenViewer */}
-      {media && media.type !== 'text' && viewerEntry && (
+      {media && media.type !== 'text' && viewerEntries.length > 0 && (
         <FullscreenViewer
           entries={viewerEntries}
-          initialIndex={0}
+          initialIndex={viewerInitialIndex}
           onClose={close}
           getSrc={getViewerSrc}
           reviewStatuses={media.mediaId && reviewStatus ? { [viewerEntry.id]: reviewStatus } : undefined}

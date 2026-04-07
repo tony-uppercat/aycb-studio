@@ -101,11 +101,28 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         <div className={styles.previewArea}>
           {h.imageB64
             ? <img src={`data:image/png;base64,${h.imageB64}`} alt="generated" className={styles.previewImg}
-                onClick={e => { e.stopPropagation(); openPreview(`data:image/png;base64,${h.imageB64}`, 'image', { mediaId: h.currentMediaId ?? undefined }) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  const currentSrc = `data:image/png;base64,${h.imageB64}`
+                  const urls = h.historyThumbs.filter(Boolean) as string[]
+                  if (urls.length > 1) {
+                    openPreview(currentSrc, 'image', { mediaId: h.currentMediaId ?? undefined, gallery: { urls, mediaIds: h.historyIds, index: h.historyIndex } })
+                  } else {
+                    openPreview(currentSrc, 'image', { mediaId: h.currentMediaId ?? undefined })
+                  }
+                }}
                 style={{ cursor: 'pointer' }} />
             : h.historyPreview
             ? <img src={h.historyPreview} alt="history" className={styles.previewImg}
-                onClick={e => { e.stopPropagation(); openPreview(h.historyPreview!, 'image', { mediaId: h.currentMediaId ?? undefined }) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  const urls = h.historyThumbs.filter(Boolean) as string[]
+                  if (urls.length > 1) {
+                    openPreview(h.historyPreview!, 'image', { mediaId: h.currentMediaId ?? undefined, gallery: { urls, mediaIds: h.historyIds, index: h.historyIndex } })
+                  } else {
+                    openPreview(h.historyPreview!, 'image', { mediaId: h.currentMediaId ?? undefined })
+                  }
+                }}
                 style={{ cursor: 'pointer' }} />
             : <span className={styles.dropHint}>{h.activePrompt ? 'Ready — click Run' : 'Write a prompt or connect one'}</span>
           }
@@ -147,7 +164,11 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                       <img src={url} alt={`gen ${i + 1}`}
                         className={`${styles.historyThumb} ${h.historyIndex === i ? styles.historyThumbActive : ''}`}
                         onClick={() => { h.userNavigatedRef.current = true; h.setHistoryIndex(i) }}
-                        onDoubleClick={e => { e.stopPropagation(); openPreview(url, 'image', { mediaId: h.historyIds[i] ?? undefined }) }}
+                        onDoubleClick={e => {
+                          e.stopPropagation()
+                          const urls = h.historyThumbs.filter(Boolean) as string[]
+                          openPreview(url, 'image', { mediaId: h.historyIds[i] ?? undefined, gallery: { urls, mediaIds: h.historyIds, index: i } })
+                        }}
                       />
                       {review?.status === 'approved' && (
                         <span style={{ position: 'absolute', top: 2, right: 2, color: '#22c55e', fontSize: 14, lineHeight: 1, pointerEvents: 'none', textShadow: '0 0 2px rgba(0,0,0,0.7)' }}

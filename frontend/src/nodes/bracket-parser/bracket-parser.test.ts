@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractBrackets, rebuildTemplate } from './bracketParserUtils'
+import { extractBrackets, getUniqueNames, extractJsonDefinitions, findJsonBlocks, findEnclosingBlock, rebuildTemplate } from './bracketParserUtils'
 import manifest from './node.manifest'
 
 describe('extractBrackets', () => {
@@ -56,34 +56,145 @@ describe('extractBrackets', () => {
   })
 })
 
+describe('getUniqueNames', () => {
+  it('deduplicates by content', () => {
+    const brackets = extractBrackets('[a] and [b] and [a] again')
+    const result = getUniqueNames(brackets)
+    expect(result).toEqual([
+      { name: 'a', count: 2 },
+      { name: 'b', count: 1 },
+    ])
+  })
+
+  it('returns empty for no brackets', () => {
+    expect(getUniqueNames([])).toEqual([])
+  })
+
+  it('preserves first-seen order', () => {
+    const brackets = extractBrackets('[z] [a] [z] [b] [a]')
+    const names = getUniqueNames(brackets).map(e => e.name)
+    expect(names).toEqual(['z', 'a', 'b'])
+  })
+})
+
+describe('findJsonBlocks', () => {
+  it('finds top-level blocks', () => {
+    const text = '{"a":1}\n{"b":2}'
+    const blocks = findJsonBlocks(text)
+    expect(blocks).toHaveLength(2)
+    expect(text.slice(blocks[0].start, blocks[0].end)).toBe('{"a":1}')
+    expect(text.slice(blocks[1].start, blocks[1].end)).toBe('{"b":2}')
+  })
+
+  it('handles nested braces', () => {
+    const text = '{"a":{"b":1}}'
+    const blocks = findJsonBlocks(text)
+    expect(blocks).toHaveLength(1)
+  })
+
+  it('returns empty for no blocks', () => {
+    expect(findJsonBlocks('no blocks')).toEqual([])
+  })
+})
+
+describe('findEnclosingBlock', () => {
+  it('finds innermost block around position', () => {
+    const text = '{"arr": [{"x": 1}, {"x": 2}]}'
+    // Position 15 is inside {"x": 1}
+    const block = findEnclosingBlock(text, 15)
+    expect(block).not.toBeNull()
+    expect(text.slice(block!.start, block!.end)).toBe('{"x": 1}')
+  })
+
+  it('returns null when no enclosing block', () => {
+    expect(findEnclosingBlock('no blocks', 3)).toBeNull()
+  })
+})
+
+describe('extractJsonDefinitions', () => {
+  it('extracts class from [name] keys', () => {
+    const json = '{"[subject_01]": {"class": "arch bridge", "role": "primary"}}'
+    const defs = extractJsonDefinitions(json)
+    expect(defs).toEqual({ subject_01: 'arch bridge' })
+  })
+
+  it('extracts multiple definitions', () => {
+    const json = `{
+      "[subject_01]": {"class": "bridge", "role": "primary"},
+      "[location_01]": {"class": "frozen pond", "role": "surface"}
+    }`
+    const defs = extractJsonDefinitions(json)
+    expect(defs).toEqual({ subject_01: 'bridge', location_01: 'frozen pond' })
+  })
+
+  it('ignores non-bracket keys', () => {
+    const json = '{"shot_type": "wide", "[subject_01]": {"class": "bridge", "role": "x"}}'
+    const defs = extractJsonDefinitions(json)
+    expect(defs).toEqual({ subject_01: 'bridge' })
+  })
+
+  it('returns empty for no definitions', () => {
+    expect(extractJsonDefinitions('no json here')).toEqual({})
+  })
+
+  it('returns empty for invalid JSON', () => {
+    expect(extractJsonDefinitions('{broken')).toEqual({})
+  })
+
+  it('handles multiple JSON blocks', () => {
+    const text = `{"[a]": {"class": "cat", "role": "subject"}}
+{"lens": "85mm", "entity": "[a]"}`
+    const defs = extractJsonDefinitions(text)
+    expect(defs).toEqual({ a: 'cat' })
+  })
+})
+
 describe('rebuildTemplate', () => {
-  it('rebuilds with no overrides', () => {
+  it('keeps original when no values provided', () => {
     const brackets = extractBrackets('The [dragon] flies')
     const result = rebuildTemplate('The [dragon] flies', brackets, {})
     expect(result).toBe('The [dragon] flies')
   })
 
-  it('applies overrides', () => {
+  it('replaces by name and strips brackets', () => {
     const brackets = extractBrackets('The [dragon] flew over the [castle]')
     const result = rebuildTemplate(
       'The [dragon] flew over the [castle]',
       brackets,
-      { '0': 'phoenix' }
+      { dragon: 'phoenix' }
     )
-    expect(result).toBe('The [phoenix] flew over the [castle]')
+    expect(result).toBe('The phoenix flew over the [castle]')
   })
 
-  it('applies multiple overrides', () => {
-    const brackets = extractBrackets('[a] and [b]')
-    const result = rebuildTemplate('[a] and [b]', brackets, { '0': 'x', '1': 'y' })
-    expect(result).toBe('[x] and [y]')
+  it('replaces all occurrences of same name', () => {
+    const text = '[a] and [b] and [a] again'
+    const brackets = extractBrackets(text)
+    const result = rebuildTemplate(text, brackets, { a: 'X', b: 'Y' })
+    expect(result).toBe('X and Y and X again')
   })
 
-  it('handles excluded indices (keeps original)', () => {
-    const brackets = extractBrackets('[a] and [b]')
-    const excluded = new Set(['0'])
-    const result = rebuildTemplate('[a] and [b]', brackets, { '1': 'y' }, excluded)
-    expect(result).toBe('[a] and [y]')
+  it('excluded removes innermost {} block (nested)', () => {
+    const text = '{"entities": [{"token": "[a]"}, {"token": "[b]"}]}'
+    const brackets = extractBrackets(text)
+    const excluded = new Set(['a'])
+    const result = rebuildTemplate(text, brackets, { b: 'Y' }, excluded)
+    expect(result).toBe('{"entities": [{"token": "Y"}]}')
+  })
+
+  it('excluded removes top-level block when not nested', () => {
+    const text = '{"entity": "[a]"}\n{"entity": "[b]"}'
+    const brackets = extractBrackets(text)
+    const excluded = new Set(['a'])
+    const result = rebuildTemplate(text, brackets, { b: 'Y' }, excluded)
+    expect(result).toBe('{"entity": "Y"}')
+  })
+
+  it('excluded cleans up trailing commas in arrays', () => {
+    const text = '[{"t": "[a]"}, {"t": "[b]"}, {"t": "[c]"}]'
+    const brackets = extractBrackets(text)
+    const excluded = new Set(['b'])
+    const result = rebuildTemplate(text, brackets, { a: 'X', c: 'Z' }, excluded)
+    expect(result).toBe('[{"t": "X"}, {"t": "Z"}]')
   })
 
   it('returns original text when no brackets', () => {

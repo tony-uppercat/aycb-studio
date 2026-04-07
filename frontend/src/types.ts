@@ -164,6 +164,7 @@ export interface BracketParserNodeData extends Record<string, unknown> {
   overrides?: Record<string, string>
   output_override?: string | null
   pins_collapsed?: boolean
+  preview_collapsed?: boolean
 }
 
 export interface JsonParserBlendNodeData extends Record<string, unknown> {

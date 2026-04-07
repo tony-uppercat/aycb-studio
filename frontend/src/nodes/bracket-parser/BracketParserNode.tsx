@@ -8,15 +8,12 @@ import styles from '../_shared/Node.module.css'
 
 type BracketParserNodeType = Node<BracketParserNodeData, 'bracketParser'>
 
-/** Highlight [brackets] in text — overridden brackets get accent color */
-function colorizeBrackets(text: string, overrides: Record<string, string>): string {
+/** Highlight replaced values or remaining [brackets] in template output */
+function colorizeTemplate(text: string): string {
   const safe = escapeHtml(text)
-  let idx = 0
-  return safe.replace(/\[([^\[\]]*)\]/g, (match, content) => {
-    const key = String(idx++)
-    const isOverridden = key in overrides
-    const color = isOverridden ? '#d97706' : '#a855f7'
-    return `<span style="color:${color}">[${escapeHtml(content)}]</span>`
+  // Remaining unreplaced [brackets] are purple, everything else is plain
+  return safe.replace(/\[([^\[\]]*)\]/g, (_match, content) => {
+    return `<span style="color:#a855f7">[${content}]</span>`
   })
 }
 
@@ -47,9 +44,9 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
         <p className={styles.infoBadge}>
           {!h.inputText.trim()
             ? 'Waiting for input...'
-            : h.brackets.length === 0
+            : h.entries.length === 0
             ? 'No brackets found'
-            : `${h.brackets.length} bracket${h.brackets.length > 1 ? 's' : ''} found`
+            : `${h.entries.length} unique / ${h.brackets.length} total`
           }
         </p>
 
@@ -60,7 +57,7 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
 
         {h.unpackError && <p className={styles.error}>{h.unpackError}</p>}
 
-        {/* Entry grid */}
+        {/* Entry grid — deduplicated by name */}
         {h.entries.length > 0 && (
           <>
             <div className={styles.blendGrid}>
@@ -68,13 +65,21 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
                 <button className={styles.blendAllNone} onClick={h.toggleAllExclusion}>
                   {h.allIncluded ? 'None' : 'All'}
                 </button>
-                <span className={styles.blendLabel}>Bracket</span>
+                {Object.keys(h.overrides).length > 0 && (
+                  <button className={styles.blendAllNone}
+                    style={{ color: '#d97706' }}
+                    onClick={() => h.setOverrides({})}
+                    title="Reset all overrides"
+                  >Reset</button>
+                )}
+                <span className={styles.blendLabel}>Name</span>
                 <span className={styles.blendLabel}>Value</span>
               </div>
               {h.entries.map(entry => {
                 const excluded = h.excludedKeys.has(entry.key)
                 const isEditing = h.editingKey === entry.key
                 const isOverridden = entry.key in h.overrides
+                const hasJsonDef = entry.key in h.jsonDefs
                 const displayVal = h.resolveVal(entry)
                 const valPreview = displayVal.slice(0, 40) + (displayVal.length > 40 ? '...' : '')
                 return (
@@ -85,8 +90,9 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
                       title="Alt+Click to isolate"
                     />
                     <span className={`${styles.blendKey} ${excluded ? styles.blendKeyExcluded : ''}`}
-                      title={`[${entry.key}]`}>
-                      [{entry.key}]
+                      title={`[${entry.key}] — ${entry.count}x`}>
+                      {entry.key}
+                      {entry.count > 1 && <span style={{ color: '#666', fontSize: 8 }}> x{entry.count}</span>}
                     </span>
                     {isEditing ? (
                       <input
@@ -97,7 +103,8 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
                         onBlur={(e) => {
                           if (h.escapedRef.current) { h.escapedRef.current = false; return }
                           const newVal = e.target.value
-                          if (newVal !== entry.val) {
+                          const originalVal = h.jsonDefs[entry.key] ?? entry.key
+                          if (newVal !== originalVal) {
                             h.setOverrides(prev => ({ ...prev, [entry.key]: newVal }))
                           } else {
                             h.setOverrides(prev => { const next = { ...prev }; delete next[entry.key]; return next })
@@ -112,7 +119,10 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
                     ) : (
                       <span
                         className={styles.blendKey}
-                        style={{ color: isOverridden ? '#d97706' : '#888', fontSize: 9, cursor: 'pointer' }}
+                        style={{
+                          color: isOverridden ? '#d97706' : hasJsonDef ? '#22c55e' : '#888',
+                          fontSize: 9, cursor: 'pointer',
+                        }}
                         title={`${displayVal}\n\nClick to edit${isOverridden ? ' — Right-click to reset' : ''}`}
                         onClick={() => h.setEditingKey(entry.key)}
                         onContextMenu={isOverridden ? (e) => {
@@ -137,50 +147,59 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
           </>
         )}
 
-        {/* Output preview */}
+        {/* Output preview toggle + content */}
         {h.effectiveOutput && (
-          h.editingOutput ? (
-            <textarea
-              ref={h.outputTextareaRef}
-              className={`${styles.resultArea} nokey`}
-              style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto', resize: 'vertical', color: '#d97706', flex: 'none', height: h.previewSize?.h ?? 60, width: h.previewSize?.w ?? '100%', minHeight: 40, boxSizing: 'border-box' }}
-              defaultValue={h.effectiveOutput}
-              autoFocus
-              onBlur={(e) => {
-                const val = e.target.value
-                h.setOutputOverride(val === h.computedOutput ? null : val)
-                h.setEditingOutput(false)
-                h.setPreviewSize(null)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  h.setEditingOutput(false)
-                  h.setPreviewSize(null)
-                }
-              }}
-            />
-          ) : (
-            <pre ref={h.previewRef} className={styles.resultArea}
-              style={{
-                margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, minHeight: 40, overflow: 'auto', cursor: 'text',
-                borderColor: h.outputOverride !== null ? '#d97706' : undefined,
-              }}
-              dangerouslySetInnerHTML={{
-                __html: h.outputMode === 'template'
-                  ? colorizeBrackets(h.effectiveOutput, h.overrides)
-                  : escapeHtml(h.effectiveOutput)
-              }}
-              onClick={() => {
-                if (h.previewRef.current) h.setPreviewSize({ w: h.previewRef.current.offsetWidth, h: h.previewRef.current.offsetHeight })
-                h.setEditingOutput(true)
-              }}
-              title={h.outputOverride !== null ? 'Overridden — click to edit, right-click to reset' : 'Click to edit output'}
-              onContextMenu={h.outputOverride !== null ? (e) => {
-                e.preventDefault()
-                h.setOutputOverride(null)
-              } : undefined}
-            />
-          )
+          <>
+            <button
+              className={styles.blendAllNone}
+              style={{ alignSelf: 'flex-start', fontSize: 8, color: '#666' }}
+              onClick={() => h.setPreviewCollapsed(v => !v)}
+            >{h.previewCollapsed ? 'Show Preview' : 'Hide Preview'}</button>
+            {!h.previewCollapsed && (
+              h.editingOutput ? (
+                <textarea
+                  ref={h.outputTextareaRef}
+                  className={`${styles.resultArea} nokey`}
+                  style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto', resize: 'vertical', color: '#d97706', flex: 'none', height: h.previewSize?.h ?? 60, width: h.previewSize?.w ?? '100%', minHeight: 40, boxSizing: 'border-box' }}
+                  defaultValue={h.effectiveOutput}
+                  autoFocus
+                  onBlur={(e) => {
+                    const val = e.target.value
+                    h.setOutputOverride(val === h.computedOutput ? null : val)
+                    h.setEditingOutput(false)
+                    h.setPreviewSize(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      h.setEditingOutput(false)
+                      h.setPreviewSize(null)
+                    }
+                  }}
+                />
+              ) : (
+                <pre ref={h.previewRef} className={styles.resultArea}
+                  style={{
+                    margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, minHeight: 40, overflow: 'auto', cursor: 'text',
+                    borderColor: h.outputOverride !== null ? '#d97706' : undefined,
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: h.outputMode === 'template'
+                      ? colorizeTemplate(h.effectiveOutput)
+                      : escapeHtml(h.effectiveOutput)
+                  }}
+                  onClick={() => {
+                    if (h.previewRef.current) h.setPreviewSize({ w: h.previewRef.current.offsetWidth, h: h.previewRef.current.offsetHeight })
+                    h.setEditingOutput(true)
+                  }}
+                  title={h.outputOverride !== null ? 'Overridden — click to edit, right-click to reset' : 'Click to edit output'}
+                  onContextMenu={h.outputOverride !== null ? (e) => {
+                    e.preventDefault()
+                    h.setOutputOverride(null)
+                  } : undefined}
+                />
+              )
+            )}
+          </>
         )}
         {h.outputOverride !== null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#d97706' }}>
@@ -214,7 +233,7 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
             </button>
           )}
           <button className={styles.unpackBtn} onClick={h.unpack}
-            title="Create a text node for each bracket (live — updates when input changes)">
+            title="Create a text node for each unique bracket (live — updates when input changes)">
             Unpack {h.includedEntries.length > 0 ? `(${h.includedEntries.length})` : ''}
           </button>
         </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
-import { extractBrackets, rebuildTemplate } from './bracketParserUtils'
+import { extractBrackets, getUniqueNames, extractJsonDefinitions, rebuildTemplate } from './bracketParserUtils'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { pullText } from '../../hooks/useDataPropagation'
 import type { BracketParserNodeData } from '../../types'
@@ -33,7 +33,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
 
   // State
   const [outputMode, setOutputMode] = useState<OutputMode>(
-    (data.output_mode as OutputMode) ?? 'items'
+    (data.output_mode as OutputMode) ?? 'template'
   )
   const [excludedKeys, setExcludedKeys] = useState<Set<string>>(
     new Set(data.excluded_keys ?? [])
@@ -47,6 +47,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const escapedRef = useRef(false)
   const [pinsCollapsed, setPinsCollapsed] = useState(data.pins_collapsed === true)
+  const [previewCollapsed, setPreviewCollapsed] = useState(data.preview_collapsed === true)
   const [outputOverride, setOutputOverride] = useState<string | null>(
     typeof data.output_override === 'string' ? data.output_override : null
   )
@@ -58,13 +59,23 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
   // Parse brackets from input
   const brackets = useMemo(() => extractBrackets(inputText), [inputText])
 
-  // Build entries from brackets (each entry has key = index string)
+  // Deduplicated entries keyed by bracket name
+  const uniqueNames = useMemo(() => getUniqueNames(brackets), [brackets])
+
+  // Auto-extract JSON definitions (first block with [name] keys → class values)
+  const jsonDefs = useMemo(() => extractJsonDefinitions(inputText), [inputText])
+
+  // Build entries: key = bracket name, val = JSON definition or name itself
   const entries = useMemo(() =>
-    brackets.map(b => ({ key: String(b.index), val: b.content })),
-    [brackets]
+    uniqueNames.map(u => ({
+      key: u.name,
+      val: jsonDefs[u.name] ?? u.name,
+      count: u.count,
+    })),
+    [uniqueNames, jsonDefs]
   )
 
-  // Resolve value: use override if present, otherwise original
+  // Resolve value: override > JSON definition > original name
   function resolveVal(entry: { key: string; val: unknown }): string {
     if (entry.key in overrides) return overrides[entry.key]
     return typeof entry.val === 'string' ? entry.val : String(entry.val)
@@ -77,19 +88,32 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     return items
   }, [entries, excludedKeys, outputLimit])
 
-  // Items output: values list
+  // Build resolved values map for template rebuild (name → resolved value)
+  const resolvedValues = useMemo(() => {
+    const vals: Record<string, string> = {}
+    for (const entry of entries) {
+      if (!excludedKeys.has(entry.key)) {
+        vals[entry.key] = entry.key in overrides
+          ? overrides[entry.key]
+          : (jsonDefs[entry.key] ?? entry.key)
+      }
+    }
+    return vals
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, overrides, excludedKeys, jsonDefs])
+
+  // Items output: resolved values list
   const itemsOutput = useMemo(() => {
     if (includedEntries.length === 0) return ''
     return includedEntries.map(e => resolveVal(e)).join('\n')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includedEntries, overrides])
 
-  // Template output: rebuilt text with overrides
+  // Template output: rebuilt text with name-based substitution (strips brackets)
   const templateOutput = useMemo(() => {
     if (brackets.length === 0) return inputText
-    return rebuildTemplate(inputText, brackets, overrides, excludedKeys)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputText, brackets, overrides, excludedKeys])
+    return rebuildTemplate(inputText, brackets, resolvedValues, excludedKeys)
+  }, [inputText, brackets, resolvedValues, excludedKeys])
 
   // Computed output based on mode
   const computedOutput = outputMode === 'template' ? templateOutput : itemsOutput
@@ -97,7 +121,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
   // Effective output: override takes precedence
   const effectiveOutput = outputOverride ?? computedOutput
 
-  // Build per-pin output map
+  // Build per-pin output map (one pin per unique name)
   const outputPins = useMemo(() => {
     const pins: Record<string, string> = {}
     includedEntries.forEach((entry, i) => {
@@ -115,7 +139,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
       const short = label.length > 20 ? label.slice(0, 20) + '...' : label
       slots.push({
         id: `text-${i}`,
-        label: `[${entry.key}] ${short}`,
+        label: `${entry.key}: ${short}`,
         type: 'text' as const,
         hidden: pinsCollapsed,
       })
@@ -141,8 +165,9 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
       outputText: effectiveOutput, outputPins, output_mode: outputMode, overrides,
       excluded_keys: [...excludedKeys], output_limit: outputLimit,
       output_override: outputOverride, pins_collapsed: pinsCollapsed,
+      preview_collapsed: previewCollapsed,
     })
-  }, [effectiveOutput, outputMode, overrides, excludedKeys, outputLimit, outputPins, id, updateNodeData, outputOverride, pinsCollapsed])
+  }, [effectiveOutput, outputMode, overrides, excludedKeys, outputLimit, outputPins, id, updateNodeData, outputOverride, pinsCollapsed, previewCollapsed])
 
   // Toggle exclude (with Alt+Click isolate)
   function toggleExclude(key: string, e?: React.MouseEvent) {
@@ -215,6 +240,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     editingKey, setEditingKey,
     escapedRef,
     pinsCollapsed, setPinsCollapsed,
+    previewCollapsed, setPreviewCollapsed,
     outputOverride, setOutputOverride,
     editingOutput, setEditingOutput,
     outputTextareaRef,
@@ -230,6 +256,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     computedOutput,
     allIncluded,
     unpackError,
+    jsonDefs,
 
     // Actions
     handleRun,

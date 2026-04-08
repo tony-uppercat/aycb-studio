@@ -189,7 +189,6 @@ export function useKeyboardShortcuts({
       return {
         ...n,
         parentId: groupId,
-        extent: 'parent' as const,
         position: { x: abs.x - gx, y: abs.y - gy },
         selected: false,
       }

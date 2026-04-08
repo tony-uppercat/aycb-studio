@@ -19,9 +19,22 @@ export function GroupNode({ id, data, selected }: NodeProps) {
   const { updateNodeData, setNodes } = useReactFlow()
   const snapshotCanvas = useCanvasStore(s => s.snapshotCanvas)
   const [collapsed, setCollapsed] = useState(d.collapsed ?? false)
+  const locked = d.locked ?? false
 
   // Store original size before collapse so we can restore it
   const originalSizeRef = useRef<{ width: number; height: number } | null>(null)
+
+  // Apply lock/unlock extent on children
+  useEffect(() => {
+    setNodes(ns => ns.map(n => {
+      if (n.parentId === id) {
+        return locked
+          ? { ...n, extent: 'parent' as const }
+          : { ...n, extent: undefined }
+      }
+      return n
+    }))
+  }, [locked, id, setNodes])
 
   // Hide/show child nodes + resize group when collapsed/expanded
   // React Flow auto-hides edges connected to hidden nodes
@@ -162,6 +175,21 @@ export function GroupNode({ id, data, selected }: NodeProps) {
             }}
             title="Group options"
           >&#x2022;&#x2022;&#x2022;</button>
+          {/* Lock toggle */}
+          <button
+            className="nodrag"
+            onClick={() => updateNodeData(id, { locked: !locked })}
+            style={{ background: 'none', border: '1px solid #333', borderRadius: 2, color: locked ? '#f59e0b' : '#666', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center' }}
+            title={locked ? 'Unlock children' : 'Lock children inside'}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              {locked
+                ? <path d="M7 11V7a5 5 0 0110 0v4" />
+                : <path d="M7 11V7a5 5 0 019.9-1" />
+              }
+            </svg>
+          </button>
           {/* Collapse toggle */}
           <button
             className="nodrag"

@@ -88,6 +88,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   useEffect(() => { resolutionRef.current = resolution }, [resolution])
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64] = useState<string | null>(null)
+  const [compareSourceUrl, setCompareSourceUrl] = useState<string | null>(null)
   // True while we're waiting for historyPreview to load after a generation, so we can clear imageB64
   const waitingForPreviewRef = useRef(false)
   const [loading, setLoading] = useState(false)
@@ -249,6 +250,15 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     if (!rawPrompt.trim()) { setError('Write a prompt'); return }
     const prompt = rawPrompt.trim()
     const refs = await pullAllMedia(id, 'image-', getNodes, getEdges)
+    // Save compare source: ref image if connected, otherwise current output (previous gen)
+    if (compareSourceUrl) URL.revokeObjectURL(compareSourceUrl)
+    if (refs.length > 0) {
+      setCompareSourceUrl(URL.createObjectURL(refs[0]))
+    } else if (imageB64) {
+      // Save current output as compare source before it gets replaced
+      const resp = await fetch(`data:image/png;base64,${imageB64}`)
+      setCompareSourceUrl(URL.createObjectURL(await resp.blob()))
+    }
     const providerKey = modelInfo.provider === 'flux-cloud' ? bflApiKey
                      : modelInfo.provider === 'local' ? localServerUrl
                      : apiKey
@@ -378,6 +388,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     resolution, setResolution,
     localPrompt, setLocalPrompt,
     imageB64,
+    compareSourceUrl,
     loading,
     error,
     lastCost,

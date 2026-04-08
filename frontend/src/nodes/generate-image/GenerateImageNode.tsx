@@ -1,6 +1,7 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
+import { CompareSlider } from '../_shared/CompareSlider'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { useGenerateImage, IMAGE_MODELS, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
@@ -12,6 +13,9 @@ type GenerateImageNodeType = Node<GenerateImageNodeData, 'generateImage'>
 export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImageNodeType>) {
   const { openPreview } = useMediaPreview()
   const h = useGenerateImage(id, data, selected)
+  const [compareMode, setCompareMode] = useState(false)
+  const outputUrl = h.imageB64 ? `data:image/png;base64,${h.imageB64}` : h.historyPreview
+  const canCompare = !!h.compareSourceUrl && !!outputUrl
 
   return (
     <NodeShell
@@ -94,7 +98,9 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         )}
         {h.error && <p className={styles.error}>{h.error}</p>}
         <div className={styles.previewArea}>
-          {h.imageB64
+          {compareMode && canCompare ? (
+            <CompareSlider imageA={h.compareSourceUrl!} imageB={outputUrl!} labelA="Before" labelB="After" />
+          ) : h.imageB64
             ? <img src={`data:image/png;base64,${h.imageB64}`} alt="generated" className={styles.previewImg}
                 onClick={e => {
                   e.stopPropagation()
@@ -121,6 +127,13 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                 style={{ cursor: 'pointer' }} />
             : <span className={styles.dropHint}>{h.activePrompt ? 'Ready — click Run' : 'Write a prompt or connect one'}</span>
           }
+          {canCompare && (
+            <button
+              className={`${styles.subtleToggle} ${styles.compareBtn}`}
+              onClick={() => setCompareMode(!compareMode)}
+              title={compareMode ? 'Show output' : 'Compare with source'}
+            >{compareMode ? 'Output' : 'Compare'}</button>
+          )}
           {h.currentMediaId && (h.imageB64 || h.historyPreview) && (
             <button
               className={`${styles.favBtn} ${h.reviewStatuses[h.currentMediaId]?.favorite ? styles.favBtnActive : ''}`}

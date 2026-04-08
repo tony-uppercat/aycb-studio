@@ -490,6 +490,22 @@
 .subtleToggle:hover { color: var(--text-dim) }
 .subtleToggleOn { color: var(--accent) }
 
+.compareBtn {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  z-index: 2;
+  width: auto;
+  height: auto;
+  font-size: 10px;
+  padding: 1px 5px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 3px;
+  color: var(--color-text-secondary);
+}
+
+.compareBtn:hover { color: var(--color-text-primary); }
+
 .swapBtn {
   background: var(--surface-2);
   border: 1px solid var(--border);

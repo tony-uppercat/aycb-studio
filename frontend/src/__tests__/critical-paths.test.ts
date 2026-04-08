@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Critical-path regression tests for the 5 flows that break most often.
  *

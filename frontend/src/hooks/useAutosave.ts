@@ -55,14 +55,26 @@ export function useAutosave(activeProjectId?: string | null) {
   const saveNow = useCallback(async () => {
     setSaveStatus('saving')
     const viewport = getViewport()
-    const payload: PersistedCanvas = {
-      nodes: serializeNodes(getNodes()),
-      edges: getEdges(),
-      viewport,
+    const nodes = serializeNodes(getNodes())
+    const edges = getEdges()
+
+    // Guard: never overwrite a project that has nodes with an empty canvas
+    const pid = projectIdRef.current
+    if (pid && nodes.length === 0) {
+      try {
+        const { loadProject } = await import('../stores/projectStore')
+        const existing = await loadProject(pid)
+        if (existing && existing.canvas?.nodes?.length > 0) {
+          console.warn('[autosave] Blocked empty save over project with', existing.canvas.nodes.length, 'nodes')
+          setSaveStatus('unsaved')
+          return
+        }
+      } catch { /* proceed if check fails */ }
     }
 
+    const payload: PersistedCanvas = { nodes, edges, viewport }
+
     // IndexedDB project store (async) — use ref-captured projectId (tab-local)
-    const pid = projectIdRef.current
     if (pid) {
       try {
         const { updateProject } = await import('../stores/projectStore')

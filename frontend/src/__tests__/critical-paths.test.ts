@@ -163,13 +163,9 @@ describe('getHandleType', () => {
   })
 
   it('documents actual behavior for "text-out-0" (known bug source)', () => {
-    // "text-out-0":
-    //   step 1: replace(/-(?:in|out)$/, '') => no match (ends with -0) => "text-out-0"
-    //   step 2: replace(/-\d+$/, '') => strips "-0" => "text-out"
-    // Result is "text-out" which is NOT a valid slot type — this is the bug.
-    // A correct implementation would return "text".
+    // "text-out-0": split('-')[0] => "text" — now correctly extracts the type
     const actual = getHandleType('text-out-0')
-    expect(actual).toBe('text-out') // documenting actual (buggy) behavior
+    expect(actual).toBe('text')
   })
 
   it('handles "prompt-in" correctly', () => {

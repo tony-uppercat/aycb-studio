@@ -10,8 +10,8 @@ import { loadMedia } from '../mediaStore'
 
 export function getHandleType(handleId: string | null | undefined): string {
   if (!handleId) return ''
-  const stripped = handleId.replace(/-(?:in|out)$/, '')
-  return stripped.replace(/-\d+$/, '')
+  // Strip directional suffixes (-in, -out), numeric suffixes (-0, -1), and named suffixes (-system, -alt, etc.)
+  return handleId.split('-')[0]
 }
 
 /**

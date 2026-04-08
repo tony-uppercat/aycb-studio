@@ -359,13 +359,22 @@ export function CanvasContextMenu({
     const minX = Math.min(...selectedNodes.map(n => n.position.x))
     const minY = Math.min(...selectedNodes.map(n => n.position.y))
 
-    const templateNodes = selectedNodes.map(n => ({
-      id: n.id, type: n.type,
-      position: { x: n.position.x - minX, y: n.position.y - minY },
-      data: withContent
-        ? keepNodeContent(n.data as Record<string, unknown>)
-        : stripNodeData(n.data as Record<string, unknown>),
-    }))
+    const selectedIds = new Set(selectedNodes.map(n => n.id))
+    const templateNodes = selectedNodes.map(n => {
+      const base: Record<string, unknown> = {
+        id: n.id, type: n.type,
+        position: n.parentId && selectedIds.has(n.parentId)
+          ? n.position  // child of group: keep relative position
+          : { x: n.position.x - minX, y: n.position.y - minY },
+        data: withContent
+          ? keepNodeContent(n.data as Record<string, unknown>)
+          : stripNodeData(n.data as Record<string, unknown>),
+      }
+      if (n.parentId && selectedIds.has(n.parentId)) base.parentId = n.parentId
+      if (n.extent) base.extent = n.extent
+      if (n.style) base.style = n.style
+      return base
+    })
 
     const templateEdges = internalEdges.map(e => ({
       id: e.id, source: e.source, target: e.target,

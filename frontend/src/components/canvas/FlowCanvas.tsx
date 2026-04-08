@@ -305,10 +305,12 @@ function FlowCanvasInner() {
     const newNodes = templateNodes.map(n => {
       const newId = getNextNodeId(n.type || 'unknown')
       idMap[n.id] = newId
+      const isChild = n.parentId && idMap[n.parentId]
       return {
         ...n,
         id: newId,
-        position: { x: (n.position?.x ?? 0) + offsetX, y: (n.position?.y ?? 0) + offsetY },
+        position: isChild ? n.position : { x: (n.position?.x ?? 0) + offsetX, y: (n.position?.y ?? 0) + offsetY },
+        ...(n.parentId ? { parentId: idMap[n.parentId] ?? n.parentId } : {}),
         selected: false,
       }
     })
@@ -397,6 +399,25 @@ function FlowCanvasInner() {
             onClick={() => setGalleryOpen(true)}
             title="Project templates"
           >Templates</button>
+          <button
+            className={styles.iconBtn}
+            onClick={() => {
+              const vp = getViewport()
+              const rect = canvasRef.current?.getBoundingClientRect()
+              const w = rect?.width ?? window.innerWidth
+              const h = rect?.height ?? window.innerHeight
+              const cx = (-vp.x + w / 2) / vp.zoom - 100
+              const cy = (-vp.y + h / 2) / vp.zoom - 40
+              const newId = getNextNodeId('textNote')
+              const next = [...getNodes(), { id: newId, type: 'textNote', position: { x: cx, y: cy }, data: { text: '', fontSize: 12, fontFamily: 'system' }, selected: true }]
+              snapshot(next, getEdges())
+              setNodes(next)
+            }}
+            title="Add text note"
+            aria-label="Add text note"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
         </div>
         <div className={styles.topActions}>
           <SaveIndicator />

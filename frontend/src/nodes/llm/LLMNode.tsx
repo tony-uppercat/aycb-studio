@@ -148,6 +148,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, id, getNodes, getEdges, updateNodeData])
 
   const inputSlots: SlotDef[] = [
+    { id: 'system-in', label: 'System', type: 'text' },
     { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
     ...mediaSlots,
   ]

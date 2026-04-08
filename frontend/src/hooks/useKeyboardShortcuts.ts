@@ -451,28 +451,26 @@ export function useKeyboardShortcuts({
       }
       // Shift+R — swap first two input connections on selected node
       if (e.shiftKey && e.key === 'R' && !e.ctrlKey && !e.metaKey && !e.altKey && !inInput) {
+        e.preventDefault()
         const allNodes = getNodes()
         const selected = allNodes.filter(n => n.selected)
+        console.log('[Shift+R] selected:', selected.length, 'nodes')
         if (selected.length === 1) {
           const node = selected[0]
-          const manifest = MANIFEST_MAP[node.type ?? '']
-          if (manifest && manifest.inputs.length >= 2) {
-            const handle1 = manifest.inputs[0].handleId
-            const handle2 = manifest.inputs[1].handleId
-            const allEdges = getEdges()
-            const edge1 = allEdges.find(ed => ed.target === node.id && ed.targetHandle === handle1)
-            const edge2 = allEdges.find(ed => ed.target === node.id && ed.targetHandle === handle2)
-            if (edge1 || edge2) {
-              e.preventDefault()
-              const postEdges = allEdges.map(ed => {
-                if (ed.id === edge1?.id) return { ...ed, targetHandle: handle2 }
-                if (ed.id === edge2?.id) return { ...ed, targetHandle: handle1 }
-                return ed
-              })
-              snapshot(allNodes, postEdges)
-              setEdges(postEdges)
-            }
-          }
+          const allEdges = getEdges()
+          const incomingEdges = allEdges.filter(ed => ed.target === node.id)
+          if (incomingEdges.length < 2) break
+          // Use first two incoming edges sorted by targetHandle name
+          const sorted = [...incomingEdges].sort((a, b) => (a.targetHandle ?? '').localeCompare(b.targetHandle ?? ''))
+          const edge1 = sorted[0]
+          const edge2 = sorted[1]
+          const postEdges = allEdges.map(ed => {
+            if (ed.id === edge1.id) return { ...ed, targetHandle: edge2.targetHandle }
+            if (ed.id === edge2.id) return { ...ed, targetHandle: edge1.targetHandle }
+            return ed
+          })
+          snapshot(allNodes, postEdges)
+          setEdges(postEdges)
         }
       }
       // Backspace — plain delete (no reconnection)

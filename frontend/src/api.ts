@@ -28,9 +28,9 @@ function recordRequest(method: string, path: string, status: number, duration: n
 
 function backendError(context: string): Error {
   if (!isBackendAvailable()) {
-    return new Error(`${context}: running in cloud mode — backend not available. Run locally: python -m src.cli ui-react`)
+    return new Error(`${context}: running in cloud mode — backend not available`)
   }
-  return new Error(`${context}: backend not responding. Start it with: python -m src.cli ui-react`)
+  return new Error(`${context}: backend not responding. Start the backend on port 5101`)
 }
 
 async function post<T>(path: string, body: FormData): Promise<T> {
@@ -151,7 +151,7 @@ export const api = {
   },
 
   analyzeVideo(video: File, model: string, nFrames: number, doEmbed: boolean, apiKey: string): Promise<AnalyzeVideoResult> {
-    if (!isBackendAvailable()) throw new Error('Video analysis requires the local backend. Run: python -m src.cli ui-react')
+    if (!isBackendAvailable()) throw new Error('Video analysis requires the local backend')
     const fd = new FormData()
     fd.append('video', video)
     fd.append('model', model)
@@ -163,7 +163,7 @@ export const api = {
 
   /** Extended video analysis — caller builds the full FormData (model, n_frames, mode, cut_threshold, prompt, etc.) */
   analyzeVideoAdvanced(fd: FormData): Promise<AnalyzeVideoResult> {
-    if (!isBackendAvailable()) throw new Error('Video analysis requires the local backend. Run: python -m src.cli ui-react')
+    if (!isBackendAvailable()) throw new Error('Video analysis requires the local backend')
     return post('/analyze/video', fd)
   },
 
@@ -188,7 +188,7 @@ export const api = {
     return post('/generate/image', fd)
   },
 
-  llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[]): Promise<{ text: string; status: string; usage?: UsageInfo }> {
+  llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[], systemPrompt?: string): Promise<{ text: string; status: string; usage?: UsageInfo }> {
     // Route Ollama models directly to client-side provider (no backend proxy needed)
     if (model.startsWith('ollama/')) {
       const llm = getLLMProvider('ollama')
@@ -204,6 +204,7 @@ export const api = {
     fd.append('prompt', prompt)
     fd.append('model', model)
     fd.append('api_key', apiKey)
+    if (systemPrompt) fd.append('system_prompt', systemPrompt)
     mediaFiles?.forEach(f => fd.append('media_files', f))
     return post('/llm/chat', fd)
   },

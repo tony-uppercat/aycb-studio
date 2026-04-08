@@ -66,6 +66,9 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   const [localPrompt, setLocalPrompt] = useState(
     typeof data.prompt === 'string' ? data.prompt : ''
   )
+  const [localSystemPrompt, setLocalSystemPrompt] = useState(
+    typeof data.systemPrompt === 'string' ? data.systemPrompt : ''
+  )
   const [prependMode, setPrependMode] = useState(
     typeof data.prependPrompt === 'boolean' ? data.prependPrompt : true
   )
@@ -105,13 +108,17 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       ? (prependMode && localPrompt.trim() ? `${localPrompt}\n\n${pin}` : pin)
       : localPrompt
     if (!prompt.trim()) { setError('Write a prompt or connect a Prompt pin'); return }
+
+    const systemPin = pullText(id, 'system-in', getNodes, getEdges)
+    const systemPrompt = systemPin.trim() || localSystemPrompt.trim()
+
     setLoading(true); setError('')
 
     const files = await pullAllMedia(id, 'media-', getNodes, getEdges)
 
     try {
       const effectiveKey = modelInfo.api === 'anthropic' ? (anthropicKey || '') : (apiKey || '')
-      const r = await api.llmChat(prompt, modelInfo.id, effectiveKey, files.length ? files : undefined)
+      const r = await api.llmChat(prompt, modelInfo.id, effectiveKey, files.length ? files : undefined, systemPrompt)
       const text = r.text || ''
       setOutput(text)
       // Propagate filtered output (without thinking) to downstream nodes
@@ -214,6 +221,20 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h12v2H3v-2z"/><path d="M19 15l-4-3v6l4-3z"/></svg>
           </button>
         </div>
+        {/* System prompt — shown when no system-in pin connected */}
+        {!pullText(id, 'system-in', getNodes, getEdges).trim() && (
+          <textarea
+            className={`${styles.promptTextarea} nodrag nowheel nokey`}
+            value={localSystemPrompt}
+            onChange={e => {
+              setLocalSystemPrompt(e.target.value)
+              updateNodeData(id, { systemPrompt: e.target.value })
+            }}
+            rows={1}
+            placeholder="System prompt (optional)"
+            style={{ fontSize: 10, opacity: 0.7, minHeight: 22 }}
+          />
+        )}
         <textarea
           className={styles.promptTextarea}
           value={localPrompt}
@@ -222,7 +243,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
             updateNodeData(id, { prompt: e.target.value })
           }}
           rows={3}
-          placeholder="System prompt, instructions..."
+          placeholder="Prompt..."
         />
         {error && <p className={styles.error}>{error}</p>}
         <ExpandableText value={displayOutput} rows={6} placeholder="Output appears here..." onEdit={(text) => { setOutput(text); updateNodeData(id, { outputText: text, text }) }} />

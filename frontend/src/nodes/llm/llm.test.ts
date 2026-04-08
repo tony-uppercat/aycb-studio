@@ -10,9 +10,10 @@ describe('llm manifest', () => {
   })
 
   it('has correct inputs and outputs', () => {
-    expect(manifest.inputs).toHaveLength(2)
-    expect(manifest.inputs[0]).toEqual({ type: 'prompt', handleId: 'prompt-in' })
-    expect(manifest.inputs[1]).toEqual({ type: 'media', handleId: 'media-0' })
+    expect(manifest.inputs).toHaveLength(3)
+    expect(manifest.inputs[0]).toEqual({ type: 'text', handleId: 'system-in' })
+    expect(manifest.inputs[1]).toEqual({ type: 'prompt', handleId: 'prompt-in' })
+    expect(manifest.inputs[2]).toEqual({ type: 'media', handleId: 'media-0' })
     expect(manifest.outputs).toHaveLength(1)
     expect(manifest.outputs[0]).toEqual({ type: 'text', handleId: 'text-out' })
   })

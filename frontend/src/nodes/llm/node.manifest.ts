@@ -8,6 +8,7 @@ const manifest: NodeManifest = {
   description: 'Generate or transform text — choose Gemini or Claude',
   defaultData: { prompt: '', systemPrompt: '', selectedModel: 'gemini-3.1-flash-lite-preview:thinking' },
   inputs: [
+    { type: 'text', handleId: 'system-in' },
     { type: 'prompt', handleId: 'prompt-in' },
     { type: 'media', handleId: 'media-0' },
   ],

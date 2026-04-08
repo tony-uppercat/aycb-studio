@@ -462,11 +462,11 @@ export function useKeyboardShortcuts({
             const allEdges = getEdges()
             const edge1 = allEdges.find(ed => ed.target === node.id && ed.targetHandle === handle1)
             const edge2 = allEdges.find(ed => ed.target === node.id && ed.targetHandle === handle2)
-            if (edge1 && edge2) {
+            if (edge1 || edge2) {
               e.preventDefault()
               const postEdges = allEdges.map(ed => {
-                if (ed.id === edge1.id) return { ...ed, targetHandle: handle2 }
-                if (ed.id === edge2.id) return { ...ed, targetHandle: handle1 }
+                if (ed.id === edge1?.id) return { ...ed, targetHandle: handle2 }
+                if (ed.id === edge2?.id) return { ...ed, targetHandle: handle1 }
                 return ed
               })
               snapshot(allNodes, postEdges)

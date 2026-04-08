@@ -133,8 +133,29 @@ function FlowCanvasInner() {
         // No insertion — just snapshot for undo history as before
         historyDragStop()
       }
+      // Unparent child if dragged outside group bounds
+      if (node.parentId) {
+        const allNodes = getNodes()
+        const parent = allNodes.find(n => n.id === node.parentId)
+        if (parent) {
+          const pw = (parent.style?.width as number) ?? parent.measured?.width ?? 200
+          const ph = (parent.style?.height as number) ?? parent.measured?.height ?? 150
+          const nx = node.position.x
+          const ny = node.position.y
+          if (nx < -20 || ny < -20 || nx > pw + 20 || ny > ph + 20) {
+            // Convert to absolute position and detach
+            const absX = (parent.position?.x ?? 0) + nx
+            const absY = (parent.position?.y ?? 0) + ny
+            setNodes(ns => ns.map(n =>
+              n.id === node.id
+                ? { ...n, parentId: undefined, extent: undefined, position: { x: absX, y: absY } }
+                : n
+            ))
+          }
+        }
+      }
     },
-    [tryInsertOnEdge, historyDragStop],
+    [tryInsertOnEdge, historyDragStop, getNodes, setNodes],
   )
   useCanvasPersistence(nodes, edges, activeProject.projectId)
   useAutosave(activeProject.projectId)

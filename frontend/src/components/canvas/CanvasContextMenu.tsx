@@ -12,7 +12,7 @@ import type { Node, Edge } from '@xyflow/react'
 import { NODE_CATALOG, CATEGORY_LABELS, type NodeManifest } from '../../nodes/index'
 import { loadMedia } from '../../mediaStore'
 import { serializeNodes } from '../../hooks/useCanvasPersistence'
-import { saveUserTemplate } from '../../presets'
+import { saveUserTemplate, findTemplateByName, deleteUserTemplate } from '../../presets'
 import { triggerDownload, downloadFile } from '../../utils/downloadManager'
 import type { CollageImage } from '../CollageEditor'
 import styles from './CanvasContextMenu.module.css'
@@ -342,8 +342,18 @@ export function CanvasContextMenu({
   function saveTemplate(withContent: boolean) {
     if (!canSaveTemplate) return
     const suffix = withContent ? '' : ' (clean)'
-    const name = window.prompt(`Template name${suffix}:`)?.trim()
+    const raw = window.prompt(`Template name${suffix}:`)
+    if (!raw) return
+    // Sanitize: trim + strip control characters
+    const name = raw.trim().replace(/[\x00-\x1f\x7f]/g, '')
     if (!name) return
+
+    // Overwrite detection
+    const existing = findTemplateByName(name)
+    if (existing) {
+      if (!window.confirm(`Template "${name}" exists. Overwrite?`)) return
+      deleteUserTemplate(existing.id)
+    }
 
     const internalEdges = getInternalEdges(selectedNodes, allEdges)
     const minX = Math.min(...selectedNodes.map(n => n.position.x))
@@ -462,8 +472,8 @@ export function CanvasContextMenu({
             {/* Templates */}
             {canSaveTemplate && !templateSaved && (
               <>
-                <Item icon="☆" label="Save Template (clean)" onClick={() => saveTemplate(false)} />
-                <Item icon="★" label="Save Template (content)" onClick={() => saveTemplate(true)} />
+                <Item icon="T" label="Save Template (Clean)" onClick={() => saveTemplate(false)} />
+                <Item icon="T" label="Save Template (Content)" onClick={() => saveTemplate(true)} />
                 <Sep />
               </>
             )}

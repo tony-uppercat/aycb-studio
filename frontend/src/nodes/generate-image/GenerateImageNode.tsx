@@ -31,29 +31,26 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
       estimatedCost={h.estimatedLabel}
     >
       <div className={styles.nodeContent}>
-        <div className={styles.modelSelectRow}>
-          <select
-            className={`${styles.select} ${h.modelInfo.deprecated ? styles.selectDeprecated : ''}`}
-            value={h.selectedModel}
-            onChange={e => { h.setSelectedModel(e.target.value); h.updateNodeData(id, { selectedModel: e.target.value }) }}
-          >
-            {[
-              { label: 'Google Gemini', filter: 'gemini' },
-              { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
-              { label: 'Local GPU', filter: 'local' },
-            ].map(g => {
-              const items = IMAGE_MODELS.filter(m => m.provider === g.filter)
-              return items.length > 0 ? (
-                <optgroup key={g.label} label={g.label}>
-                  {items.map(m => (
-                    <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
-                  ))}
-                </optgroup>
-              ) : null
-            })}
-          </select>
-          <span className={`${styles.priceBadge} ${styles[priceTier(h.modelInfo.cost, 0.05, 0.15)]}`}>{h.modelInfo.price}</span>
-        </div>
+        <select
+          className={`${styles.select} ${styles[priceTier(h.modelInfo.cost, 0.05, 0.15)]}`}
+          value={h.selectedModel}
+          onChange={e => { h.setSelectedModel(e.target.value); h.updateNodeData(id, { selectedModel: e.target.value }) }}
+        >
+          {[
+            { label: 'Google Gemini', filter: 'gemini' },
+            { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
+            { label: 'Local GPU', filter: 'local' },
+          ].map(g => {
+            const items = IMAGE_MODELS.filter(m => m.provider === g.filter)
+            return items.length > 0 ? (
+              <optgroup key={g.label} label={g.label}>
+                {items.map(m => (
+                  <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
+                ))}
+              </optgroup>
+            ) : null
+          })}
+        </select>
         {h.modelInfo.deprecated && (
           <div className={styles.deprecatedWarning}>Legacy model — consider switching to a 3.x version</div>
         )}

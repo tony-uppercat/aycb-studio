@@ -290,14 +290,15 @@ function FlowCanvasInner() {
     const tplCenterX = (minX + maxX) / 2
     const tplCenterY = (minY + maxY) / 2
 
-    // Get viewport center in flow coordinates
-    // Use the React Flow container bounds (not window center) so nodes land at the visible canvas center
+    // Get viewport center in flow coordinates directly from viewport transform
+    const vp = getViewport()
     const rect = canvasRef.current?.getBoundingClientRect()
-    const screenCenterX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
-    const screenCenterY = rect ? rect.top + rect.height / 2 : window.innerHeight / 2
-    const viewportCenter = screenToFlowPosition({ x: screenCenterX, y: screenCenterY })
-    const offsetX = viewportCenter.x - tplCenterX
-    const offsetY = viewportCenter.y - tplCenterY
+    const w = rect?.width ?? window.innerWidth
+    const h = rect?.height ?? window.innerHeight
+    const viewCenterX = (-vp.x + w / 2) / vp.zoom
+    const viewCenterY = (-vp.y + h / 2) / vp.zoom
+    const offsetX = viewCenterX - tplCenterX
+    const offsetY = viewCenterY - tplCenterY
 
     // Remap IDs to avoid collisions
     const idMap: Record<string, string> = {}

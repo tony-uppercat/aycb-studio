@@ -159,37 +159,32 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       estimatedCost={estimatedLabel}
     >
       <div className={styles.nodeContent}>
-        <div className={styles.modelSelectRow}>
-          <select
-            className={`${styles.select} ${modelInfo.deprecated ? styles.selectDeprecated : ''}`}
-            value={selectedModel}
-            onChange={e => {
-              setSelectedModel(e.target.value)
-              updateNodeData(id, { selectedModel: e.target.value })
-            }}
-          >
-            {[
-              { label: 'Gemini (Google)', items: LLM_MODELS.filter(m => m.api === 'gemini') },
-              { label: 'Claude (Anthropic)', items: LLM_MODELS.filter(m => m.api === 'anthropic') },
-            ].map(g => (
-              <optgroup key={g.label} label={g.label}>
-                {g.items.map(m => (
-                  <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
-                ))}
-              </optgroup>
-            ))}
-            {ollamaAvailable && ollamaModels.length > 0 && (
-              <optgroup label="Ollama (Local)">
-                {ollamaModels.map(m => (
-                  <option key={m.id} value={m.id} title={m.tooltip}>{m.name}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-          {modelInfo && 'price' in modelInfo && (
-            <span className={`${styles.priceBadge} ${styles[priceTier(modelInfo.cost, 1, 5)]}`}>{modelInfo.price}</span>
+        <select
+          className={`${styles.select} ${modelInfo && 'cost' in modelInfo ? styles[priceTier(modelInfo.cost, 1, 5)] : ''}`}
+          value={selectedModel}
+          onChange={e => {
+            setSelectedModel(e.target.value)
+            updateNodeData(id, { selectedModel: e.target.value })
+          }}
+        >
+          {[
+            { label: 'Gemini (Google)', items: LLM_MODELS.filter(m => m.api === 'gemini') },
+            { label: 'Claude (Anthropic)', items: LLM_MODELS.filter(m => m.api === 'anthropic') },
+          ].map(g => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map(m => (
+                <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
+              ))}
+            </optgroup>
+          ))}
+          {ollamaAvailable && ollamaModels.length > 0 && (
+            <optgroup label="Ollama (Local)">
+              {ollamaModels.map(m => (
+                <option key={m.id} value={m.id} title={m.tooltip}>{m.name}</option>
+              ))}
+            </optgroup>
           )}
-        </div>
+        </select>
         {modelInfo.deprecated && (
           <div className={styles.deprecatedWarning}>Legacy model — consider switching to a 3.x version</div>
         )}

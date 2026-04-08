@@ -159,31 +159,10 @@
   line-height: 1.3;
 }
 
-.modelSelectRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.modelSelectRow .select {
-  flex: 1;
-  min-width: 0;
-}
-
-.priceBadge {
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-  background: #ffffff08;
-  letter-spacing: -0.02em;
-}
-
-.priceFree { color: var(--color-success); }
-.priceCheap { color: var(--color-success); }
-.priceMid { color: var(--color-warning); }
-.priceExpensive { color: var(--color-error); }
+.priceFree { border-left: 3px solid var(--color-success); }
+.priceCheap { border-left: 3px solid var(--color-success); }
+.priceMid { border-left: 3px solid var(--color-warning); }
+.priceExpensive { border-left: 3px solid var(--color-error); }
 
 .arResRow {
   display: flex;

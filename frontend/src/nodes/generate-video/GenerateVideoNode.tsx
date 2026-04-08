@@ -54,23 +54,20 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
       <div className={styles.nodeContent}>
 
         {/* Model selector */}
-        <div className={styles.modelSelectRow}>
-          <select
-            className={styles.select}
-            value={selectedModel}
-            onChange={e => {
-              setSelectedModel(e.target.value)
-              updateNodeData(id, { selectedModel: e.target.value })
-            }}
-          >
-            {VIDEO_MODELS.map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>
-                {m.name} ({m.price})
-              </option>
-            ))}
-          </select>
-          <span className={`${styles.priceBadge} ${styles[priceTier(modelInfo.cost, 0.10, 1)]}`}>{modelInfo.price}</span>
-        </div>
+        <select
+          className={`${styles.select} ${styles[priceTier(modelInfo.cost, 0.10, 1)]}`}
+          value={selectedModel}
+          onChange={e => {
+            setSelectedModel(e.target.value)
+            updateNodeData(id, { selectedModel: e.target.value })
+          }}
+        >
+          {VIDEO_MODELS.map(m => (
+            <option key={m.id} value={m.id} title={m.tooltip}>
+              {m.name} ({m.price})
+            </option>
+          ))}
+        </select>
 
         {/* Prompt textarea (only when no prompt connected) */}
         {!hasPromptEdge && (

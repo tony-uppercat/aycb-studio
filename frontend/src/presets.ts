@@ -16,6 +16,7 @@ export interface UserTemplate {
   nodes: Node[]
   edges: Edge[]
   createdAt: string
+  updatedAt?: string
 }
 
 export const USER_TEMPLATES_KEY = STORAGE_KEYS.USER_TEMPLATES
@@ -27,9 +28,26 @@ export function getUserTemplates(): UserTemplate[] {
 }
 
 export function saveUserTemplate(template: UserTemplate): void {
+  const now = new Date().toISOString()
   const existing = getUserTemplates()
-  existing.push(template)
+  existing.push({ ...template, updatedAt: now })
   localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(existing))
+}
+
+export function updateUserTemplate(
+  id: string,
+  updates: Partial<Pick<UserTemplate, 'name' | 'description' | 'nodes' | 'edges'>>,
+): void {
+  const templates = getUserTemplates()
+  const idx = templates.findIndex(t => t.id === id)
+  if (idx === -1) return
+  templates[idx] = { ...templates[idx], ...updates, updatedAt: new Date().toISOString() }
+  localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(templates))
+}
+
+export function findTemplateByName(name: string): UserTemplate | undefined {
+  const lower = name.toLowerCase()
+  return getUserTemplates().find(t => t.name.toLowerCase() === lower)
 }
 
 export function deleteUserTemplate(id: string): void {

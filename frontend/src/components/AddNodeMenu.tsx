@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { NODE_CATALOG, CATEGORY_LABELS, getCompatibleNodes, type NodeManifest } from '../nodes/index'
 import { PRESETS } from './project/ProjectGallery'
-import { getUserTemplates, deleteUserTemplate, type UserTemplate } from '../presets'
+import { getUserTemplates, deleteUserTemplate, updateUserTemplate, type UserTemplate } from '../presets'
 import styles from './AddNodeMenu.module.css'
 
 interface Props {
@@ -28,20 +28,21 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
     ? getCompatibleNodes(NODE_CATALOG, filter.slotType, filter.direction)
     : NODE_CATALOG
 
-  const q = query.toLowerCase()
+  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '')
+  const q = normalize(query)
   const filtered = q
-    ? baseCatalog.filter(n => n.label.toLowerCase().includes(q) || n.description.toLowerCase().includes(q) || n.category.includes(q))
+    ? baseCatalog.filter(n => normalize(n.label).includes(q) || normalize(n.description).includes(q) || n.category.includes(q))
     : baseCatalog
 
   const templates = !filter && onAddTemplate
     ? (q
-      ? PRESETS.filter(p => p.nodes.length > 0 && (p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)))
+      ? PRESETS.filter(p => p.nodes.length > 0 && (normalize(p.name).includes(q) || normalize(p.description).includes(q)))
       : PRESETS.filter(p => p.nodes.length > 0))
     : []
 
   const filteredUserTemplates = !filter && onAddTemplate
     ? (q
-      ? userTemplates.filter(t => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q))
+      ? userTemplates.filter(t => normalize(t.name).includes(q) || normalize(t.description).includes(q))
       : userTemplates)
     : []
 
@@ -248,6 +249,18 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
                       <div className={styles.itemName}>{t.name}</div>
                       <div className={styles.itemDesc}>{t.description}</div>
                     </div>
+                    <button
+                      className={styles.deleteBtn}
+                      title="Rename template"
+                      onClick={e => {
+                        e.stopPropagation()
+                        const newName = window.prompt('Rename template:', t.name)
+                        if (newName && newName.trim()) {
+                          updateUserTemplate(t.id, { name: newName.trim() })
+                          setUserTemplates(getUserTemplates())
+                        }
+                      }}
+                    >R</button>
                     <button
                       className={styles.deleteBtn}
                       title="Delete template"

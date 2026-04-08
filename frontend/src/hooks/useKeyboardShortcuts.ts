@@ -454,23 +454,22 @@ export function useKeyboardShortcuts({
         e.preventDefault()
         const allNodes = getNodes()
         const selected = allNodes.filter(n => n.selected)
-        console.log('[Shift+R] selected:', selected.length, 'nodes')
         if (selected.length === 1) {
           const node = selected[0]
           const allEdges = getEdges()
           const incomingEdges = allEdges.filter(ed => ed.target === node.id)
-          if (incomingEdges.length < 2) break
-          // Use first two incoming edges sorted by targetHandle name
-          const sorted = [...incomingEdges].sort((a, b) => (a.targetHandle ?? '').localeCompare(b.targetHandle ?? ''))
-          const edge1 = sorted[0]
-          const edge2 = sorted[1]
-          const postEdges = allEdges.map(ed => {
-            if (ed.id === edge1.id) return { ...ed, targetHandle: edge2.targetHandle }
-            if (ed.id === edge2.id) return { ...ed, targetHandle: edge1.targetHandle }
-            return ed
-          })
-          snapshot(allNodes, postEdges)
-          setEdges(postEdges)
+          if (incomingEdges.length >= 2) {
+            const sorted = [...incomingEdges].sort((a, b) => (a.targetHandle ?? '').localeCompare(b.targetHandle ?? ''))
+            const edge1 = sorted[0]
+            const edge2 = sorted[1]
+            const postEdges = allEdges.map(ed => {
+              if (ed.id === edge1.id) return { ...ed, targetHandle: edge2.targetHandle }
+              if (ed.id === edge2.id) return { ...ed, targetHandle: edge1.targetHandle }
+              return ed
+            })
+            snapshot(allNodes, postEdges)
+            setEdges(postEdges)
+          }
         }
       }
       // Backspace — plain delete (no reconnection)

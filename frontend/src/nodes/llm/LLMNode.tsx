@@ -109,7 +109,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       : localPrompt
     if (!prompt.trim()) { setError('Write a prompt or connect a Prompt pin'); return }
 
-    const systemPin = pullText(id, 'system-in', getNodes, getEdges)
+    const systemPin = pullText(id, 'text-system', getNodes, getEdges)
     const systemPrompt = systemPin.trim() || localSystemPrompt.trim()
 
     setLoading(true); setError('')
@@ -148,7 +148,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, id, getNodes, getEdges, updateNodeData])
 
   const inputSlots: SlotDef[] = [
-    { id: 'system-in', label: 'System', type: 'text' },
+    { id: 'text-system', label: 'System', type: 'text' },
     { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
     ...mediaSlots,
   ]
@@ -222,8 +222,8 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h12v2H3v-2z"/><path d="M19 15l-4-3v6l4-3z"/></svg>
           </button>
         </div>
-        {/* System prompt — shown when no system-in pin connected */}
-        {!pullText(id, 'system-in', getNodes, getEdges).trim() && (
+        {/* System prompt — shown when no text-system pin connected */}
+        {!pullText(id, 'text-system', getNodes, getEdges).trim() && (
           <textarea
             className={`${styles.promptTextarea} nodrag nowheel nokey`}
             value={localSystemPrompt}

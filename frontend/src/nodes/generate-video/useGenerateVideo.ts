@@ -15,16 +15,18 @@ export interface VideoModelDef {
   provider: string
   tooltip: string
   price: string
+  cost: number
   ratios: string[]
   qualities: string[]
   maxDuration: number
 }
 
 export const VIDEO_MODELS: VideoModelDef[] = [
-  { id: 'seedance-2.0',   name: 'Seedance 2.0',       provider: 'muapi', tooltip: 'ByteDance \u2014 fast T2V/I2V, up to 2K',   price: '~$0.05',  ratios: ['16:9', '9:16', '4:3', '3:4'], qualities: ['basic', 'high'], maxDuration: 10 },
-  { id: 'kling-3.0-std',  name: 'Kling 3.0 Standard',  provider: 'muapi', tooltip: 'Kuaishou \u2014 720p, fast, affordable',     price: '~$0.50',  ratios: ['16:9', '9:16', '1:1'],        qualities: ['720p'],          maxDuration: 10 },
-  { id: 'kling-3.0-pro',  name: 'Kling 3.0 Pro',       provider: 'muapi', tooltip: 'Kuaishou \u2014 1080p, best quality, audio', price: '~$1.50',  ratios: ['16:9', '9:16', '1:1'],        qualities: ['1080p'],         maxDuration: 10 },
+  { id: 'seedance-2.0',   name: 'Seedance 2.0',       provider: 'muapi', tooltip: 'ByteDance — fast T2V/I2V, up to 2K',   price: '~$0.05',  cost: 0.05, ratios: ['16:9', '9:16', '4:3', '3:4'], qualities: ['basic', 'high'], maxDuration: 10 },
+  { id: 'kling-3.0-std',  name: 'Kling 3.0 Standard',  provider: 'muapi', tooltip: 'Kuaishou — 720p, fast, affordable',     price: '~$0.50',  cost: 0.50, ratios: ['16:9', '9:16', '1:1'],        qualities: ['720p'],          maxDuration: 10 },
+  { id: 'kling-3.0-pro',  name: 'Kling 3.0 Pro',       provider: 'muapi', tooltip: 'Kuaishou — 1080p, best quality, audio', price: '~$1.50',  cost: 1.50, ratios: ['16:9', '9:16', '1:1'],        qualities: ['1080p'],         maxDuration: 10 },
 ]
+
 
 const POLL_INTERVAL_MS = 5000
 

@@ -14,7 +14,8 @@ Single-process architecture: React+Vite frontend (:5100) proxied to Python FastA
 At the start of EVERY session:
 1. Read `skills/aycb-workflow/SKILL.md` — session lifecycle (open, execute, compact, close).
 2. Read the latest `reports/*_technical.md` — current state and next tasks.
-3. Orient: 3-4 lines max.
+3. Invoke all applicable superpowers skills BEFORE any action (brainstorming before features, debugging before fixes, writing-plans before multi-step work). No exceptions — even if the task seems simple.
+4. Orient: 3-4 lines max.
 
 When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 

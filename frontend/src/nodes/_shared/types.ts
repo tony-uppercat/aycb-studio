@@ -59,3 +59,12 @@ export function findHandleForSlot(
   if (compat) return compat.handleId
   return null
 }
+
+/** Map a numeric cost to a CSS class name for price-tier coloring.
+ *  `cheap` = upper bound for green, `mid` = upper bound for yellow. */
+export function priceTier(cost: number, cheap: number, mid: number): string {
+  if (cost === 0) return 'priceFree'
+  if (cost < cheap) return 'priceCheap'
+  if (cost <= mid) return 'priceMid'
+  return 'priceExpensive'
+}

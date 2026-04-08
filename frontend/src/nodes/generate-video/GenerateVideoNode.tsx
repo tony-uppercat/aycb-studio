@@ -3,6 +3,7 @@ import { useReactFlow, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { useGenerateVideo, VIDEO_MODELS } from './useGenerateVideo'
+import { priceTier } from '../_shared/types'
 import type { GenerateVideoNodeData } from '../../types'
 import styles from '../_shared/Node.module.css'
 import nodeStyles from './GenerateVideoNode.module.css'
@@ -53,20 +54,23 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
       <div className={styles.nodeContent}>
 
         {/* Model selector */}
-        <select
-          className={styles.select}
-          value={selectedModel}
-          onChange={e => {
-            setSelectedModel(e.target.value)
-            updateNodeData(id, { selectedModel: e.target.value })
-          }}
-        >
-          {VIDEO_MODELS.map(m => (
-            <option key={m.id} value={m.id} title={m.tooltip}>
-              {m.name} ({m.price})
-            </option>
-          ))}
-        </select>
+        <div className={styles.modelSelectRow}>
+          <select
+            className={styles.select}
+            value={selectedModel}
+            onChange={e => {
+              setSelectedModel(e.target.value)
+              updateNodeData(id, { selectedModel: e.target.value })
+            }}
+          >
+            {VIDEO_MODELS.map(m => (
+              <option key={m.id} value={m.id} title={m.tooltip}>
+                {m.name} ({m.price})
+              </option>
+            ))}
+          </select>
+          <span className={`${styles.priceBadge} ${styles[priceTier(modelInfo.cost, 0.10, 1)]}`}>{modelInfo.price}</span>
+        </div>
 
         {/* Prompt textarea (only when no prompt connected) */}
         {!hasPromptEdge && (

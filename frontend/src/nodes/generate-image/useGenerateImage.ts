@@ -15,15 +15,16 @@ import { fetchReviewStatus, registerBridgeStem, saveMediaMeta, toggleFavorite, t
 
 export const IMAGE_MODELS = [
   // Google Gemini — text-to-image & image-to-image (pass ref images for editing)
-  { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', deprecated: false },
-  { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', deprecated: false },
+  { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false },
+  { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false },
   // Flux (BFL Cloud)
-  { id: 'flux-2-klein-4b', name: 'Flux 2 Klein 4B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 4B via BFL API', price: '~$0.014', deprecated: false },
-  { id: 'flux-2-klein-9b', name: 'Flux 2 Klein 9B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 9B via BFL API', price: '~$0.015', deprecated: false },
+  { id: 'flux-2-klein-4b', name: 'Flux 2 Klein 4B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 4B via BFL API', price: '~$0.014', cost: 0.014, deprecated: false },
+  { id: 'flux-2-klein-9b', name: 'Flux 2 Klein 9B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 9B via BFL API', price: '~$0.015', cost: 0.015, deprecated: false },
   // Flux (Local GPU)
-  { id: 'local/flux-2-klein-4b', name: 'Flux 2 Klein 4B (Local)', provider: 'local', tooltip: 'Run on your GPU', price: 'Free', deprecated: false },
-  { id: 'local/flux-2-klein-9b', name: 'Flux 2 Klein 9B (Local)', provider: 'local', tooltip: 'Run on your GPU (24GB+ VRAM)', price: 'Free', deprecated: false },
+  { id: 'local/flux-2-klein-4b', name: 'Flux 2 Klein 4B (Local)', provider: 'local', tooltip: 'Run on your GPU', price: 'Free', cost: 0, deprecated: false },
+  { id: 'local/flux-2-klein-9b', name: 'Flux 2 Klein 9B (Local)', provider: 'local', tooltip: 'Run on your GPU (24GB+ VRAM)', price: 'Free', cost: 0, deprecated: false },
 ] as const
+
 
 export const ASPECT_RATIOS = [
   { value: '', label: 'Auto' },

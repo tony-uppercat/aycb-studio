@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals, type Node, type NodeProps } from '@xyflow/react'
 import { NodeShell, type SlotDef } from '../_shared/NodeShell'
+import { priceTier } from '../_shared/types'
 import { ExpandableText } from '../_shared/ExpandableText'
 import { useSettings } from '../../components/SettingsContext'
 import { api } from '../../api'
@@ -15,15 +16,16 @@ import styles from '../_shared/Node.module.css'
 type LLMNodeType = Node<LLMNodeData, 'llm'>
 
 const LLM_MODELS = [
-  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite', api: 'gemini', tooltip: 'Ultra fast & cheap, $0.25/1M input, thinking support', deprecated: false },
-  { id: 'gemini-3.1-flash-lite-preview:thinking', name: 'Gemini 3.1 Flash-Lite Thinking', api: 'gemini', tooltip: '3.1 Flash-Lite with high thinking level', deprecated: false },
-  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', api: 'gemini', tooltip: 'Latest, thinking always on, advanced agentic reasoning', deprecated: false },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', api: 'gemini', tooltip: '1M context, fast balanced performance, multimodal', deprecated: false },
-  { id: 'gemini-3-flash-preview:thinking', name: 'Gemini 3 Flash Thinking', api: 'gemini', tooltip: 'Gemini 3 Flash with high thinking level', deprecated: false },
-  { id: 'claude-sonnet-4-6-20250620', name: 'Claude Sonnet 4.6', api: 'anthropic', tooltip: 'Strong all-around model with excellent coding and analysis', deprecated: false },
-  { id: 'claude-opus-4-6-20250620', name: 'Claude Opus 4.6', api: 'anthropic', tooltip: 'Most capable Claude model for advanced reasoning and creativity', deprecated: false },
-  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', api: 'anthropic', tooltip: 'Fast and cost-effective for lightweight tasks', deprecated: false },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite', api: 'gemini', tooltip: 'Ultra fast & cheap, thinking support', price: '$0.25/$1.50', cost: 0.25, deprecated: false },
+  { id: 'gemini-3.1-flash-lite-preview:thinking', name: 'Gemini 3.1 Flash-Lite Thinking', api: 'gemini', tooltip: '3.1 Flash-Lite with high thinking level', price: '$0.25/$1.50', cost: 0.25, deprecated: false },
+  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', api: 'gemini', tooltip: 'Latest, thinking always on, advanced agentic reasoning', price: '$2/$12', cost: 2, deprecated: false },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', api: 'gemini', tooltip: '1M context, fast balanced performance, multimodal', price: '$0.50/$3', cost: 0.50, deprecated: false },
+  { id: 'gemini-3-flash-preview:thinking', name: 'Gemini 3 Flash Thinking', api: 'gemini', tooltip: 'Gemini 3 Flash with high thinking level', price: '$0.50/$3', cost: 0.50, deprecated: false },
+  { id: 'claude-sonnet-4-6-20250620', name: 'Claude Sonnet 4.6', api: 'anthropic', tooltip: 'Strong all-around model with excellent coding and analysis', price: '$3/$15', cost: 3, deprecated: false },
+  { id: 'claude-opus-4-6-20250620', name: 'Claude Opus 4.6', api: 'anthropic', tooltip: 'Most capable Claude model for advanced reasoning and creativity', price: '$15/$75', cost: 15, deprecated: false },
+  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', api: 'anthropic', tooltip: 'Fast and cost-effective for lightweight tasks', price: '$0.80/$4', cost: 0.80, deprecated: false },
 ] as const
+
 
 const MAX_MEDIA = 8
 
@@ -157,32 +159,37 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       estimatedCost={estimatedLabel}
     >
       <div className={styles.nodeContent}>
-        <select
-          className={`${styles.select} ${modelInfo.deprecated ? styles.selectDeprecated : ''}`}
-          value={selectedModel}
-          onChange={e => {
-            setSelectedModel(e.target.value)
-            updateNodeData(id, { selectedModel: e.target.value })
-          }}
-        >
-          <optgroup label="Gemini (Google)">
-            {LLM_MODELS.filter(m => m.api === 'gemini').map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>{m.deprecated ? '[LEGACY] ' : ''}{m.name}</option>
+        <div className={styles.modelSelectRow}>
+          <select
+            className={`${styles.select} ${modelInfo.deprecated ? styles.selectDeprecated : ''}`}
+            value={selectedModel}
+            onChange={e => {
+              setSelectedModel(e.target.value)
+              updateNodeData(id, { selectedModel: e.target.value })
+            }}
+          >
+            {[
+              { label: 'Gemini (Google)', items: LLM_MODELS.filter(m => m.api === 'gemini') },
+              { label: 'Claude (Anthropic)', items: LLM_MODELS.filter(m => m.api === 'anthropic') },
+            ].map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {g.items.map(m => (
+                  <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
+                ))}
+              </optgroup>
             ))}
-          </optgroup>
-          <optgroup label="Claude (Anthropic)">
-            {LLM_MODELS.filter(m => m.api === 'anthropic').map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>{m.deprecated ? '[LEGACY] ' : ''}{m.name}</option>
-            ))}
-          </optgroup>
-          {ollamaAvailable && ollamaModels.length > 0 && (
-            <optgroup label="Ollama (Local)">
-              {ollamaModels.map(m => (
-                <option key={m.id} value={m.id} title={m.tooltip}>{m.name}</option>
-              ))}
-            </optgroup>
+            {ollamaAvailable && ollamaModels.length > 0 && (
+              <optgroup label="Ollama (Local)">
+                {ollamaModels.map(m => (
+                  <option key={m.id} value={m.id} title={m.tooltip}>{m.name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          {modelInfo && 'price' in modelInfo && (
+            <span className={`${styles.priceBadge} ${styles[priceTier(modelInfo.cost, 1, 5)]}`}>{modelInfo.price}</span>
           )}
-        </select>
+        </div>
         {modelInfo.deprecated && (
           <div className={styles.deprecatedWarning}>Legacy model — consider switching to a 3.x version</div>
         )}

@@ -4,6 +4,7 @@ import { NodeShell } from '../_shared/NodeShell'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { useGenerateImage, IMAGE_MODELS, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
+import { priceTier } from '../_shared/types'
 import styles from '../_shared/Node.module.css'
 
 type GenerateImageNodeType = Node<GenerateImageNodeData, 'generateImage'>
@@ -30,32 +31,29 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
       estimatedCost={h.estimatedLabel}
     >
       <div className={styles.nodeContent}>
-        <select
-          className={`${styles.select} ${h.modelInfo.deprecated ? styles.selectDeprecated : ''}`}
-          value={h.selectedModel}
-          onChange={e => { h.setSelectedModel(e.target.value); h.updateNodeData(id, { selectedModel: e.target.value }) }}
-        >
-          <optgroup label="Google Gemini">
-            {IMAGE_MODELS.filter(m => m.provider === 'gemini').map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>{m.deprecated ? '[LEGACY] ' : ''}{m.name} ({m.price})</option>
-            ))}
-          </optgroup>
-          <optgroup label="Google Imagen">
-            {IMAGE_MODELS.filter(m => m.provider === 'imagen').map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
-            ))}
-          </optgroup>
-          <optgroup label="Flux (fal.ai)">
-            {IMAGE_MODELS.filter(m => m.provider === 'flux-cloud').map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
-            ))}
-          </optgroup>
-          <optgroup label="Local GPU">
-            {IMAGE_MODELS.filter(m => m.provider === 'local').map(m => (
-              <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
-            ))}
-          </optgroup>
-        </select>
+        <div className={styles.modelSelectRow}>
+          <select
+            className={`${styles.select} ${h.modelInfo.deprecated ? styles.selectDeprecated : ''}`}
+            value={h.selectedModel}
+            onChange={e => { h.setSelectedModel(e.target.value); h.updateNodeData(id, { selectedModel: e.target.value }) }}
+          >
+            {[
+              { label: 'Google Gemini', filter: 'gemini' },
+              { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
+              { label: 'Local GPU', filter: 'local' },
+            ].map(g => {
+              const items = IMAGE_MODELS.filter(m => m.provider === g.filter)
+              return items.length > 0 ? (
+                <optgroup key={g.label} label={g.label}>
+                  {items.map(m => (
+                    <option key={m.id} value={m.id} title={m.tooltip}>{m.name} ({m.price})</option>
+                  ))}
+                </optgroup>
+              ) : null
+            })}
+          </select>
+          <span className={`${styles.priceBadge} ${styles[priceTier(h.modelInfo.cost, 0.05, 0.15)]}`}>{h.modelInfo.price}</span>
+        </div>
         {h.modelInfo.deprecated && (
           <div className={styles.deprecatedWarning}>Legacy model — consider switching to a 3.x version</div>
         )}

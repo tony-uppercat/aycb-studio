@@ -17,11 +17,6 @@ export const IMAGE_MODELS = [
   // Google Gemini — text-to-image & image-to-image (pass ref images for editing)
   { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', deprecated: false },
   { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', deprecated: false },
-  { id: 'gemini-2.5-flash-image', name: 'Nano Banana (2.5)', provider: 'gemini', tooltip: 'Gemini 2.5 Flash — LEGACY, max 1K only. Consider using 3.x models instead.', price: '$0.039', deprecated: true },
-  // Google Imagen
-  { id: 'imagen-4.0-generate-001', name: 'Imagen 4', provider: 'imagen', tooltip: 'Google Imagen 4 — photorealistic, up to 2K', price: '$0.04', deprecated: false },
-  { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4 Ultra', provider: 'imagen', tooltip: 'Imagen 4 Ultra — max detail, up to 2K', price: '$0.06', deprecated: false },
-  { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4 Fast', provider: 'imagen', tooltip: 'Fastest Imagen — quick iterations', price: '$0.02', deprecated: false },
   // Flux (BFL Cloud)
   { id: 'flux-2-klein-4b', name: 'Flux 2 Klein 4B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 4B via BFL API', price: '~$0.014', deprecated: false },
   { id: 'flux-2-klein-9b', name: 'Flux 2 Klein 9B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 9B via BFL API', price: '~$0.015', deprecated: false },

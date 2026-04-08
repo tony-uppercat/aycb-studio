@@ -19,18 +19,11 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   'gemini-3.1-flash-image-preview':   [0.50, 60.00],
   // Gemini 3 (text/LLM)
   'gemini-3-flash-preview':           [0.50,  3.00],
-  'gemini-3-pro-preview':             [2.00, 12.00],
   // Nano Banana Pro (Gemini 3 Pro Image) — ~$0.134/image @1K-2K, $0.24 @4K
   'gemini-3-pro-image-preview':       [2.00, 120.00],
-  // Gemini 2.5 (text/LLM)
+  // Gemini 2.5 (legacy — kept for historical cost lookups)
   'gemini-2.5-flash':                 [0.30,  2.50],
   'gemini-2.5-pro':                   [1.25, 10.00],
-  // Nano Banana 2.5 (Gemini 2.5 Flash Image) — ~$0.039/image, max 1K only
-  'gemini-2.5-flash-image':           [0.30, 30.00],
-  // Imagen: per-image pricing
-  'imagen-4.0-generate-001':          [0, 40.00],   // $0.04/image
-  'imagen-4.0-ultra-generate-001':    [0, 60.00],   // $0.06/image
-  'imagen-4.0-fast-generate-001':     [0, 20.00],   // $0.02/image
   // Claude models (approximate)
   'claude-sonnet-4-6-20250620':       [3.00, 15.00],
   'claude-opus-4-6-20250620':         [15.00, 75.00],
@@ -76,7 +69,7 @@ export interface CostEstimate {
 
 /**
  * Estimate cost for an API call.
- * @param modelId - The model ID (e.g., 'gemini-2.5-flash')
+ * @param modelId - The model ID (e.g., 'gemini-3-flash-preview')
  * @param operation - Operation type: 'analyze_image' | 'analyze_video' | 'generate_image' | 'llm_chat'
  * @param promptText - The text prompt
  * @param imageCount - Number of input images
@@ -106,10 +99,6 @@ export function estimateCost(
     const FIXED_IMAGE_COST: Record<string, number> = {
       'gemini-3.1-flash-image-preview': 0.067,   // @1K default
       'gemini-3-pro-image-preview': 0.134,        // @1K-2K
-      'gemini-2.5-flash-image': 0.039,            // max 1K
-      'imagen-4.0-generate-001': 0.04,
-      'imagen-4.0-ultra-generate-001': 0.06,
-      'imagen-4.0-fast-generate-001': 0.02,
     }
     const fixedCost = FIXED_IMAGE_COST[pricingModelId]
     if (fixedCost !== undefined) {

@@ -14,12 +14,11 @@ import styles from '../_shared/Node.module.css'
 // ── Models for overpaint analysis (vision-capable Gemini models) ─────────────
 
 const METAPROMPT_MODELS = [
-  { id: 'gemini-3.1-flash-lite-preview',          name: 'Gemini 3.1 Flash-Lite',        deprecated: false, tooltip: 'Ultra-fast & cheap' },
-  { id: 'gemini-3.1-flash-lite-preview:thinking',name: 'Gemini 3.1 Flash-Lite (Think)', deprecated: false, tooltip: 'Flash-Lite with deep reasoning' },
-  { id: 'gemini-3.1-pro-preview',                 name: 'Gemini 3.1 Pro',               deprecated: false, tooltip: 'Latest, always-thinking' },
-  { id: 'gemini-3-flash-preview',                 name: 'Gemini 3 Flash',               deprecated: false, tooltip: 'Fast, balanced, multimodal' },
-  { id: 'gemini-3-flash-preview:thinking',        name: 'Gemini 3 Flash (Think)',        deprecated: false, tooltip: 'Flash with deep reasoning' },
-  { id: 'gemini-3-pro-preview',                   name: 'Gemini 3 Pro',                 deprecated: false, tooltip: 'Best quality, complex reasoning' },
+  { id: 'gemini-3.1-flash-lite-preview',           name: 'Gemini 3.1 Flash-Lite',        deprecated: false, tooltip: 'Ultra-fast & cheap' },
+  { id: 'gemini-3.1-flash-lite-preview:thinking',  name: 'Gemini 3.1 Flash-Lite (Think)', deprecated: false, tooltip: 'Flash-Lite with deep reasoning' },
+  { id: 'gemini-3.1-pro-preview',                  name: 'Gemini 3.1 Pro',               deprecated: false, tooltip: 'Latest, always-thinking' },
+  { id: 'gemini-3-flash-preview',                  name: 'Gemini 3 Flash',               deprecated: false, tooltip: 'Fast, balanced, multimodal' },
+  { id: 'gemini-3-flash-preview:thinking',         name: 'Gemini 3 Flash (Think)',        deprecated: false, tooltip: 'Flash with deep reasoning' },
 ] as const
 
 // ── System prompt for overpaint analysis ─────────────────────────────────────

@@ -37,7 +37,7 @@ export function deleteUserTemplate(id: string): void {
   localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(existing))
 }
 
-export const MODELS = ['Gemini 3.1 Pro', 'Gemini 3.1 Flash-Lite', 'Gemini 3 Flash', 'Gemini 3 Pro', 'Gemini 2.5 Flash', 'Gemini 2.5 Pro']
+export const MODELS = ['Gemini 3.1 Pro', 'Gemini 3.1 Flash-Lite', 'Gemini 3 Flash']
 
 export const DEFAULT_PRESET_NAME = 'Default'
 

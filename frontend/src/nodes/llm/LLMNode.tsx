@@ -19,12 +19,7 @@ const LLM_MODELS = [
   { id: 'gemini-3.1-flash-lite-preview:thinking', name: 'Gemini 3.1 Flash-Lite Thinking', api: 'gemini', tooltip: '3.1 Flash-Lite with high thinking level', deprecated: false },
   { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', api: 'gemini', tooltip: 'Latest, thinking always on, advanced agentic reasoning', deprecated: false },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', api: 'gemini', tooltip: '1M context, fast balanced performance, multimodal', deprecated: false },
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', api: 'gemini', tooltip: '1M context, complex reasoning, coding, research', deprecated: false },
   { id: 'gemini-3-flash-preview:thinking', name: 'Gemini 3 Flash Thinking', api: 'gemini', tooltip: 'Gemini 3 Flash with high thinking level', deprecated: false },
-  { id: 'gemini-2.5-flash:thinking', name: 'Gemini 2.5 Flash Thinking', api: 'gemini', tooltip: 'LEGACY — Extended thinking mode. Consider 3.x Flash Thinking instead.', deprecated: true },
-  { id: 'gemini-2.5-pro:thinking', name: 'Gemini 2.5 Pro Thinking', api: 'gemini', tooltip: 'LEGACY — Deep reasoning. Consider 3.x Pro instead.', deprecated: true },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', api: 'gemini', tooltip: 'LEGACY — Previous gen. Consider 3.x Flash instead.', deprecated: true },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', api: 'gemini', tooltip: 'LEGACY — Previous gen. Consider 3.x Pro instead.', deprecated: true },
   { id: 'claude-sonnet-4-6-20250620', name: 'Claude Sonnet 4.6', api: 'anthropic', tooltip: 'Strong all-around model with excellent coding and analysis', deprecated: false },
   { id: 'claude-opus-4-6-20250620', name: 'Claude Opus 4.6', api: 'anthropic', tooltip: 'Most capable Claude model for advanced reasoning and creativity', deprecated: false },
   { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', api: 'anthropic', tooltip: 'Fast and cost-effective for lightweight tasks', deprecated: false },
@@ -35,7 +30,7 @@ const MAX_MEDIA = 8
 export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
-  const { apiKey } = useSettings()
+  const { apiKey, anthropicKey } = useSettings()
   const { models: ollamaModels, available: ollamaAvailable } = useOllamaModels()
 
   const connectedMediaCount = useStore(state =>
@@ -113,7 +108,8 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
     const files = await pullAllMedia(id, 'media-', getNodes, getEdges)
 
     try {
-      const r = await api.llmChat(prompt, modelInfo.id, apiKey || '', files.length ? files : undefined)
+      const effectiveKey = modelInfo.api === 'anthropic' ? (anthropicKey || '') : (apiKey || '')
+      const r = await api.llmChat(prompt, modelInfo.id, effectiveKey, files.length ? files : undefined)
       const text = r.text || ''
       setOutput(text)
       // Propagate filtered output (without thinking) to downstream nodes
@@ -140,7 +136,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       reportNodeError(id, msg)
     }
     finally { setLoading(false) }
-  }, [apiKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, id, getNodes, getEdges, updateNodeData])
+  }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, id, getNodes, getEdges, updateNodeData])
 
   const inputSlots: SlotDef[] = [
     { id: 'prompt-in', label: 'Prompt', type: 'prompt' },

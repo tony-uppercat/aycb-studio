@@ -242,7 +242,7 @@ export async function importProject(file: File): Promise<ImportResult> {
     nodes,
     edges,
     viewport,
-    settings: (raw.settings as ImportResult['settings']) ?? { model: 'Gemini 2.5 Flash', doEmbed: false },
+    settings: (raw.settings as ImportResult['settings']) ?? { model: 'Gemini 3 Flash', doEmbed: false },
     mediaCount,
   }
 }

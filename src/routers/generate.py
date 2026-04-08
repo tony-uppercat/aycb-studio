@@ -13,10 +13,10 @@ from PIL import Image as PILImage
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.shared import (
-    _log, _require_api_key, _require_prompt, _classify_error,
+    _log, _require_key, _require_prompt, _classify_error,
     _estimate_cost, _pil_to_b64, _save_to_bridge, _validate_image_upload,
     _read_upload,
-    IMAGE_MODELS, MODEL_PRICING, MAX_IMAGE_BYTES,
+    IMAGE_MODELS, MAX_IMAGE_BYTES,
 )
 # Lazy imports — src.gemini pulls cv2/numpy which may fail at boot on Windows
 # from src.gemini import generate_image, get_last_usage  → inside endpoints
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 async def generate_image_endpoint(
     prompt: str = Form(...),
     api_key: str = Form(""),
-    model: str = Form("Gemini 2.5 Flash"),
+    model: str = Form("Gemini 3.1 Flash Image"),
     aspect_ratio: str = Form(""),
     image_size: str = Form(""),
     project_name: str = Form(""),
@@ -38,7 +38,7 @@ async def generate_image_endpoint(
     from src.gemini import generate_image, get_last_usage
 
     clean_prompt = _require_prompt(prompt)
-    effective_key = _require_api_key(api_key)
+    effective_key = _require_key(api_key, "gemini")
 
     pil_refs: list[PILImage.Image] = []
     if ref_images:
@@ -64,10 +64,6 @@ async def generate_image_endpoint(
 
     usage = get_last_usage()
     cost = _estimate_cost(model_id, usage)
-    # For imagen models, estimate per-image cost (no token usage available)
-    if model_id.startswith("imagen"):
-        per_image_cost = MODEL_PRICING.get(model_id, (0, 0))[1] / 1_000_000 * 1000
-        cost = {"input_tokens": 0, "output_tokens": 0, "cost_usd": round(per_image_cost, 6)}
 
     dt = time.time() - t0
     if result is None:

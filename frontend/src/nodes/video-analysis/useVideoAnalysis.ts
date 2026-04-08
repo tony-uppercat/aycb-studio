@@ -15,10 +15,6 @@ export const VIDEO_ANALYSIS_MODELS = [
   { id: 'gemini-3.1-pro-preview',                  name: 'Gemini 3.1 Pro',                  deprecated: false, thinking: true,  tooltip: 'Latest, always-thinking' },
   { id: 'gemini-3-flash-preview',                  name: 'Gemini 3 Flash',                  deprecated: false, thinking: false, tooltip: 'Fast, balanced, multimodal' },
   { id: 'gemini-3-flash-preview:thinking',         name: 'Gemini 3 Flash (Think)',           deprecated: false, thinking: true,  tooltip: 'Flash with deep reasoning' },
-  { id: 'gemini-3-pro-preview',                    name: 'Gemini 3 Pro',                    deprecated: false, thinking: false, tooltip: 'Best quality, complex reasoning' },
-  { id: 'gemini-3-pro-preview:thinking',           name: 'Gemini 3 Pro (Think)',             deprecated: false, thinking: true,  tooltip: 'Pro with deep reasoning' },
-  { id: 'gemini-2.5-flash',                        name: 'Gemini 2.5 Flash',                deprecated: true,  thinking: false, tooltip: 'LEGACY — use 3.x instead' },
-  { id: 'gemini-2.5-pro',                          name: 'Gemini 2.5 Pro',                  deprecated: true,  thinking: false, tooltip: 'LEGACY — use 3.x instead' },
 ] as const
 
 export type ExtractionMode = 'sharpness' | 'cuts'

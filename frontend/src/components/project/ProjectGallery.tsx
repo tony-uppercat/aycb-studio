@@ -105,7 +105,7 @@ export const PRESETS: PresetTemplate[] = [
     icon: '🧠',
     nodes: [
       { id: 'prompt-1', type: 'textInput', position: { x: 60, y: 120 }, data: { outputText: 'Write a haiku about coding' } },
-      { id: 'llm-1', type: 'llm', position: { x: 380, y: 120 }, data: { prompt: '', systemPrompt: '', selectedModel: 'gemini-2.5-flash' } },
+      { id: 'llm-1', type: 'llm', position: { x: 380, y: 120 }, data: { prompt: '', systemPrompt: '', selectedModel: 'gemini-3.1-flash-lite-preview:thinking' } },
       { id: 'result-1', type: 'resultViewer', position: { x: 700, y: 120 }, data: {} },
     ],
     edges: [

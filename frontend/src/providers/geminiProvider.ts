@@ -12,19 +12,10 @@ const MODEL_MAP: Record<string, string> = {
   'Gemini 3.1 Pro': 'gemini-3.1-pro-preview',
   'Gemini 3.1 Flash-Lite': 'gemini-3.1-flash-lite-preview',
   'Gemini 3.1 Flash-Lite Thinking': 'gemini-3.1-flash-lite-preview:thinking',
-  'Gemini 3 Pro': 'gemini-3-pro-preview',
   'Gemini 3 Flash': 'gemini-3-flash-preview',
   'Gemini 3 Flash Thinking': 'gemini-3-flash-preview:thinking',
-  'Gemini 2.5 Flash Thinking': 'gemini-2.5-flash:thinking',
-  'Gemini 2.5 Pro Thinking': 'gemini-2.5-pro:thinking',
-  'Gemini 2.5 Flash': 'gemini-2.5-flash',
-  'Gemini 2.5 Pro': 'gemini-2.5-pro',
   'Gemini 3.1 Flash Image': 'gemini-3.1-flash-image-preview',
   'Gemini 3 Pro Image': 'gemini-3-pro-image-preview',
-  'Gemini 2.5 Flash Image': 'gemini-2.5-flash-image',
-  'Imagen 4': 'imagen-4.0-generate-001',
-  'Imagen 4 Ultra': 'imagen-4.0-ultra-generate-001',
-  'Imagen 4 Fast': 'imagen-4.0-fast-generate-001',
 }
 
 export function resolveModel(nameOrId: string): string {
@@ -49,7 +40,6 @@ export async function fileToBase64(file: File): Promise<string> {
 const GEMINI_IMAGE_COST: Record<string, number> = {
   'gemini-3.1-flash-image-preview': 0.067,   // $0.045@0.5K, $0.067@1K, $0.101@2K, $0.151@4K
   'gemini-3-pro-image-preview': 0.134,        // $0.134@1K-2K, $0.240@4K
-  'gemini-2.5-flash-image': 0.039,            // max 1K only
 }
 
 /** Compute cost: fixed per-image for image gen, per-token for text/LLM */
@@ -107,40 +97,6 @@ const geminiImageProvider: ImageProvider = {
           return { image_b64: part.inlineData.data, status: 'OK', usage }
         }
       }
-    }
-    return { image_b64: null, status: 'No image generated', usage }
-  },
-}
-
-// ── Imagen provider (generateImages API) ────────────────────────────────────
-
-const imagenImageProvider: ImageProvider = {
-  id: 'imagen',
-  async generateImage(prompt: string, modelNameOrId: string, apiKey: string, _refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
-    const ai = new GoogleGenAI({ apiKey })
-    const modelId = resolveModel(modelNameOrId)
-
-    const response = await ai.models.generateImages({
-      model: modelId,
-      prompt,
-      config: {
-        numberOfImages: 1,
-        ...(options?.aspectRatio ? { aspectRatio: options.aspectRatio } : {}),
-      },
-    })
-
-    // Imagen uses fixed per-image pricing (no token usage)
-    const IMAGEN_PRICING: Record<string, number> = {
-      'imagen-4.0-generate-001': 0.04,
-      'imagen-4.0-ultra-generate-001': 0.06,
-      'imagen-4.0-fast-generate-001': 0.02,
-    }
-    const perImageCost = IMAGEN_PRICING[modelId] ?? 0
-    const usage: UsageInfo = { input_tokens: 0, output_tokens: 0, cost_usd: perImageCost }
-
-    const img = response.generatedImages?.[0]
-    if (img?.image?.imageBytes) {
-      return { image_b64: img.image.imageBytes, status: 'OK', usage }
     }
     return { image_b64: null, status: 'No image generated', usage }
   },
@@ -236,5 +192,4 @@ const geminiLLMProvider: LLMProvider = {
 // ── Register all providers at module scope ──────────────────────────────────
 
 registerImageProvider(geminiImageProvider)
-registerImageProvider(imagenImageProvider)
 registerLLMProvider(geminiLLMProvider)

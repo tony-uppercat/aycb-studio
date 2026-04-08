@@ -304,7 +304,7 @@ export function CanvasContextMenu({
             sourceHandle: e.sourceHandle, targetHandle: e.targetHandle,
           })),
         },
-        settings: { model: 'Gemini 2.5 Flash', doEmbed: false },
+        settings: { model: 'Gemini 3 Flash', doEmbed: false },
         media: mediaItems,
       }
       triggerDownload(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `nodes-${Date.now()}.geminishot.json`)

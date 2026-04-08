@@ -84,7 +84,7 @@ export async function createProject(
     createdAt: now,
     updatedAt: now,
     canvas: canvas ?? { nodes: [], edges: [] },
-    settings: settings ?? { model: 'Gemini 2.5 Flash', doEmbed: false },
+    settings: settings ?? { model: 'Gemini 3 Flash', doEmbed: false },
     mediaIds: [],
   }
   const db = await openDB()
@@ -244,7 +244,7 @@ export async function migrateFromLocalStorage(): Promise<string | null> {
     }
 
     // Read settings
-    let settings = { model: 'Gemini 2.5 Flash', doEmbed: false }
+    let settings = { model: 'Gemini 3 Flash', doEmbed: false }
     try {
       const settingsJson = localStorage.getItem(LS_SETTINGS_KEY)
       if (settingsJson) {

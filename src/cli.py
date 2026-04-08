@@ -20,11 +20,10 @@ VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
 
 MODELS = {
-    "3-pro": "gemini-3-pro-preview",
+    "3.1-pro": "gemini-3.1-pro-preview",
+    "3.1-lite": "gemini-3.1-flash-lite-preview",
     "3-flash": "gemini-3-flash-preview",
     "flash": "gemini-3-flash-preview",
-    "2.5-flash": "gemini-2.5-flash",
-    "2.5-pro": "gemini-2.5-pro",
 }
 
 
@@ -32,7 +31,7 @@ MODELS = {
 def analyze(
     path: Path = typer.Argument(..., help="Image or video file to analyze"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output directory"),
-    model: str = typer.Option("2.5-flash", "--model", "-m", help="Model: flash, 2.5-flash, 2.5-pro, 3.1-pro, 3-flash"),
+    model: str = typer.Option("flash", "--model", "-m", help="Model: 3.1-pro, 3.1-lite, 3-flash (=flash)"),
     keyframes: int = typer.Option(3, "--keyframes", "-n", min=1, max=10, help="Max key-frames (video only)"),
     embed: bool = typer.Option(False, "--embed", "-e", help="Generate Gemini Embedding 2 vectors"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),

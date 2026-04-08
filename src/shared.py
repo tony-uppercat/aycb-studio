@@ -14,7 +14,7 @@ from PIL import Image as PILImage
 from PIL.PngImagePlugin import PngInfo
 from pydantic import BaseModel
 
-from config.settings import save_api_key_to_env, settings
+from config.settings import settings
 
 # ── Log buffer ───────────────────────────────────────────────────────────────
 _log_buffer: deque[str] = deque(maxlen=500)
@@ -82,19 +82,12 @@ def _sanitize_filename(name: str | None) -> str:
 MODELS = {
     "Gemini 3.1 Pro": "gemini-3.1-pro-preview",
     "Gemini 3.1 Flash-Lite": "gemini-3.1-flash-lite-preview",
-    "Gemini 3 Pro": "gemini-3-pro-preview",
     "Gemini 3 Flash": "gemini-3-flash-preview",
-    "Gemini 2.5 Flash": "gemini-2.5-flash",
-    "Gemini 2.5 Pro": "gemini-2.5-pro",
 }
 
 IMAGE_MODELS = {
     "Gemini 3.1 Flash Image": "gemini-3.1-flash-image-preview",
     "Gemini 3 Pro Image": "gemini-3-pro-image-preview",
-    "Gemini 2.5 Flash Image": "gemini-2.5-flash-image",
-    "Imagen 4": "imagen-4.0-generate-001",
-    "Imagen 4 Ultra": "imagen-4.0-ultra-generate-001",
-    "Imagen 4 Fast": "imagen-4.0-fast-generate-001",
 }
 
 # Cost per 1M tokens (USD): (input_per_1M, output_per_1M)
@@ -105,16 +98,14 @@ MODEL_PRICING = {
     "gemini-3.1-flash-image-preview": (0.50, 60.00),   # image gen: $60/1M output
     # Gemini 3
     "gemini-3-flash-preview": (0.50, 3.00),
-    "gemini-3-pro-preview": (2.00, 12.00),
     "gemini-3-pro-image-preview": (2.00, 120.00),      # image gen: $120/1M output
-    # Gemini 2.5
+    # Gemini 2.5 (legacy — kept for historical cost lookups)
     "gemini-2.5-flash": (0.30, 2.50),
     "gemini-2.5-pro": (1.25, 10.00),
-    "gemini-2.5-flash-image": (0.30, 30.00),           # ~$0.039/image
-    # Imagen: per-image pricing (stored as output cost, input=0)
-    "imagen-4.0-generate-001": (0, 40.00),              # $0.04/image
-    "imagen-4.0-ultra-generate-001": (0, 60.00),        # $0.06/image
-    "imagen-4.0-fast-generate-001": (0, 20.00),         # $0.02/image
+    # Claude (Anthropic)
+    "claude-sonnet-4-6-20250620": (3.00, 15.00),
+    "claude-opus-4-6-20250620": (15.00, 75.00),
+    "claude-haiku-4-5-20251001": (0.80, 4.00),
 }
 
 
@@ -154,15 +145,16 @@ def _pil_to_b64(pil: PILImage.Image, depth16: bool = True) -> str:
         return base64.b64encode(buf.getvalue()).decode()
 
 
-def _require_api_key(api_key: str) -> str:
-    """Validate and return the effective API key without mutating global settings."""
+def _require_key(api_key: str, provider: str) -> str:
+    """Return the effective API key (request param or .env fallback)."""
     key = api_key.strip()
     if key:
-        save_api_key_to_env(key)
         return key
-    if settings.gemini_api_key:
-        return settings.gemini_api_key
-    raise HTTPException(400, detail="Missing api_key")
+    fallback = getattr(settings, f"{provider}_api_key", "")
+    if fallback:
+        return fallback
+    label = provider.capitalize()
+    raise HTTPException(400, detail=f"Missing {label} API key — set it in Settings > API Keys")
 
 
 def _require_prompt(prompt: str) -> str:

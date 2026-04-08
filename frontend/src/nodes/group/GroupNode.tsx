@@ -24,16 +24,20 @@ export function GroupNode({ id, data, selected }: NodeProps) {
   // Store original size before collapse so we can restore it
   const originalSizeRef = useRef<{ width: number; height: number } | null>(null)
 
-  // Apply lock/unlock extent on children
+  // Apply lock/unlock extent on children — only when locked changes
   useEffect(() => {
-    setNodes(ns => ns.map(n => {
-      if (n.parentId === id) {
-        return locked
-          ? { ...n, extent: 'parent' as const }
-          : { ...n, extent: undefined }
-      }
-      return n
-    }))
+    setNodes(ns => {
+      const target = locked ? 'parent' : undefined
+      let changed = false
+      const next = ns.map(n => {
+        if (n.parentId === id && n.extent !== target) {
+          changed = true
+          return { ...n, extent: target as 'parent' | undefined }
+        }
+        return n
+      })
+      return changed ? next : ns
+    })
   }, [locked, id, setNodes])
 
   // Hide/show child nodes + resize group when collapsed/expanded

@@ -4,6 +4,7 @@ import { getNextNodeId } from './useCanvasDragDrop'
 import { enforceOneEdgePerInput } from './useConnectionHandlers'
 import { edgeStyle } from '../utils/edgeStyles'
 import { deleteMedia, deleteMultipleMedia } from '../mediaStore'
+import { MANIFEST_MAP } from '../nodes/index'
 
 export interface UseKeyboardShortcutsParams {
   getNodes: () => Node[]
@@ -446,6 +447,32 @@ export function useKeyboardShortcuts({
           setEdges(postEdges)
 
           console.log(`[Paste] ${clones.length} nodes, ${clonedEdges.length} edges`)
+        }
+      }
+      // Shift+R — swap first two input connections on selected node
+      if (e.shiftKey && e.key === 'R' && !e.ctrlKey && !e.metaKey && !e.altKey && !inInput) {
+        const allNodes = getNodes()
+        const selected = allNodes.filter(n => n.selected)
+        if (selected.length === 1) {
+          const node = selected[0]
+          const manifest = MANIFEST_MAP[node.type ?? '']
+          if (manifest && manifest.inputs.length >= 2) {
+            const handle1 = manifest.inputs[0].handleId
+            const handle2 = manifest.inputs[1].handleId
+            const allEdges = getEdges()
+            const edge1 = allEdges.find(ed => ed.target === node.id && ed.targetHandle === handle1)
+            const edge2 = allEdges.find(ed => ed.target === node.id && ed.targetHandle === handle2)
+            if (edge1 && edge2) {
+              e.preventDefault()
+              const postEdges = allEdges.map(ed => {
+                if (ed.id === edge1.id) return { ...ed, targetHandle: handle2 }
+                if (ed.id === edge2.id) return { ...ed, targetHandle: handle1 }
+                return ed
+              })
+              snapshot(allNodes, postEdges)
+              setEdges(postEdges)
+            }
+          }
         }
       }
       // Backspace — plain delete (no reconnection)

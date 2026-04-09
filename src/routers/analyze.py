@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.shared import (
     _log, _read_upload, _validate_image_upload, _validate_video_upload,
-    _require_api_key, _require_prompt, _estimate_cost, _classify_error,
+    _require_key, _require_prompt, _estimate_cost, _classify_error,
     _pil_to_b64, _safe_video_suffix,
     MODELS, MODEL_PRICING, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES,
 )
@@ -30,7 +30,7 @@ async def analyze_image_endpoint(
     do_embed: bool = Form(False),
     api_key: str = Form(""),
 ):
-    effective_key = _require_api_key(api_key)
+    effective_key = _require_key(api_key, "gemini")
     _validate_image_upload(image)
 
     raw = await _read_upload(image, MAX_IMAGE_BYTES, "Image")
@@ -82,7 +82,7 @@ async def analyze_video_endpoint(
     video_name: str = Form(""),
     prompt: str = Form(""),
 ):
-    effective_key = _require_api_key(api_key)
+    effective_key = _require_key(api_key, "gemini")
     _validate_video_upload(video)
 
     model_id = MODELS.get(model, model)

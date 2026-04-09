@@ -1,4 +1,4 @@
-"""LLM router — chat with Gemini models."""
+"""LLM router — chat with Gemini and Claude models."""
 from __future__ import annotations
 
 import asyncio
@@ -7,11 +7,16 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.shared import (
     _log, _read_upload,
-    _require_api_key, _require_prompt, _estimate_cost, _classify_error,
+    _require_key, _require_prompt,
+    _estimate_cost, _classify_error,
     MODELS, MAX_IMAGE_BYTES,
 )
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
+
+
+def _is_claude_model(model_id: str) -> bool:
+    return model_id.startswith("claude-")
 
 
 @router.post("/chat")
@@ -23,14 +28,88 @@ async def llm_chat_endpoint(
     media_files: list[UploadFile] | None = File(default=None),
 ):
     import time
+
+    clean_prompt = _require_prompt(prompt)
+    model_id = MODELS.get(model, model)
+
+    if _is_claude_model(model_id):
+        return await _chat_claude(clean_prompt, system_prompt, api_key, model_id, media_files, time.time())
+    return await _chat_gemini(clean_prompt, system_prompt, api_key, model_id, media_files, time.time())
+
+
+async def _chat_claude(
+    prompt: str, system_prompt: str, api_key: str,
+    model_id: str, media_files: list[UploadFile] | None, t0: float,
+):
+    """Handle Claude (Anthropic) model requests."""
+    import time
+    import base64
+    import anthropic
+
+    effective_key = _require_key(api_key, "anthropic")
+    media_count = len(media_files) if media_files else 0
+    _log(f"LLM chat (Claude) — model={model_id}, {media_count} media, prompt={prompt[:80]}...")
+
+    try:
+        client = anthropic.Anthropic(api_key=effective_key)
+
+        content: list[dict] = []
+        if media_files:
+            for f in media_files:
+                raw = await _read_upload(f, MAX_IMAGE_BYTES, "Media")
+                mime = f.content_type or "image/png"
+                content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime,
+                        "data": base64.b64encode(raw).decode(),
+                    },
+                })
+        content.append({"type": "text", "text": prompt})
+
+        kwargs: dict = {
+            "model": model_id,
+            "max_tokens": 8192,
+            "messages": [{"role": "user", "content": content}],
+        }
+        if system_prompt.strip():
+            kwargs["system"] = system_prompt.strip()
+
+        response = await asyncio.to_thread(lambda: client.messages.create(**kwargs))
+
+        text = "".join(b.text for b in response.content if b.type == "text")
+        usage = {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+        cost = _estimate_cost(model_id, usage)
+
+        dt = time.time() - t0
+        _log(f"LLM chat (Claude) complete — {len(text)} chars ({dt:.1f}s)")
+        return {"text": text, "status": "OK", "usage": cost}
+    except anthropic.APIStatusError as exc:
+        dt = time.time() - t0
+        _log(f"LLM chat (Claude) FAILED — {exc.status_code} {exc.message} ({dt:.1f}s)")
+        raise HTTPException(exc.status_code, detail=exc.message)
+    except Exception as exc:
+        dt = time.time() - t0
+        _log(f"LLM chat (Claude) FAILED — {exc} ({dt:.1f}s)")
+        code, detail = _classify_error(exc)
+        raise HTTPException(code, detail=detail)
+
+
+async def _chat_gemini(
+    prompt: str, system_prompt: str, api_key: str,
+    model_id: str, media_files: list[UploadFile] | None, t0: float,
+):
+    """Handle Gemini (Google) model requests."""
+    import time
     from google import genai
     from google.genai import types as genai_types
     from src.gemini import _call_with_gemini_retries
 
-    clean_prompt = _require_prompt(prompt)
-    effective_key = _require_api_key(api_key)
-
-    model_id = MODELS.get(model, model)
+    effective_key = _require_key(api_key, "gemini")
 
     # Handle :thinking suffix — strip it and enable thinking config
     is_thinking = model_id.endswith(":thinking")
@@ -38,15 +117,13 @@ async def llm_chat_endpoint(
         model_id = model_id.replace(":thinking", "")
     is_gemini3 = model_id.startswith("gemini-3")
 
-    # Gemini 3.1 Pro has thinking always enabled — auto-set thinking config
-    is_always_thinking = model_id == "gemini-3.1-pro-preview"
-    if is_always_thinking:
+    # Gemini 3.1 Pro has thinking always enabled
+    if model_id == "gemini-3.1-pro-preview":
         is_thinking = True
 
     media_count = len(media_files) if media_files else 0
-    _log(f"LLM chat — model={model_id}, thinking={is_thinking}, {media_count} media, prompt={clean_prompt[:80]}...")
+    _log(f"LLM chat (Gemini) — model={model_id}, thinking={is_thinking}, {media_count} media, prompt={prompt[:80]}...")
 
-    t0 = time.time()
     try:
         client = genai.Client(api_key=effective_key)
 
@@ -56,7 +133,7 @@ async def llm_chat_endpoint(
                 raw = await _read_upload(f, MAX_IMAGE_BYTES, "Media")
                 mime = f.content_type or "image/png"
                 parts.append(genai_types.Part.from_bytes(data=raw, mime_type=mime))
-        parts.append(genai_types.Part.from_text(text=clean_prompt))
+        parts.append(genai_types.Part.from_text(text=prompt))
 
         config_kwargs: dict = {}
         if system_prompt.strip():
@@ -92,10 +169,10 @@ async def llm_chat_endpoint(
         else:
             text = "".join(answer_parts) or response.text or ""
         dt = time.time() - t0
-        _log(f"LLM chat complete — {len(text)} chars ({dt:.1f}s)")
+        _log(f"LLM chat (Gemini) complete — {len(text)} chars ({dt:.1f}s)")
         return {"text": text, "status": "OK", "usage": cost}
     except Exception as exc:
         dt = time.time() - t0
-        _log(f"LLM chat FAILED — {exc} ({dt:.1f}s)")
+        _log(f"LLM chat (Gemini) FAILED — {exc} ({dt:.1f}s)")
         code, detail = _classify_error(exc)
         raise HTTPException(code, detail=detail)

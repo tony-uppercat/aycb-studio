@@ -10,7 +10,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.shared import (
     _log, _read_upload, _validate_image_upload,
-    _pil_to_b64, _require_api_key, _classify_error,
+    _pil_to_b64, _require_key, _classify_error,
     MAX_IMAGE_BYTES,
 )
 router = APIRouter(prefix="/api/effects", tags=["effects"])
@@ -45,7 +45,7 @@ async def depth_estimation_endpoint(
     """Generate depth map using Gemini image generation. Returns depth map as base64 PNG."""
     import time
 
-    effective_key = _require_api_key(api_key)
+    effective_key = _require_key(api_key, "gemini")
 
     _validate_image_upload(image)
     raw = await _read_upload(image, MAX_IMAGE_BYTES, "Image")

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "postToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd frontend && npx tsc --noEmit --pretty 2>&1 | head -20",
+            "timeout": 30000
+          }
+        ]
+      }
+    ]
+  }
+}

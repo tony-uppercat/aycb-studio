@@ -35,6 +35,8 @@ When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 10. One task = one thing. Never mix node creation + bug fix + refactor in one task.
 11. When in doubt, add a new file. Never extend an existing one past 250 lines.
 12. Never `except: pass`. Always log the error. Corrupt data files: backup to `.corrupt` and reset.
+13. Modify ONLY the files specified or directly required. Never add useEffect, hooks, refactors, or "improvements" not requested. Never modify .env as a side effect. If something else needs changing, ask first.
+14. After 2 failed fix attempts: STOP. Invoke superpowers:systematic-debugging skill. Check console/terminal errors, last 3 commits, declare root cause before proposing any fix. Never try a 3rd fix without root cause.
 
 ---
 
@@ -243,6 +245,16 @@ Single source of truth: `config/settings.py` → `settings.shared_root`. All bac
 **Never hardcode shared paths with `Path(__file__)`** — always use `settings.media_dir`, `settings.references_dir`, etc.
 
 **Known exception:** `src/review_hub/db.py` uses `_DB_PATH = Path(__file__)...` instead of `settings.db_path`. Tests monkeypatch `_DB_PATH` directly. This should be migrated to use `settings.db_path` when touched next.
+
+---
+
+## Backend Changes Checklist
+
+After modifying any backend endpoint or model:
+1. Verify frontend types match the new response shape.
+2. Verify UI components reference correct endpoints.
+3. Verify new fields appear in dropdowns/forms.
+4. Test the endpoint with curl before claiming done.
 
 ---
 

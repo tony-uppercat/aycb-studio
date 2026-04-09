@@ -296,6 +296,7 @@ def generate_image(
     aspect_ratio: str | None = None,
     image_size: str | None = None,
     api_key: str | None = None,
+    use_grounding: bool = False,
 ) -> Image.Image | None:
     """Generate an image using Gemini generateContent with IMAGE modality."""
     from google.genai import types
@@ -316,14 +317,22 @@ def generate_image(
         image_cfg["image_size"] = image_size
     image_config = types.ImageConfig(**image_cfg) if image_cfg else None
 
-    # Force IMAGE-only output to prevent model from responding with text instead
+    # Grounding requires TEXT+IMAGE modalities so the model can return search metadata
+    modalities = ["TEXT", "IMAGE"] if use_grounding else ["IMAGE"]
+
+    config_kwargs: dict = {}
+    if image_config:
+        config_kwargs["image_config"] = image_config
+    if use_grounding:
+        config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+
     response, _usage = _call_with_gemini_retries(
         lambda: client.models.generate_content(
             model=use_model,
             contents=contents,
             config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"],
-                **({"image_config": image_config} if image_config else {}),
+                response_modalities=modalities,
+                **config_kwargs,
             ),
         ),
         operation="generate_image",

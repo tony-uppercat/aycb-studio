@@ -18,7 +18,7 @@ describe('image-edit manifest', () => {
   })
 
   it('has correct default data', () => {
-    expect(manifest.defaultData.edit_mode).toBe('EDIT_MODE_INPAINT_REMOVAL')
+    expect(manifest.defaultData.edit_mode).toBe('EDIT_MODE_DEFAULT')
     expect(manifest.defaultData.mask_mode).toBe('MASK_MODE_BACKGROUND')
     expect(manifest.defaultData.mask_dilation).toBe(0.01)
     expect(manifest.defaultData.number_of_images).toBe(1)

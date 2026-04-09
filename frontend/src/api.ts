@@ -192,20 +192,26 @@ export const api = {
   async editImage(
     prompt: string,
     image: File,
+    model: string,
+    apiKey: string,
     editMode: string,
     maskMode: string,
     maskDilation: number,
     numberOfImages: number,
+    aspectRatio?: string,
     subjectImages?: File[],
   ): Promise<ImageEditResult> {
-    if (!isBackendAvailable()) throw new Error('Image editing requires the backend (Vertex AI)')
+    if (!isBackendAvailable()) throw new Error('Image editing requires the backend')
     const fd = new FormData()
     fd.append('prompt', prompt)
     fd.append('image', image)
+    fd.append('model', model)
+    fd.append('api_key', apiKey)
     fd.append('edit_mode', editMode)
     fd.append('mask_mode', maskMode)
     fd.append('mask_dilation', String(maskDilation))
     fd.append('number_of_images', String(numberOfImages))
+    if (aspectRatio) fd.append('aspect_ratio', aspectRatio)
     subjectImages?.forEach(f => fd.append('subject_images', f))
     return post('/edit/image', fd)
   },

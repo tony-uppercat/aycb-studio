@@ -606,3 +606,44 @@ describe('reviewStatus cache', () => {
     expect(mod.MAX_REVIEW_CACHE).toBeLessThanOrEqual(1000)
   })
 })
+
+// ---------------------------------------------------------------------------
+// 8. Cost estimation — resolution-aware pricing
+// ---------------------------------------------------------------------------
+describe('estimateCost resolution-aware pricing', () => {
+  it('returns correct cost per resolution for Nano Banana 2', async () => {
+    const { estimateCost } = await import('../utils/costEstimate')
+    const r512 = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '512')
+    const r1k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '1K')
+    const r2k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '2K')
+    const r4k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '4K')
+    expect(r512.costUsd).toBeCloseTo(0.045, 3)
+    expect(r1k.costUsd).toBeCloseTo(0.067, 3)
+    expect(r2k.costUsd).toBeCloseTo(0.101, 3)
+    expect(r4k.costUsd).toBeCloseTo(0.151, 3)
+  })
+
+  it('defaults to 1K price when resolution is empty', async () => {
+    const { estimateCost } = await import('../utils/costEstimate')
+    const rAuto = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '')
+    expect(rAuto.costUsd).toBeCloseTo(0.067, 3)
+  })
+
+  it('adds input cost for reference images in edit mode', async () => {
+    const { estimateCost } = await import('../utils/costEstimate')
+    const noRef = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '1K')
+    const withRef = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 1, 0, 1, '1K')
+    expect(withRef.costUsd).toBeGreaterThan(noRef.costUsd)
+    expect(withRef.inputTokens).toBe(560)
+    // Input cost: 560 tokens * $0.50/M = $0.00028
+    expect(withRef.costUsd - noRef.costUsd).toBeCloseTo(0.00028, 4)
+  })
+
+  it('returns correct cost for Nano Banana Pro', async () => {
+    const { estimateCost } = await import('../utils/costEstimate')
+    const r1k = estimateCost('gemini-3-pro-image-preview', 'generate_image', 'test', 0, 0, 1, '1K')
+    const r4k = estimateCost('gemini-3-pro-image-preview', 'generate_image', 'test', 0, 0, 1, '4K')
+    expect(r1k.costUsd).toBeCloseTo(0.134, 3)
+    expect(r4k.costUsd).toBeCloseTo(0.240, 3)
+  })
+})

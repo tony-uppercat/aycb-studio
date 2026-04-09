@@ -65,8 +65,51 @@ _NEEDS_MASK = {
 
 _EDIT_MODEL = "imagen-3.0-capability-001"
 
+EDIT_MODELS = [
+    {"id": "gemini-3.1-flash-image-preview", "name": "Nano Banana 2 (Gemini)", "provider": "gemini"},
+    {"id": "imagen-3.0-capability-001", "name": "Imagen 3 (Vertex AI)", "provider": "imagen"},
+]
 
-# ── Sync worker ─────────────────────────────────────────────────────────────
+
+# ── Gemini edit (generateContent with image input) ─────────────────────────
+
+def _edit_gemini_sync(
+    prompt: str,
+    base_pil: PILImage.Image,
+    api_key: str,
+    subject_pils: list[PILImage.Image] | None = None,
+) -> list[PILImage.Image]:
+    """Edit via Gemini generateContent — prompt-based, no mask."""
+    from src.gemini import _get_client, _call_with_gemini_retries
+    from google.genai import types
+
+    client = _get_client(api_key)
+    contents: list = [base_pil]
+    if subject_pils:
+        contents.extend(subject_pils[:4])
+    contents.append(prompt)
+
+    response, _usage = _call_with_gemini_retries(
+        lambda: client.models.generate_content(
+            model="gemini-3.1-flash-image-preview",
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_modalities=["TEXT", "IMAGE"],
+            ),
+        ),
+        operation="edit_image_gemini",
+    )
+
+    results: list[PILImage.Image] = []
+    if response.candidates:
+        parts = getattr(response.candidates[0].content, 'parts', None) or []
+        for part in parts:
+            if part.inline_data is not None:
+                results.append(PILImage.open(io.BytesIO(part.inline_data.data)))
+    return results
+
+
+# ── Imagen edit (Vertex AI edit_image) ─────────────────────────────────────
 
 def _edit_image_sync(
     prompt: str,
@@ -75,6 +118,7 @@ def _edit_image_sync(
     mask_mode: str,
     mask_dilation: float,
     number_of_images: int,
+    aspect_ratio: str = "",
     subject_pils: list[PILImage.Image] | None = None,
 ) -> list[PILImage.Image]:
     """Call Vertex AI edit_image() synchronously. Returns list of PIL images."""
@@ -87,7 +131,7 @@ def _edit_image_sync(
     base_pil.save(buf, format="PNG")
     base_bytes = buf.getvalue()
 
-    base_image = types.Image.from_bytes(data=base_bytes)
+    base_image = types.Image(image_bytes=base_bytes, mime_type="image/png")
 
     reference_images: list = [
         types.RawReferenceImage(reference_id=0, reference_image=base_image)
@@ -111,7 +155,7 @@ def _edit_image_sync(
             s_buf = io.BytesIO()
             subject_pil.save(s_buf, format="PNG")
             s_bytes = s_buf.getvalue()
-            s_image = types.Image.from_bytes(data=s_bytes)
+            s_image = types.Image(image_bytes=s_bytes, mime_type="image/png")
             reference_images.append(
                 types.SubjectReferenceImage(
                     reference_id=10 + i,
@@ -122,10 +166,13 @@ def _edit_image_sync(
                 )
             )
 
-    edit_config = types.EditImageConfig(
-        edit_mode=edit_mode,
-        number_of_images=number_of_images,
-    )
+    edit_kwargs: dict = {
+        "edit_mode": edit_mode,
+        "number_of_images": number_of_images,
+    }
+    if aspect_ratio:
+        edit_kwargs["aspect_ratio"] = aspect_ratio
+    edit_config = types.EditImageConfig(**edit_kwargs)
 
     _log(f"Vertex AI edit_image — model={_EDIT_MODEL}, mode={edit_mode}, n={number_of_images}")
     response = client.models.edit_image(
@@ -137,7 +184,7 @@ def _edit_image_sync(
 
     results: list[PILImage.Image] = []
     for generated in response.generated_images:
-        img_bytes = generated.image._image_bytes
+        img_bytes = generated.image.image_bytes
         pil = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
         results.append(pil)
 
@@ -158,18 +205,20 @@ def _pil_to_b64(pil: PILImage.Image) -> str:
 @router.post("/image")
 async def edit_image_endpoint(
     prompt: str = Form(...),
-    edit_mode: str = Form("EDIT_MODE_INPAINT_INSERTION"),
+    model: str = Form("gemini-3.1-flash-image-preview"),
+    api_key: str = Form(""),
+    edit_mode: str = Form("EDIT_MODE_DEFAULT"),
     mask_mode: str = Form("MASK_MODE_FOREGROUND"),
     mask_dilation: float = Form(0.03),
     number_of_images: int = Form(1),
+    aspect_ratio: str = Form(""),
     image: UploadFile = File(...),
     subject_images: Optional[list[UploadFile]] = File(default=None),
 ):
-    """Edit an image using Vertex AI Imagen edit_image().
+    """Edit an image using Gemini (prompt-based) or Vertex AI Imagen (mask-based).
 
-    Requires GCP project to be configured in settings.
-    Edit modes needing a mask: EDIT_MODE_INPAINT_REMOVAL, EDIT_MODE_INPAINT_INSERTION, EDIT_MODE_OUTPAINT.
-    Edit modes without mask: EDIT_MODE_BGSWAP, EDIT_MODE_PRODUCT_IMAGE.
+    Gemini: prompt-based editing, no mask needed, uses API key.
+    Imagen: mask-based editing (inpaint, outpaint, bgswap), requires GCP project.
     """
     clean_prompt = _require_prompt(prompt)
 
@@ -185,7 +234,7 @@ async def edit_image_endpoint(
     # Validate and read subject images if provided
     subject_pils: list[PILImage.Image] = []
     if subject_images:
-        for sf in subject_images[:8]:
+        for sf in subject_images[:4]:
             _validate_image_upload(sf)
             raw_s = await _read_upload(sf, MAX_IMAGE_BYTES, "Subject image")
             try:
@@ -204,20 +253,23 @@ async def edit_image_endpoint(
         f"prompt={clean_prompt[:80]}..."
     )
 
+    is_gemini = model.startswith("gemini-")
     t0 = time.time()
     try:
-        result_pils = await asyncio.to_thread(
-            _edit_image_sync,
-            clean_prompt,
-            base_pil,
-            edit_mode,
-            mask_mode,
-            mask_dilation,
-            number_of_images,
-            subject_pils if subject_pils else None,
-        )
+        if is_gemini:
+            from src.shared import _require_key
+            effective_key = _require_key(api_key, "gemini")
+            result_pils = await asyncio.to_thread(
+                _edit_gemini_sync, clean_prompt, base_pil, effective_key,
+                subject_pils if subject_pils else None,
+            )
+        else:
+            result_pils = await asyncio.to_thread(
+                _edit_image_sync, clean_prompt, base_pil, edit_mode, mask_mode,
+                mask_dilation, number_of_images, aspect_ratio,
+                subject_pils if subject_pils else None,
+            )
     except ValueError as exc:
-        # Config errors (missing GCP project, vertexai=False client, etc.)
         _log(f"Image edit config error — {exc}")
         raise HTTPException(400, detail=str(exc))
     except Exception as exc:
@@ -230,7 +282,8 @@ async def edit_image_endpoint(
     _log(f"Image edit complete — {count} image(s) returned ({dt:.1f}s)")
 
     images_b64 = [_pil_to_b64(pil) for pil in result_pils]
-    cost_usd = round(0.02 * count, 4)
+    per_image = 0.067 if is_gemini else 0.02
+    cost_usd = round(per_image * count, 4)
 
     return {
         "images_b64": images_b64,

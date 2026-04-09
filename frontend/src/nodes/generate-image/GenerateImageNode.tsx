@@ -78,6 +78,18 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               >×{n}</button>
             ))}
           </div>
+          {h.modelInfo.provider === 'gemini' && (
+            <button
+              className={`${styles.batchBtn} ${h.useGrounding ? styles.batchBtnActive : ''}`}
+              onClick={() => { h.setUseGrounding(!h.useGrounding); h.updateNodeData(id, { useGrounding: !h.useGrounding }) }}
+              title="Search Grounding — uses Google Search for real-time data before generating"
+            >GND</button>
+          )}
+          <button
+            className={`${styles.batchBtn} ${h.editMode ? styles.batchBtnActive : ''}`}
+            onClick={() => { h.setEditMode(!h.editMode); h.updateNodeData(id, { editMode: !h.editMode }) }}
+            title="Edit Mode — re-uses last generated image as reference for iterative editing"
+          >EDIT</button>
         </div>
         {h.connectedImageCount >= 2 && (
           <button className={styles.swapBtn} onClick={h.swapRefs} title="Swap Ref 1 ↔ Ref 2">⇄</button>
@@ -132,7 +144,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               className={`${styles.subtleToggle} ${styles.compareBtn}`}
               onClick={() => setCompareMode(!compareMode)}
               title={compareMode ? 'Show output' : 'Compare with source'}
-            >{compareMode ? 'Output' : 'Compare'}</button>
+            >{compareMode ? 'IMG' : 'A/B'}</button>
           )}
           {h.currentMediaId && (h.imageB64 || h.historyPreview) && (
             <button

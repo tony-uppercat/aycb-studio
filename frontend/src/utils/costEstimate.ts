@@ -83,6 +83,7 @@ export function estimateCost(
   imageCount: number = 0,
   videoDurationSec: number = 0,
   nFrames: number = 1,
+  resolution: string = '',
 ): CostEstimate {
   const inputTokens =
     estimateTextTokens(promptText) +
@@ -95,14 +96,19 @@ export function estimateCost(
   const pricingModelId = modelId.endsWith(':thinking') ? modelId.replace(':thinking', '') : modelId
 
   // Image generation: use official fixed per-image pricing (Google charges per image, not per token)
+  // Prices vary by resolution — imageSize passed via imageCount overload won't work,
+  // so we expose resolution-aware maps and let the caller pass the right imageCount for input refs.
   if (operation === 'generate_image') {
-    const FIXED_IMAGE_COST: Record<string, number> = {
-      'gemini-3.1-flash-image-preview': 0.067,   // @1K default
-      'gemini-3-pro-image-preview': 0.134,        // @1K-2K
+    const FIXED_IMAGE_COST: Record<string, Record<string, number>> = {
+      'gemini-3.1-flash-image-preview': { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
+      'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
     }
-    const fixedCost = FIXED_IMAGE_COST[pricingModelId]
-    if (fixedCost !== undefined) {
-      return { inputTokens: 0, outputTokens: 0, costUsd: fixedCost, model: modelId }
+    const resMap = FIXED_IMAGE_COST[pricingModelId]
+    if (resMap !== undefined) {
+      const imgCost = resMap[resolution] ?? resMap[''] ?? 0.067
+      // Add input cost for reference images (edit mode): ~560 tokens per image
+      const inputRefCost = imageCount > 0 ? (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50) : 0
+      return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: imgCost + inputRefCost, model: modelId }
     }
   }
 

@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
-import { useImageEdit, EDIT_MODES, MASK_MODES } from './useImageEdit'
+import { useImageEdit, EDIT_MODES, MASK_MODES, ASPECT_RATIOS, EDIT_MODEL_OPTIONS } from './useImageEdit'
 import styles from '../_shared/Node.module.css'
 
 export function ImageEditNode({ id, data, selected }: NodeProps) {
@@ -25,6 +25,16 @@ export function ImageEditNode({ id, data, selected }: NodeProps) {
       estimatedCost="~$0.02"
     >
       <div className={styles.nodeContent}>
+        <select
+          className={styles.select}
+          value={h.selectedModel}
+          onChange={e => { h.setSelectedModel(e.target.value); h.updateNodeData(id, { selected_model: e.target.value }) }}
+          title="Model"
+        >
+          {EDIT_MODEL_OPTIONS.map(m => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
         <select
           className={styles.select}
           value={h.editMode}
@@ -60,7 +70,13 @@ export function ImageEditNode({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <div className={styles.batchToggle}>
+        <div className={styles.arResRow}>
+          <select className={styles.selectSmall} value={h.aspectRatio}
+            onChange={e => { h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspect_ratio: e.target.value }) }}
+            title="Aspect Ratio">
+            {ASPECT_RATIOS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+          </select>
+          <div className={styles.batchToggle}>
           {[1, 2, 4].map(n => (
             <button key={n}
               className={`${styles.batchBtn} ${h.numberOfImages === n ? styles.batchBtnActive : ''}`}
@@ -68,6 +84,7 @@ export function ImageEditNode({ id, data, selected }: NodeProps) {
               title={n === 1 ? 'Single result' : `Generate ${n} variants`}
             >{'\u00d7'}{n}</button>
           ))}
+          </div>
         </div>
 
         <textarea

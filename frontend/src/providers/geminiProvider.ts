@@ -73,13 +73,19 @@ const geminiImageProvider: ImageProvider = {
     if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
     if (options?.imageSize) imageConfig.imageSize = options.imageSize
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const config: Record<string, any> = {
+      responseModalities: ['IMAGE', 'TEXT'],
+      ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
+    }
+    if (options?.useGrounding) {
+      config.tools = [{ googleSearch: {} }]
+    }
+
     const response = await ai.models.generateContent({
       model: modelId,
       contents: [{ role: 'user', parts }],
-      config: {
-        responseModalities: ['IMAGE', 'TEXT'],
-        ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
-      },
+      config,
     })
 
     // Extract usage metadata for cost tracking

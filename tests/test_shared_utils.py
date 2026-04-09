@@ -100,6 +100,36 @@ def test_estimate_cost_none_usage():
     assert _estimate_cost("gemini-2.5-flash", None) is None
 
 
+# ── generate_image grounding config ────────────────────────────────────────
+
+def test_generate_image_grounding_config():
+    """Verify grounding adds google_search tool and TEXT+IMAGE modalities."""
+    from google.genai import types
+
+    # Grounding ON
+    modalities_on = ["TEXT", "IMAGE"]
+    kwargs_on: dict = {"tools": [types.Tool(google_search=types.GoogleSearch())]}
+    cfg_on = types.GenerateContentConfig(response_modalities=modalities_on, **kwargs_on)
+    assert cfg_on.response_modalities == ["TEXT", "IMAGE"]
+    assert cfg_on.tools is not None
+    assert len(cfg_on.tools) == 1
+    assert cfg_on.tools[0].google_search is not None
+
+    # Grounding OFF
+    cfg_off = types.GenerateContentConfig(response_modalities=["IMAGE"])
+    assert cfg_off.response_modalities == ["IMAGE"]
+    assert cfg_off.tools is None
+
+
+def test_generate_image_grounding_parameter():
+    """Verify generate_image function accepts use_grounding parameter."""
+    import inspect
+    from src.gemini import generate_image
+    sig = inspect.signature(generate_image)
+    assert "use_grounding" in sig.parameters
+    assert sig.parameters["use_grounding"].default is False
+
+
 # ── _require_prompt ─────────────────────────────────────────────────────────
 
 def test_require_prompt_valid():

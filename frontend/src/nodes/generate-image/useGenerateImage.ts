@@ -5,7 +5,7 @@ import { useSettings } from '../../components/SettingsContext'
 import { api, bridgeMedia } from '../../api'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { saveMediaForProject, generateMediaId } from '../../mediaStore'
+import { saveMediaForProject, generateMediaId, loadMedia } from '../../mediaStore'
 import { pullText, pullAllMedia } from '../../hooks/useDataPropagation'
 import { useGenerateImageHistory } from '../../hooks/useGenerateImageHistory'
 import { reportNodeError } from '../../utils/nodeErrors'
@@ -86,6 +86,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const resolutionRef = useRef(resolution)
   useEffect(() => { aspectRatioRef.current = aspectRatio }, [aspectRatio])
   useEffect(() => { resolutionRef.current = resolution }, [resolution])
+  const [useGrounding, setUseGrounding] = useState(Boolean((data as Record<string, unknown>).useGrounding))
+  const [editMode, setEditMode] = useState(Boolean((data as Record<string, unknown>).editMode))
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64] = useState<string | null>(null)
   const [compareSourceUrl, setCompareSourceUrl] = useState<string | null>(null)
@@ -231,7 +233,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   }
 
   const promptForEstimate = pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt
-  const estimate = estimateCost(selectedModel, 'generate_image', promptForEstimate, connectedImageCount)
+  const editRefCount = (editMode && currentMediaId) ? 1 : 0
+  const estimate = estimateCost(selectedModel, 'generate_image', promptForEstimate, connectedImageCount + editRefCount, 0, 1, resolution)
   const estimatedLabel = formatCostEstimate(estimate.costUsd)
 
   const [batchCount, setBatchCount] = useState(1)
@@ -250,6 +253,11 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     if (!rawPrompt.trim()) { setError('Write a prompt'); return }
     const prompt = rawPrompt.trim()
     const refs = await pullAllMedia(id, 'image-', getNodes, getEdges)
+    // Edit mode: prepend the last generated image as reference for iterative editing
+    if (editMode && currentMediaId) {
+      const lastFile = await loadMedia(currentMediaId)
+      if (lastFile) refs.unshift(lastFile)
+    }
     // Save compare source: ref image if connected, otherwise current output (previous gen)
     if (compareSourceUrl) URL.revokeObjectURL(compareSourceUrl)
     if (refs.length > 0) {
@@ -267,6 +275,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const imageOptions = {
       ...(currentAspectRatio ? { aspectRatio: currentAspectRatio } : {}),
       ...(currentResolution ? { imageSize: currentResolution } : {}),
+      ...(useGrounding ? { useGrounding: true } : {}),
     }
     const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, refs.length ? refs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }
@@ -328,7 +337,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
 
     // Track cost from API response or fall back to client-side estimate
     const actualUsage = r.usage
-    const fallback = estimateCost(selectedModel, 'generate_image', rawPrompt, refs.length)
+    const fallback = estimateCost(selectedModel, 'generate_image', rawPrompt, refs.length, 0, 1, currentResolution)
     const costUsd = actualUsage?.cost_usd ?? fallback.costUsd
     setLastCost(costUsd)
     useCanvasStore.getState().addCost({
@@ -386,6 +395,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     selectedModel, setSelectedModel,
     aspectRatio, setAspectRatio,
     resolution, setResolution,
+    useGrounding, setUseGrounding,
+    editMode, setEditMode,
     localPrompt, setLocalPrompt,
     imageB64,
     compareSourceUrl,

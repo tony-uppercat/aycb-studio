@@ -33,6 +33,7 @@ async def generate_image_endpoint(
     aspect_ratio: str = Form(""),
     image_size: str = Form(""),
     project_name: str = Form(""),
+    use_grounding: str = Form(""),
     ref_images: list[UploadFile] | None = File(default=None),
 ):
     from src.gemini import generate_image, get_last_usage
@@ -47,14 +48,15 @@ async def generate_image_endpoint(
             raw = await _read_upload(f, MAX_IMAGE_BYTES, "Reference image")
             pil_refs.append(PILImage.open(io.BytesIO(raw)).convert("RGB"))
 
+    grounding = use_grounding.lower() in ("true", "1", "yes")
     model_id = IMAGE_MODELS.get(model, model)
-    _log(f"Generate image — model={model} ({model_id}), {len(pil_refs)} refs, prompt={clean_prompt[:80]}...")
+    _log(f"Generate image — model={model} ({model_id}), {len(pil_refs)} refs, grounding={grounding}, prompt={clean_prompt[:80]}...")
     t0 = time.time()
     try:
         result = await asyncio.to_thread(
             generate_image, clean_prompt, pil_refs if pil_refs else None, model_id,
             aspect_ratio=aspect_ratio or None, image_size=image_size or None,
-            api_key=effective_key,
+            api_key=effective_key, use_grounding=grounding,
         )
     except Exception as exc:
         dt = time.time() - t0

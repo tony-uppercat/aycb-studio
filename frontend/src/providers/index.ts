@@ -3,6 +3,7 @@ import type { GenerateImageResult, UsageInfo } from '../types'
 export interface ImageGenerationOptions {
   aspectRatio?: string
   imageSize?: string
+  useGrounding?: boolean
 }
 
 export interface ImageProvider {

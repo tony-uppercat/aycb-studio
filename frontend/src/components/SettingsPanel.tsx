@@ -34,6 +34,7 @@ interface OllamaStatus {
 export function SettingsPanel({ open, onClose }: Props) {
   const {
     apiKey, setApiKey,
+    anthropicKey, setAnthropicKey,
     bflApiKey, setBflApiKey,
     muApiKey, setMuApiKey,
     localServerUrl, setLocalServerUrl,
@@ -46,6 +47,8 @@ export function SettingsPanel({ open, onClose }: Props) {
   const [restarting, setRestarting] = useState(false)
   const [sharedPath, setSharedPath] = useState('')
   const [sharedPathExists, setSharedPathExists] = useState(false)
+  const [gcpProject, setGcpProjectLocal] = useState('')
+  const [gcpLocation, setGcpLocationLocal] = useState('us-central1')
   const [pathSaving, setPathSaving] = useState(false)
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null)
   const [gpuLoading, setGpuLoading] = useState(false)
@@ -116,6 +119,8 @@ export function SettingsPanel({ open, onClose }: Props) {
         const d = await r.json()
         setSharedPath(d.shared_root ?? '')
         setSharedPathExists(d.exists ?? false)
+        setGcpProjectLocal(d.gcp_project ?? '')
+        setGcpLocationLocal(d.gcp_location ?? 'us-central1')
       }
     } catch { /* offline */ }
   }, [])
@@ -127,7 +132,7 @@ export function SettingsPanel({ open, onClose }: Props) {
       const r = await fetch('/api/settings/paths', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shared_root: sharedPath }),
+        body: JSON.stringify({ shared_root: sharedPath, gcp_project: gcpProject, gcp_location: gcpLocation }),
         signal: AbortSignal.timeout(3000),
       })
       if (r.ok) {
@@ -203,6 +208,17 @@ export function SettingsPanel({ open, onClose }: Props) {
                 hint="Your API key is stored locally and never sent to our servers."
                 linkUrl="https://aistudio.google.com/apikey"
                 linkText="Get your API key from Google AI Studio"
+              />
+              <ApiKeyField
+                label="Anthropic API Key"
+                value={anthropicKey}
+                onChange={setAnthropicKey}
+                placeholder="Enter your Anthropic API key (for Claude models)"
+                statusOk="Key configured"
+                statusEmpty="No key (Claude models disabled)"
+                hint="For Claude Opus, Sonnet, and Haiku models."
+                linkUrl="https://console.anthropic.com/settings/keys"
+                linkText="Get your key from Anthropic Console"
               />
               <ApiKeyField
                 label="BFL API Key"
@@ -384,6 +400,29 @@ export function SettingsPanel({ open, onClose }: Props) {
                     Open in Explorer
                   </button>
                 </div>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>GCP Project ID</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="my-gcp-project-id"
+                  value={gcpProject}
+                  onChange={e => setGcpProjectLocal(e.target.value)}
+                />
+                <p className={styles.hint}>
+                  Google Cloud project for Vertex AI Imagen editing. Requires: gcloud auth application-default login
+                </p>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>GCP Location</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="us-central1"
+                  value={gcpLocation}
+                  onChange={e => setGcpLocationLocal(e.target.value)}
+                />
               </div>
             </>
           )}

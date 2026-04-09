@@ -3,6 +3,7 @@ import { STORAGE_KEYS } from '../storage/keys'
 
 interface Settings {
   apiKey: string
+  anthropicKey: string
   hfApiKey: string
   bflApiKey: string
   muApiKey: string
@@ -10,10 +11,13 @@ interface Settings {
   ollamaUrl: string
   model: string
   doEmbed: boolean
+  gcpProject: string
+  gcpLocation: string
 }
 
 interface SettingsCtx extends Settings {
   setApiKey: (k: string) => void
+  setAnthropicKey: (k: string) => void
   setHfApiKey: (k: string) => void
   setBflApiKey: (k: string) => void
   setMuApiKey: (k: string) => void
@@ -21,10 +25,12 @@ interface SettingsCtx extends Settings {
   setOllamaUrl: (k: string) => void
   setModel: (m: string) => void
   setDoEmbed: (v: boolean) => void
+  setGcpProject: (k: string) => void
+  setGcpLocation: (k: string) => void
 }
 
 const LS_KEY = STORAGE_KEYS.SETTINGS
-const DEFAULTS: Settings = { apiKey: '', hfApiKey: '', bflApiKey: '', muApiKey: '', localServerUrl: '', ollamaUrl: 'http://localhost:11434', model: 'Gemini 3.1 Pro', doEmbed: false }
+const DEFAULTS: Settings = { apiKey: '', anthropicKey: '', hfApiKey: '', bflApiKey: '', muApiKey: '', localServerUrl: '', ollamaUrl: 'http://localhost:11434', model: 'Gemini 3.1 Pro', doEmbed: false, gcpProject: '', gcpLocation: 'us-central1' }
 
 function load(): Settings {
   try {
@@ -37,6 +43,7 @@ function load(): Settings {
 const Ctx = createContext<SettingsCtx>({
   ...DEFAULTS,
   setApiKey: () => {},
+  setAnthropicKey: () => {},
   setHfApiKey: () => {},
   setBflApiKey: () => {},
   setMuApiKey: () => {},
@@ -44,6 +51,8 @@ const Ctx = createContext<SettingsCtx>({
   setOllamaUrl: () => {},
   setModel: () => {},
   setDoEmbed: () => {},
+  setGcpProject: () => {},
+  setGcpLocation: () => {},
 })
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -56,6 +65,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const ctx: SettingsCtx = {
     ...settings,
     setApiKey: (k) => setSettings(s => ({ ...s, apiKey: k })),
+    setAnthropicKey: (k) => setSettings(s => ({ ...s, anthropicKey: k })),
     setHfApiKey: (k) => setSettings(s => ({ ...s, hfApiKey: k })),
     setBflApiKey: (k) => setSettings(s => ({ ...s, bflApiKey: k })),
     setMuApiKey: (k) => setSettings(s => ({ ...s, muApiKey: k })),
@@ -63,6 +73,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setOllamaUrl: (k) => setSettings(s => ({ ...s, ollamaUrl: k })),
     setModel: (m) => setSettings(s => ({ ...s, model: m })),
     setDoEmbed: (v) => setSettings(s => ({ ...s, doEmbed: v })),
+    setGcpProject: (k) => setSettings(s => ({ ...s, gcpProject: k })),
+    setGcpLocation: (k) => setSettings(s => ({ ...s, gcpLocation: k })),
   }
 
   return <Ctx.Provider value={ctx}>{children}</Ctx.Provider>

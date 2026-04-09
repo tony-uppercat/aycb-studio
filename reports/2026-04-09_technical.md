@@ -48,8 +48,27 @@ Search grounding, edit mode, resolution-aware cost estimation for Generate Image
 - Gemini option in Image Edit node is redundant with EDIT button in Generate Image
 - Review Hub frontend still has zero test files
 
+## Session 2 — Prompt Library
+
+### Created (5 files)
+- `frontend/src/nodes/prompt-editor/PromptLibraryPanel.tsx` — Floating panel UI with tag filter, save form, delete
+- `frontend/src/nodes/prompt-editor/PromptLibraryPanel.module.css` — Panel styles
+- `frontend/src/nodes/prompt-editor/usePromptLibrary.ts` — Hook: fetch, save, delete with AbortController
+- `tests/test_prompt_library.py` — 7 backend tests (CRUD + failure paths + corrupt backup)
+- `docs/superpowers/plans/2026-04-09-prompt-library.md` — Implementation plan
+
+### Modified (4 files)
+- `src/shared.py` — Added PromptLibrarySave, PromptLibraryUpdate models
+- `src/routers/prompt.py` — Added library CRUD endpoints (list, create, update, delete)
+- `frontend/src/nodes/_shared/NodeShell.tsx` — Added optional `footerExtra` prop
+- `frontend/src/nodes/prompt-editor/PromptEditorNode.tsx` — Wired library button + panel
+
+### Tests (Session 2)
+- Backend: 105 passed (7 new prompt library)
+- Frontend: 157 passed
+- Total: 262, all green
+
 ## Next Tasks
-1. Test Imagen specific edit modes (Background Swap, Remove Object)
-2. Remove redundant Gemini from Image Edit node or keep for convenience
-3. Prompt Library feature
-4. Gestione utenti by admin (Review Hub)
+1. Commit remaining uncommitted changes (BackendBanner, LLM router, TextCombine, etc.)
+2. Gestione utenti by admin (Review Hub)
+3. Split useKeyboardShortcuts.ts (593 lines)

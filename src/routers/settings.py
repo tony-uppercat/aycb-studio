@@ -20,6 +20,8 @@ async def get_paths():
         "exists": resolved.exists(),
         "media_dir": str(settings.media_dir),
         "references_dir": str(settings.references_dir),
+        "gcp_project": settings.gcp_project,
+        "gcp_location": settings.gcp_location,
     }
 
 
@@ -31,7 +33,16 @@ async def set_paths(body: dict):
     p = Path(new_path).resolve()
     settings.shared_root = p
     set_key(ENV_PATH, "AYCB_SHARED_ROOT", str(p))
-    return {"shared_root": str(p), "exists": p.exists()}
+    # GCP settings (optional)
+    gcp_project = body.get("gcp_project", "").strip()
+    gcp_location = body.get("gcp_location", "").strip()
+    if gcp_project:
+        settings.gcp_project = gcp_project
+        set_key(ENV_PATH, "AYCB_GCP_PROJECT", gcp_project)
+    if gcp_location:
+        settings.gcp_location = gcp_location
+        set_key(ENV_PATH, "AYCB_GCP_LOCATION", gcp_location)
+    return {"shared_root": str(p), "exists": p.exists(), "gcp_project": settings.gcp_project, "gcp_location": settings.gcp_location}
 
 
 @router.post("/open-folder")

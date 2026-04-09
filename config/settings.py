@@ -30,10 +30,15 @@ class Settings(BaseSettings):
     def db_path(self) -> Path:
         return self.shared_root / "data" / "review-hub.db"
 
-    # ── Gemini ────────────────────────────────────────────────────────
+    # ── API Keys ──────────────────────────────────────────────────────
     gemini_api_key: str = ""
+    anthropic_api_key: str = ""
     gemini_flash_model: str = "gemini-3.1-flash-lite-preview"
     gemini_embedding_model: str = "gemini-embedding-exp-03-07"
+
+    # ── Google Cloud (Vertex AI) ──────────────────────────────────────
+    gcp_project: str = ""
+    gcp_location: str = "us-central1"
 
     # ── Frame extraction ──────────────────────────────────────────────
     max_keyframes: int = 3
@@ -60,12 +65,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-
-def save_api_key_to_env(key: str) -> None:
-    """Persist the API key to the .env file so it survives restarts."""
-    from dotenv import set_key
-
-    settings.gemini_api_key = key
-    env_path = str(settings.project_root / ".env")
-    set_key(env_path, "AYCB_GEMINI_API_KEY", key)

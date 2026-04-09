@@ -146,7 +146,7 @@ export function useImageMerge(id: string, data: ImageMergeNodeData) {
   const connectedImageCount = useStore(state =>
     state.edges.filter(e => e.target === id && (e.targetHandle ?? '').startsWith('image-')).length
   )
-  const imageCount = Math.min(connectedImageCount + 1, MAX_INPUTS)
+  const imageCount = Math.min(Math.max(connectedImageCount, 2), MAX_INPUTS)
   const imageSlots: SlotDef[] = Array.from({ length: imageCount }, (_, i) => ({
     id: `image-${i}`,
     label: `Image ${i + 1}`,

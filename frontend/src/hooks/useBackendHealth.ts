@@ -13,7 +13,7 @@ export function useBackendHealth() {
     useCanvasStore.getState().setBackendStatus('offline')
     if (prev !== 'offline') {
       wasOfflineRef.current = true
-      useCanvasStore.getState().addLog(`Backend offline — start it with: python -m src.cli ui-react`)
+      useCanvasStore.getState().addLog(`Backend offline — start the backend on port 5101`)
     }
   }
 

@@ -75,6 +75,7 @@ export function ImageUploadNode({ id, data, selected }: NodeProps<ImageUploadNod
 
   const {
     splitMode, setSplitMode, splitCols, setSplitCols, splitRows, setSplitRows,
+    executeSplit,
     handlePointerDown, handlePointerMove, handlePointerUp,
   } = splitOverlay
 
@@ -136,7 +137,7 @@ export function ImageUploadNode({ id, data, selected }: NodeProps<ImageUploadNod
           {PRESETS.map(([c, r]) => (
             <button key={`${c}x${r}`}
               className={`${styles.splitPresetBtn} ${c === splitCols && r === splitRows ? styles.splitPresetActive : ''}`}
-              onClick={e => { e.stopPropagation(); setSplitCols(c); setSplitRows(r) }}>{c}&times;{r}</button>
+              onClick={e => { e.stopPropagation(); executeSplit(c, r) }}>{c}&times;{r}</button>
           ))}
         </div>
       </div>

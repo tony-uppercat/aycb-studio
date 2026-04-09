@@ -33,7 +33,7 @@ export function BackendBanner() {
     <div className={styles.banner}>
       <span className={styles.dot} />
       <span className={styles.text}>Backend offline</span>
-      <code className={styles.hint}>python -m src.cli ui-react</code>
+      <code className={styles.hint}>Start backend on port 5101</code>
       <button
         className={styles.retryBtn}
         onClick={handleReconnect}

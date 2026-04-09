@@ -32,7 +32,6 @@ export function useSplitOverlay({
   const [splitRows, setSplitRows] = useState(3)
 
   const dragOrigin = useRef<{ x: number; y: number; cols: number; rows: number } | null>(null)
-  const didDrag = useRef(false)
 
   const executeSplit = useCallback((cols: number, rows: number) => {
     window.dispatchEvent(new CustomEvent(CANVAS_EVENTS.IMAGE_SPLIT_GRID, {
@@ -47,7 +46,6 @@ export function useSplitOverlay({
     const el = e.currentTarget
     el.setPointerCapture(e.pointerId)
     dragOrigin.current = { x: e.clientX, y: e.clientY, cols: splitCols, rows: splitRows }
-    didDrag.current = false
   }, [splitCols, splitRows])
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -58,7 +56,6 @@ export function useSplitOverlay({
     const dy = e.clientY - dragOrigin.current.y
     const colDelta = Math.round(dx / DRAG_THRESHOLD)
     const rowDelta = Math.round(dy / DRAG_THRESHOLD)
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) didDrag.current = true
     const newCols = Math.max(MIN_GRID, Math.min(MAX_GRID, dragOrigin.current.cols + colDelta))
     const newRows = Math.max(MIN_GRID, Math.min(MAX_GRID, dragOrigin.current.rows + rowDelta))
     setSplitCols(newCols)
@@ -68,9 +65,7 @@ export function useSplitOverlay({
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation()
     e.preventDefault()
-    if (!didDrag.current) {
-      executeSplit(splitCols, splitRows)
-    }
+    executeSplit(splitCols, splitRows)
     dragOrigin.current = null
   }, [executeSplit, splitCols, splitRows])
 

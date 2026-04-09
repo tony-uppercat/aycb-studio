@@ -1,4 +1,4 @@
-import type { AnalyzeImageResult, AnalyzeVideoResult, GenerateImageResult, HistoryEntry, UsageInfo } from './types'
+import type { AnalyzeImageResult, AnalyzeVideoResult, GenerateImageResult, ImageEditResult, HistoryEntry, UsageInfo } from './types'
 import { useCanvasStore } from './stores/canvasStore'
 import './providers/geminiProvider'
 import './providers/fluxProvider'
@@ -184,8 +184,30 @@ export const api = {
     fd.append('api_key', apiKey)
     if (options?.aspectRatio) fd.append('aspect_ratio', options.aspectRatio)
     if (options?.imageSize) fd.append('image_size', options.imageSize)
+    if (options?.useGrounding) fd.append('use_grounding', 'true')
     refs?.forEach(f => fd.append('ref_images', f))
     return post('/generate/image', fd)
+  },
+
+  async editImage(
+    prompt: string,
+    image: File,
+    editMode: string,
+    maskMode: string,
+    maskDilation: number,
+    numberOfImages: number,
+    subjectImages?: File[],
+  ): Promise<ImageEditResult> {
+    if (!isBackendAvailable()) throw new Error('Image editing requires the backend (Vertex AI)')
+    const fd = new FormData()
+    fd.append('prompt', prompt)
+    fd.append('image', image)
+    fd.append('edit_mode', editMode)
+    fd.append('mask_mode', maskMode)
+    fd.append('mask_dilation', String(maskDilation))
+    fd.append('number_of_images', String(numberOfImages))
+    subjectImages?.forEach(f => fd.append('subject_images', f))
+    return post('/edit/image', fd)
   },
 
   llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[], systemPrompt?: string): Promise<{ text: string; status: string; usage?: UsageInfo }> {

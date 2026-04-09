@@ -33,6 +33,12 @@ export interface GenerateImageResult {
   bridge_stem?: string | null
 }
 
+export interface ImageEditResult {
+  images_b64: string[]
+  status: string
+  usage?: { cost_usd: number }
+}
+
 export interface HistoryEntry {
   label: string
   prompt: string

@@ -492,19 +492,22 @@
 
 .compareBtn {
   position: absolute;
-  top: 4px;
-  right: 28px;
+  top: 2px;
+  right: 2px;
   z-index: 2;
   width: auto;
   height: auto;
-  font-size: 10px;
-  padding: 1px 5px;
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 3px;
   background: rgba(0,0,0,0.5);
-  border-radius: 3px;
+  border-radius: 2px;
   color: var(--color-text-secondary);
+  letter-spacing: 0.3px;
+  opacity: 0.5;
 }
 
-.compareBtn:hover { color: var(--color-text-primary); }
+.compareBtn:hover { opacity: 1; color: var(--color-text-primary); }
 
 .swapBtn {
   background: var(--surface-2);

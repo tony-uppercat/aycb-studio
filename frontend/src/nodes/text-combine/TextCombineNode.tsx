@@ -94,6 +94,7 @@ export function TextCombineNode({ id, data, selected }: NodeProps<TextCombineNod
   }))
 
   const jsonMode = isValidJson(combined)
+  const multiInput = texts.length > 1 && !jsonMode
 
   return (
     <NodeShell
@@ -150,6 +151,8 @@ export function TextCombineNode({ id, data, selected }: NodeProps<TextCombineNod
               style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
               dangerouslySetInnerHTML={{ __html: colorizeJson(combined) }}
             />
+          ) : multiInput ? (
+            <ColoredSegments texts={texts} separator={separator} />
           ) : (
             <ExpandableText value={combined} rows={6} placeholder="Output will appear here..." />
           )
@@ -158,6 +161,40 @@ export function TextCombineNode({ id, data, selected }: NodeProps<TextCombineNod
         )}
       </div>
     </NodeShell>
+  )
+}
+
+// Subtle blue accent tones for each input segment
+const SEGMENT_COLORS = [
+  '#5b8def',
+  '#4ecdc4',
+  '#7c9df0',
+  '#45a5b5',
+  '#6a7ff2',
+  '#58b9c9',
+  '#8da4f4',
+  '#4fafbf',
+]
+
+function ColoredSegments({ texts, separator }: { texts: string[]; separator: string }) {
+  return (
+    <pre
+      className={styles.resultArea}
+      style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+    >
+      {texts.map((t, i) => (
+        <span key={i}>
+          {i > 0 && <span style={{ opacity: 0.3 }}>{separator}</span>}
+          <span style={{
+            borderLeft: `2px solid ${SEGMENT_COLORS[i % SEGMENT_COLORS.length]}`,
+            paddingLeft: 6,
+            marginLeft: i > 0 ? 0 : undefined,
+          }}>
+            {t}
+          </span>
+        </span>
+      ))}
+    </pre>
   )
 }
 

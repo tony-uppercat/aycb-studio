@@ -32,6 +32,7 @@ interface Props {
   onMenu?: () => void
   lastCost?: number
   estimatedCost?: string  // e.g. "~$0.0012"
+  footerExtra?: React.ReactNode
 }
 
 const TYPE_CSS: Record<SlotDataType, string> = {
@@ -108,6 +109,7 @@ export function NodeShell({
   onMenu,
   lastCost,
   estimatedCost,
+  footerExtra,
 }: Props): React.ReactElement {
   const nodeId = useNodeId()
 
@@ -278,6 +280,7 @@ export function NodeShell({
               {estimatedCost}
             </span>
           ) : null}
+          {footerExtra}
           {onAutoUpdateToggle && (
             <button
               className={styles.autoToggle}

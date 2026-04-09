@@ -200,6 +200,18 @@ class PromptBody(BaseModel):
     text: str
 
 
+class PromptLibrarySave(BaseModel):
+    name: str
+    text: str
+    tags: list[str] = []
+
+
+class PromptLibraryUpdate(BaseModel):
+    name: str | None = None
+    text: str | None = None
+    tags: list[str] | None = None
+
+
 class ReportCostEntry(BaseModel):
     timestamp: str
     nodeId: str

@@ -104,9 +104,13 @@ export interface GenerateVideoNodeData {
 
 export interface GenerateVideoResult {
   request_id?: string
+  task_id?: string
   status?: string
   url?: string
   error?: string
+  _fal_endpoint?: string
+  _fal_status_url?: string
+  _fal_response_url?: string
 }
 
 export interface PromptEditorNodeData {

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 import time
 from collections import deque
@@ -294,4 +295,49 @@ def _save_to_bridge(
         return {"status": "ok", "path": str(img_path.name), "stem": stem, "folder": folder}
     except Exception as e:
         _log(f"Review Hub bridge — error: {e}")
+        return None
+
+
+def _save_video_to_bridge(
+    video_bytes: bytes,
+    prompt: str = "",
+    model: str = "",
+    model_name: str = "",
+    aspect_ratio: str = "",
+    duration: int = 0,
+    cost_usd: float = 0.0,
+    project_name: str = "",
+) -> dict | None:
+    """Save video with sidecar .meta.json to shared/Media/ for Review Hub."""
+    try:
+        if project_name.strip():
+            folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
+        else:
+            folder = time.strftime("%Y-%m-%d")
+        target_dir = settings.media_dir / folder
+        target_dir.mkdir(parents=True, exist_ok=True)
+        stem = f"video_{int(time.time() * 1000)}"
+        video_path = target_dir / f"{stem}.mp4"
+
+        video_path.write_bytes(video_bytes)
+
+        generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        meta = {
+            "source": "aycb",
+            "project": project_name.strip() or None,
+            "prompt": prompt,
+            "model": model,
+            "model_name": model_name,
+            "aspect_ratio": aspect_ratio,
+            "duration": duration,
+            "cost_usd": cost_usd,
+            "generated_at": generated_at,
+        }
+        meta_path = target_dir / f"{stem}.meta.json"
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8", newline="\n")
+
+        _log(f"Video bridge — saved {folder}/{video_path.name} ({len(video_bytes)} bytes)")
+        return {"status": "ok", "path": str(video_path.name), "stem": stem, "folder": folder}
+    except Exception as e:
+        _log(f"Video bridge — error: {e}")
         return None

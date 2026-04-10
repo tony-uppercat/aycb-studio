@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import { useMediaPreview } from '../../components/media/MediaPreview'
@@ -15,6 +15,16 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
 
   const vid = useGenerateVideo(id, d)
 
+  const PROVIDERS = [
+    { id: 'fal', label: 'fal.ai' },
+    { id: 'atlas', label: 'Atlas' },
+    { id: 'piapi', label: 'PiAPI' },
+  ]
+  const [activeProvider, setActiveProvider] = useState(
+    () => VIDEO_MODELS.find(m => m.id === (d.selectedModel ?? 'atlas-seedance-2.0'))?.provider ?? 'atlas'
+  )
+  const filteredModels = VIDEO_MODELS.filter(m => m.provider === activeProvider)
+
   const {
     localPrompt, setLocalPrompt,
     selectedModel, setSelectedModel,
@@ -24,10 +34,14 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,
+    imageSlots,
     hasPromptEdge,
     activePrompt, mode,
     run,
-    muApiKey,
+    activeApiKey,
+    lastCost,
+    estimatedCost,
+    historyIds, historyIndex, navigateHistory,
   } = vid
 
   const statusClass =
@@ -43,15 +57,37 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
       icon="\u{1F39E}"
       inputSlots={[
         { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
-        { id: 'image-in', label: 'Image (i2v)', type: 'image' },
+        ...imageSlots,
+        { id: 'video-ref', label: 'Video Ref', type: 'video' },
+        { id: 'audio-ref', label: 'Audio URL', type: 'text' },
       ]}
       outputSlots={[
         { id: 'video-out', label: 'Video', type: 'video' },
       ]}
       onRun={run}
       running={loading}
+      lastCost={lastCost}
+      estimatedCost={estimatedCost}
     >
       <div className={styles.nodeContent}>
+
+        {/* Provider filter */}
+        <div className={nodeStyles.providerRow}>
+          {PROVIDERS.map(p => (
+            <button
+              key={p.id}
+              className={`${nodeStyles.providerBtn} ${activeProvider === p.id ? nodeStyles.providerBtnActive : ''}`}
+              onClick={() => {
+                setActiveProvider(p.id)
+                const first = VIDEO_MODELS.find(m => m.provider === p.id)
+                if (first && modelInfo.provider !== p.id) {
+                  setSelectedModel(first.id)
+                  updateNodeData(id, { selectedModel: first.id })
+                }
+              }}
+            >{p.label}</button>
+          ))}
+        </div>
 
         {/* Model selector */}
         <select
@@ -62,7 +98,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
             updateNodeData(id, { selectedModel: e.target.value })
           }}
         >
-          {VIDEO_MODELS.map(m => (
+          {filteredModels.map(m => (
             <option key={m.id} value={m.id} title={m.tooltip}>
               {m.name} ({m.price})
             </option>
@@ -96,8 +132,8 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
             <span className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}>
               Text{'\u2192'}Video
             </span>
-            <span className={`${nodeStyles.modeBtn} ${mode === 'i2v' ? nodeStyles.modeBtnActive : ''}`}>
-              Img{'\u2192'}Video
+            <span className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}>
+              Multi-Ref
             </span>
           </div>
         </div>
@@ -144,7 +180,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
           <input
             type="range"
             className={`${nodeStyles.slider} nodrag`}
-            min={1}
+            min={modelInfo.minDuration}
             max={modelInfo.maxDuration}
             step={1}
             value={duration}
@@ -193,11 +229,22 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
           </div>
         )}
 
+        {/* History bar */}
+        {historyIds.length > 1 && (
+          <div className={styles.historyBar}>
+            <button className={styles.historyArrow} onClick={() => navigateHistory(-1)}
+              disabled={historyIndex <= 0}>&#8249;</button>
+            <span className={styles.historyCount}>{historyIndex + 1} / {historyIds.length}</span>
+            <button className={styles.historyArrow} onClick={() => navigateHistory(1)}
+              disabled={historyIndex >= historyIds.length - 1}>&#8250;</button>
+          </div>
+        )}
+
         {/* Placeholder */}
         {!videoUrl && !loading && !status && (
           <div className={styles.previewArea}>
             <span className={styles.dropHint}>
-              {!muApiKey ? 'Set MuAPI key in Settings' : 'Write a prompt and click Run'}
+              {!activeApiKey ? 'Set PiAPI key in Settings' : 'Write a prompt and click Run'}
             </span>
           </div>
         )}

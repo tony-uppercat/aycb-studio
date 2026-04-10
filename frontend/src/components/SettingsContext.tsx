@@ -6,7 +6,9 @@ interface Settings {
   anthropicKey: string
   hfApiKey: string
   bflApiKey: string
-  muApiKey: string
+  piApiKey: string
+  falApiKey: string
+  atlasApiKey: string
   localServerUrl: string
   ollamaUrl: string
   model: string
@@ -20,7 +22,9 @@ interface SettingsCtx extends Settings {
   setAnthropicKey: (k: string) => void
   setHfApiKey: (k: string) => void
   setBflApiKey: (k: string) => void
-  setMuApiKey: (k: string) => void
+  setPiApiKey: (k: string) => void
+  setFalApiKey: (k: string) => void
+  setAtlasApiKey: (k: string) => void
   setLocalServerUrl: (k: string) => void
   setOllamaUrl: (k: string) => void
   setModel: (m: string) => void
@@ -30,7 +34,7 @@ interface SettingsCtx extends Settings {
 }
 
 const LS_KEY = STORAGE_KEYS.SETTINGS
-const DEFAULTS: Settings = { apiKey: '', anthropicKey: '', hfApiKey: '', bflApiKey: '', muApiKey: '', localServerUrl: '', ollamaUrl: 'http://localhost:11434', model: 'Gemini 3.1 Pro', doEmbed: false, gcpProject: '', gcpLocation: 'us-central1' }
+const DEFAULTS: Settings = { apiKey: '', anthropicKey: '', hfApiKey: '', bflApiKey: '', piApiKey: '', falApiKey: '', atlasApiKey: '', localServerUrl: '', ollamaUrl: 'http://localhost:11434', model: 'Gemini 3.1 Pro', doEmbed: false, gcpProject: '', gcpLocation: 'us-central1' }
 
 function load(): Settings {
   try {
@@ -46,7 +50,9 @@ const Ctx = createContext<SettingsCtx>({
   setAnthropicKey: () => {},
   setHfApiKey: () => {},
   setBflApiKey: () => {},
-  setMuApiKey: () => {},
+  setPiApiKey: () => {},
+  setFalApiKey: () => {},
+  setAtlasApiKey: () => {},
   setLocalServerUrl: () => {},
   setOllamaUrl: () => {},
   setModel: () => {},
@@ -68,7 +74,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setAnthropicKey: (k) => setSettings(s => ({ ...s, anthropicKey: k })),
     setHfApiKey: (k) => setSettings(s => ({ ...s, hfApiKey: k })),
     setBflApiKey: (k) => setSettings(s => ({ ...s, bflApiKey: k })),
-    setMuApiKey: (k) => setSettings(s => ({ ...s, muApiKey: k })),
+    setPiApiKey: (k) => setSettings(s => ({ ...s, piApiKey: k })),
+    setFalApiKey: (k) => setSettings(s => ({ ...s, falApiKey: k })),
+    setAtlasApiKey: (k) => setSettings(s => ({ ...s, atlasApiKey: k })),
     setLocalServerUrl: (k) => setSettings(s => ({ ...s, localServerUrl: k })),
     setOllamaUrl: (k) => setSettings(s => ({ ...s, ollamaUrl: k })),
     setModel: (m) => setSettings(s => ({ ...s, model: m })),

@@ -59,6 +59,39 @@
   color: #22c55e;
 }
 
+.providerRow {
+  display: flex;
+  gap: 0;
+  border: 1px solid #2a2a2e;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.providerBtn {
+  flex: 1;
+  background: #1c1c20;
+  border: none;
+  color: #666;
+  font-size: 9px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.providerBtn:hover {
+  color: #ccc;
+}
+
+.providerBtn:not(:last-child) {
+  border-right: 1px solid #2a2a2e;
+}
+
+.providerBtnActive {
+  background: #F5277618;
+  color: #F52776;
+}
+
 .statusBar {
   display: flex;
   align-items: center;

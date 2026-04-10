@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useReactFlow, useStore } from '@xyflow/react'
+import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
+import type { SlotDef } from '../_shared/NodeShell'
 import { useSettings } from '../../components/SettingsContext'
-import { api } from '../../api'
-import { pullText } from '../../hooks/useDataPropagation'
+import { api, bridgeVideo } from '../../api'
+import { pullText, pullAllMedia, pullMedia } from '../../hooks/useDataPropagation'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
+import { priceTier } from '../_shared/types'
 import type { GenerateVideoNodeData } from '../../types'
 
 // -- Video generation models --------------------------------------------------
@@ -18,41 +20,147 @@ export interface VideoModelDef {
   cost: number
   ratios: string[]
   qualities: string[]
+  minDuration: number
   maxDuration: number
 }
 
 export const VIDEO_MODELS: VideoModelDef[] = [
-  { id: 'seedance-2.0',   name: 'Seedance 2.0',       provider: 'muapi', tooltip: 'ByteDance — fast T2V/I2V, up to 2K',   price: '~$0.05',  cost: 0.05, ratios: ['16:9', '9:16', '4:3', '3:4'], qualities: ['basic', 'high'], maxDuration: 10 },
-  { id: 'kling-3.0-std',  name: 'Kling 3.0 Standard',  provider: 'muapi', tooltip: 'Kuaishou — 720p, fast, affordable',     price: '~$0.50',  cost: 0.50, ratios: ['16:9', '9:16', '1:1'],        qualities: ['720p'],          maxDuration: 10 },
-  { id: 'kling-3.0-pro',  name: 'Kling 3.0 Pro',       provider: 'muapi', tooltip: 'Kuaishou — 1080p, best quality, audio', price: '~$1.50',  cost: 1.50, ratios: ['16:9', '9:16', '1:1'],        qualities: ['1080p'],         maxDuration: 10 },
+  // fal.ai — Kling v3
+  {
+    id: 'fal-kling-v3-std', name: 'Kling 3.0 Omni Std', provider: 'fal',
+    tooltip: 'fal.ai — Kling 3.0 Omni Standard, 3-15s, fast', price: '$0.07/s',
+    cost: 0.07, ratios: ['16:9', '9:16', '1:1'],
+    qualities: ['720p'], minDuration: 3, maxDuration: 15,
+  },
+  {
+    id: 'fal-kling-v3-pro', name: 'Kling 3.0 Omni Pro', provider: 'fal',
+    tooltip: 'fal.ai — Kling 3.0 Omni Pro, 3-15s, best quality', price: '$0.10/s',
+    cost: 0.10, ratios: ['16:9', '9:16', '1:1'],
+    qualities: ['1080p'], minDuration: 3, maxDuration: 15,
+  },
+  {
+    id: 'fal-seedance-2.0', name: 'Seedance 2.0', provider: 'fal',
+    tooltip: 'fal.ai — Seedance 2.0, 4-15s, I2V', price: '$0.30/s',
+    cost: 0.30, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    qualities: ['720p'], minDuration: 4, maxDuration: 15,
+  },
+  // Atlas Cloud — Seedance 2.0 (cheapest)
+  {
+    id: 'atlas-seedance-2.0-fast', name: 'Seedance 2.0 Fast', provider: 'atlas',
+    tooltip: 'Atlas Cloud — Seedance 2.0 Fast', price: '$0.18/s',
+    cost: 0.18, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    qualities: ['720p'], minDuration: 4, maxDuration: 15,
+  },
+  {
+    id: 'atlas-seedance-2.0', name: 'Seedance 2.0', provider: 'atlas',
+    tooltip: 'Atlas Cloud — full quality Seedance 2.0', price: '$0.25/s',
+    cost: 0.25, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    qualities: ['720p'], minDuration: 4, maxDuration: 15,
+  },
+  // PiAPI — Kling 3.0 Omni
+  {
+    id: 'kling-3.0-omni', name: 'Kling 3.0 Omni', provider: 'piapi',
+    tooltip: 'PiAPI — Kling 3.0 Omni, 720p/1080p', price: '$0.10-0.15/s',
+    cost: 0.10, ratios: ['16:9', '9:16', '1:1'],
+    qualities: ['720p', '1080p'], minDuration: 3, maxDuration: 15,
+  },
+  // PiAPI — Seedance 2.0
+  {
+    id: 'seedance-2.0', name: 'Seedance 2.0', provider: 'piapi',
+    tooltip: 'PiAPI — T2V/multi-ref, 4-15s', price: '$0.15/s',
+    cost: 0.15, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    qualities: ['standard'], minDuration: 4, maxDuration: 15,
+  },
+  {
+    id: 'seedance-2.0-fast', name: 'Seedance 2.0 Fast', provider: 'piapi',
+    tooltip: 'PiAPI — fast, lower cost', price: '$0.10/s',
+    cost: 0.10, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    qualities: ['standard'], minDuration: 4, maxDuration: 15,
+  },
 ]
 
-
+const MAX_REFS = 12
 const POLL_INTERVAL_MS = 5000
 
 export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
-  const { muApiKey } = useSettings()
+  const updateNodeInternals = useUpdateNodeInternals()
+  const { piApiKey, falApiKey, atlasApiKey } = useSettings()
 
   // -- UI state ---------------------------------------------------------------
 
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
-  const [selectedModel, setSelectedModel] = useState(data.selectedModel ?? 'seedance-2.0')
-  const [aspectRatio, setAspectRatio] = useState(data.aspectRatio ?? '16:9')
+  const [selectedModel, setSelectedModel] = useState(data.selectedModel ?? 'atlas-seedance-2.0')
+  const [aspectRatio, setAspectRatio] = useState(data.aspectRatio ?? '21:9')
   const [duration, setDuration] = useState(data.duration ?? 5)
-  const [quality, setQuality] = useState(data.quality ?? 'high')
+  const [quality, setQuality] = useState(data.quality ?? '720p')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [lastCost, setLastCost] = useState<number | undefined>()
   const [status, setStatus] = useState(data.status ?? '')
   const [videoUrl, setVideoUrl] = useState(data.videoUrl ?? '')
   const [requestId, setRequestId] = useState(data.requestId ?? '')
   const [pollElapsed, setPollElapsed] = useState(0)
 
+  // History — list of {stem, url} for generated videos
+  const [historyIds, setHistoryIds] = useState<string[]>(data.historyIds as string[] ?? [])
+  const [historyUrls, setHistoryUrls] = useState<string[]>(data.historyUrls as string[] ?? [])
+  const [historyIndex, setHistoryIndex] = useState(Math.max(0, (data.historyIds as string[] ?? []).length - 1))
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollStartRef = useRef(0)
+  const falEndpointRef = useRef('')  // stored from fal submit response for polling
 
   const modelInfo = VIDEO_MODELS.find(m => m.id === selectedModel) ?? VIDEO_MODELS[0]
+  const isFal = modelInfo.provider === 'fal'
+  const isAtlas = modelInfo.provider === 'atlas'
+  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : piApiKey
+  const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : 'piapi'
+
+  // -- Dynamic image slots (same pattern as Generate Image) -------------------
+
+  const connectedImageCount = useStore(state =>
+    state.edges.filter(e => e.target === id && (e.targetHandle ?? '').startsWith('image-')).length
+  )
+  const imageCount = Math.min(connectedImageCount + 1, MAX_REFS)
+  const imageSlots: SlotDef[] = Array.from({ length: imageCount }, (_, i) => ({
+    id: `image-${i}`,
+    label: `Ref ${i + 1}`,
+    type: 'image' as const,
+  }))
+
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [imageCount, id, updateNodeInternals])
+
+  // -- Check connections ------------------------------------------------------
+
+  const hasPromptEdge = useStore(state =>
+    state.edges.some(e => e.target === id && e.targetHandle === 'prompt-in')
+  )
+  const hasVideoRef = useStore(state =>
+    state.edges.some(e => e.target === id && e.targetHandle === 'video-ref')
+  )
+  const hasAudioRef = useStore(state =>
+    state.edges.some(e => e.target === id && e.targetHandle === 'audio-ref')
+  )
+
+  const activePrompt = useStore(state => {
+    const edge = state.edges.find(e => e.target === id && e.targetHandle === 'prompt-in')
+    if (!edge) return localPrompt
+    const src = state.nodes.find(n => n.id === edge.source)
+    if (!src) return localPrompt
+    const sd = src.data as Record<string, unknown>
+    return String(sd.outputText ?? sd.text ?? sd.prompt ?? localPrompt)
+  })
+
+  // Cost estimate
+  const estimatedCost = `~$${(modelInfo.cost * duration).toFixed(2)}`
+
+  // Detect mode
+  const hasRefs = connectedImageCount > 0 || hasVideoRef || hasAudioRef
+  const mode = hasRefs ? 'multi-ref' : 't2v'
 
   // -- Polling ----------------------------------------------------------------
 
@@ -70,7 +178,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
 
     pollRef.current = setInterval(async () => {
       try {
-        const result = await api.videoStatus(reqId, muApiKey)
+        const result = await api.videoStatus(reqId, activeApiKey, activeProvider, falEndpointRef.current)
         const s = (result.status ?? '').toLowerCase()
         setPollElapsed(Math.floor((Date.now() - pollStartRef.current) / 1000))
 
@@ -80,11 +188,10 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
           setVideoUrl(url)
           setStatus('completed')
           setLoading(false)
-          updateNodeData(id, { videoUrl: url, status: 'completed', requestId: reqId })
 
-          // Track cost (estimated)
-          const isKling = selectedModel.startsWith('kling')
-          const costEstimate = isKling ? duration * (selectedModel.includes('pro') ? 0.15 : 0.10) : (quality === 'high' ? 0.10 : 0.05)
+          // Track cost (per-second pricing)
+          const costUsd = modelInfo.cost * duration
+          setLastCost(costUsd)
           useCanvasStore.getState().addCost({
             timestamp: new Date().toISOString(),
             nodeId: id,
@@ -92,7 +199,34 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
             model: modelInfo.name,
             inputTokens: 0,
             outputTokens: 0,
-            costUsd: costEstimate,
+            costUsd,
+          })
+
+          // Bridge video to shared/Media/ and add to history
+          const prompt = (data.prompt as string) ?? ''
+          bridgeVideo(url, {
+            prompt,
+            model: selectedModel,
+            modelName: modelInfo.name,
+            aspectRatio,
+            duration,
+            costUsd,
+          }).then(stem => {
+            if (stem) {
+              const newIds = [...historyIds, stem]
+              const newUrls = [...historyUrls, url]
+              setHistoryIds(newIds)
+              setHistoryUrls(newUrls)
+              setHistoryIndex(newIds.length - 1)
+              updateNodeData(id, {
+                videoUrl: url, status: 'completed', requestId: reqId,
+                mediaId: stem, historyIds: newIds, historyUrls: newUrls,
+              })
+            } else {
+              updateNodeData(id, { videoUrl: url, status: 'completed', requestId: reqId })
+            }
+          }).catch(() => {
+            updateNodeData(id, { videoUrl: url, status: 'completed', requestId: reqId })
           })
         } else if (s === 'failed' || s === 'error') {
           stopPolling()
@@ -109,9 +243,8 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
         setStatus(`polling... (${msg})`)
       }
     }, POLL_INTERVAL_MS)
-  }, [stopPolling, muApiKey, id, selectedModel, duration, quality, modelInfo.name, updateNodeData])
+  }, [stopPolling, activeApiKey, activeProvider, id, selectedModel, duration, quality, modelInfo, updateNodeData])
 
-  // Cleanup polling on unmount
   useEffect(() => () => stopPolling(), [stopPolling])
 
   // Resume polling if we had a pending requestId
@@ -133,40 +266,26 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     }
   }, [data._stop, stopPolling])
 
-  // -- Check if prompt-in or image-in is connected ----------------------------
-
-  const hasPromptEdge = useStore(state =>
-    state.edges.some(e => e.target === id && e.targetHandle === 'prompt-in')
-  )
-  const hasImageEdge = useStore(state =>
-    state.edges.some(e => e.target === id && e.targetHandle === 'image-in')
-  )
-
-  // Subscribe to upstream prompt for live preview
-  const activePrompt = useStore(state => {
-    const edge = state.edges.find(e => e.target === id && e.targetHandle === 'prompt-in')
-    if (!edge) return localPrompt
-    const src = state.nodes.find(n => n.id === edge.source)
-    if (!src) return localPrompt
-    const sd = src.data as Record<string, unknown>
-    return String(sd.outputText ?? sd.text ?? sd.prompt ?? localPrompt)
-  })
-
-  // Detect mode: i2v when image is connected
-  const mode = hasImageEdge ? 'i2v' : 't2v'
-
   // -- Sync quality/ratio when model changes ----------------------------------
 
   useEffect(() => {
     const info = VIDEO_MODELS.find(m => m.id === selectedModel)
     if (!info) return
-    if (!info.qualities.includes(quality as typeof info.qualities[number])) {
+    if (!info.qualities.includes(quality)) {
       setQuality(info.qualities[0])
       updateNodeData(id, { quality: info.qualities[0] })
     }
-    if (!info.ratios.includes(aspectRatio as typeof info.ratios[number])) {
+    if (!info.ratios.includes(aspectRatio)) {
       setAspectRatio(info.ratios[0])
       updateNodeData(id, { aspectRatio: info.ratios[0] })
+    }
+    if (duration < info.minDuration) {
+      setDuration(info.minDuration)
+      updateNodeData(id, { duration: info.minDuration })
+    }
+    if (duration > info.maxDuration) {
+      setDuration(info.maxDuration)
+      updateNodeData(id, { duration: info.maxDuration })
     }
   }, [selectedModel]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -175,7 +294,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const run = useCallback(async () => {
     const prompt = (pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt).trim()
     if (!prompt) { setError('Write a prompt'); return }
-    if (!muApiKey) { setError('Set MuAPI key in Settings'); return }
+    if (!activeApiKey) { setError(isFal ? 'Set fal.ai key in Settings' : 'Set PiAPI key in Settings'); return }
 
     setLoading(true)
     setError('')
@@ -183,26 +302,35 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     setVideoUrl('')
 
     try {
-      if (mode === 'i2v') {
-        setError('Image-to-video: connect a publicly accessible image URL via text node. Local images not yet supported.')
-        setLoading(false)
-        return
+      // Collect reference images
+      const refImages = await pullAllMedia(id, 'image-', getNodes, getEdges)
+
+      // Collect reference video
+      let refVideo: File | undefined
+      if (hasVideoRef) {
+        const { file } = await pullMedia(id, 'video-ref', getNodes, getEdges)
+        if (file) refVideo = file
       }
 
-      const result = await api.generateVideo(prompt, muApiKey, {
-        model: selectedModel,
-        mode,
-        aspectRatio,
-        duration,
-        quality,
-        imageUrls: '',
-      })
-
-      if (!result.request_id) {
-        throw new Error('No request_id returned')
+      // Collect audio URL from text connection
+      let audioUrl = ''
+      if (hasAudioRef) {
+        audioUrl = pullText(id, 'audio-ref', getNodes, getEdges) || ''
       }
 
-      const reqId = result.request_id
+      const result = await api.generateVideo(
+        prompt, activeApiKey,
+        { model: selectedModel, aspectRatio, duration, quality, audioUrl },
+        refImages.length > 0 ? refImages : undefined,
+        refVideo,
+      )
+
+      const reqId = result.request_id || result.task_id
+      if (!reqId) throw new Error('No request_id returned')
+
+      // Store fal endpoint for polling
+      if (isFal && result._fal_endpoint) falEndpointRef.current = result._fal_endpoint
+
       setRequestId(reqId)
       setStatus('submitted')
       updateNodeData(id, { requestId: reqId, status: 'submitted', prompt, selectedModel })
@@ -214,7 +342,14 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
       setLoading(false)
       reportNodeError(id, msg)
     }
-  }, [id, activePrompt, muApiKey, selectedModel, mode, aspectRatio, duration, quality, getNodes, getEdges, updateNodeData, startPolling])
+  }, [id, activePrompt, activeApiKey, isFal, isAtlas, activeProvider, selectedModel, aspectRatio, duration, quality,
+      hasVideoRef, hasAudioRef, getNodes, getEdges, updateNodeData, startPolling])
+
+  const navigateHistory = useCallback((delta: number) => {
+    const newIdx = Math.max(0, Math.min(historyIds.length - 1, historyIndex + delta))
+    setHistoryIndex(newIdx)
+    if (historyUrls[newIdx]) setVideoUrl(historyUrls[newIdx])
+  }, [historyIds.length, historyIndex, historyUrls])
 
   return {
     localPrompt, setLocalPrompt,
@@ -225,10 +360,15 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,
-    hasPromptEdge, hasImageEdge,
+    imageSlots,
+    connectedImageCount,
+    hasPromptEdge, hasVideoRef, hasAudioRef,
     activePrompt, mode,
     run,
-    muApiKey,
+    activeApiKey,
+    lastCost,
+    estimatedCost,
+    historyIds, historyIndex, navigateHistory,
   }
 }
 

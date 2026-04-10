@@ -131,6 +131,35 @@ export async function bridgeMedia(
   return null
 }
 
+/**
+ * Save a generated video to shared/Media/ via backend bridge.
+ * Downloads from CDN URL, saves with metadata sidecar.
+ */
+export async function bridgeVideo(
+  videoUrl: string,
+  meta: { prompt?: string; model?: string; modelName?: string; aspectRatio?: string; duration?: number; costUsd?: number },
+): Promise<string | null> {
+  if (!isBackendAvailable()) return null
+  try {
+    const fd = new FormData()
+    fd.append('video_url', videoUrl)
+    const projectName = localStorage.getItem(STORAGE_KEYS.ACTIVE_PROJECT_NAME) || ''
+    if (projectName) fd.append('project_name', projectName)
+    if (meta.prompt) fd.append('prompt', meta.prompt)
+    if (meta.model) fd.append('model', meta.model)
+    if (meta.modelName) fd.append('model_name', meta.modelName)
+    if (meta.aspectRatio) fd.append('aspect_ratio', meta.aspectRatio)
+    if (meta.duration) fd.append('duration', String(meta.duration))
+    if (meta.costUsd) fd.append('cost_usd', String(meta.costUsd))
+    const resp = await fetch(`${BASE}/bridge/video`, { method: 'POST', body: fd })
+    if (resp.ok) {
+      const data = await resp.json().catch(() => null)
+      return data?.stem ?? null
+    }
+  } catch { /* silent */ }
+  return null
+}
+
 export const api = {
   async analyzeImage(image: File, model: string, doEmbed: boolean, apiKey: string): Promise<AnalyzeImageResult> {
     if (!isBackendAvailable()) {
@@ -252,29 +281,34 @@ export const api = {
     return post('/effects/depth', fd)
   },
 
-  /** Submit a Seedance 2.0 video generation request. Returns {request_id}. */
+  /** Submit a video generation request via PiAPI (Kling / Seedance). Returns {request_id}. */
   generateVideo(
     prompt: string,
     apiKey: string,
-    options: { model?: string; mode?: string; aspectRatio?: string; duration?: number; quality?: string; imageUrls?: string },
+    options: { model?: string; aspectRatio?: string; duration?: number; quality?: string; audioUrl?: string },
+    refImages?: File[],
+    refVideo?: File,
   ): Promise<import('./types').GenerateVideoResult> {
     if (!isBackendAvailable()) throw new Error('Video generation requires the local backend.')
     const fd = new FormData()
     fd.append('prompt', prompt)
     fd.append('api_key', apiKey)
-    fd.append('model', options.model ?? 'seedance-2.0')
-    fd.append('mode', options.mode ?? 't2v')
+    fd.append('model', options.model ?? 'kling-3.0-omni')
     fd.append('aspect_ratio', options.aspectRatio ?? '16:9')
     fd.append('duration', String(options.duration ?? 5))
-    fd.append('quality', options.quality ?? 'high')
-    if (options.imageUrls) fd.append('image_urls', options.imageUrls)
+    fd.append('quality', options.quality ?? '720p')
+    if (options.audioUrl) fd.append('audio_url', options.audioUrl)
+    refImages?.forEach(f => fd.append('ref_images', f))
+    if (refVideo) fd.append('ref_video', refVideo)
     return post('/generate/video', fd)
   },
 
-  /** Poll Seedance 2.0 generation status. */
-  videoStatus(requestId: string, apiKey: string): Promise<import('./types').GenerateVideoResult> {
+  /** Poll video generation status (PiAPI or fal.ai). */
+  videoStatus(requestId: string, apiKey: string, provider = 'piapi', endpoint = ''): Promise<import('./types').GenerateVideoResult> {
     if (!isBackendAvailable()) throw new Error('Video status requires the local backend.')
-    return get(`/generate/video/status/${requestId}?api_key=${encodeURIComponent(apiKey)}`)
+    const params = new URLSearchParams({ api_key: apiKey, provider })
+    if (endpoint) params.set('endpoint', endpoint)
+    return get(`/generate/video/status/${requestId}?${params}`)
   },
 
   getPrompt(): Promise<{ prompt: string }> { return get('/prompt') },

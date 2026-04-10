@@ -36,7 +36,9 @@ export function SettingsPanel({ open, onClose }: Props) {
     apiKey, setApiKey,
     anthropicKey, setAnthropicKey,
     bflApiKey, setBflApiKey,
-    muApiKey, setMuApiKey,
+    piApiKey, setPiApiKey,
+    falApiKey, setFalApiKey,
+    atlasApiKey, setAtlasApiKey,
     localServerUrl, setLocalServerUrl,
     ollamaUrl, setOllamaUrl,
     model, setModel,
@@ -232,15 +234,37 @@ export function SettingsPanel({ open, onClose }: Props) {
                 linkText="Get your key from BFL"
               />
               <ApiKeyField
-                label="MuAPI Key"
-                value={muApiKey}
-                onChange={setMuApiKey}
-                placeholder="Enter your MuAPI key (for Seedance video)"
+                label="PiAPI Key"
+                value={piApiKey}
+                onChange={setPiApiKey}
+                placeholder="Enter your PiAPI key (for video generation)"
                 statusOk="Key configured"
-                statusEmpty="No key (Seedance video disabled)"
-                hint="For Seedance 2.0 video generation (text-to-video, image-to-video)."
-                linkUrl="https://muapi.ai/"
-                linkText="Get your key from MuAPI"
+                statusEmpty="No key (video generation disabled)"
+                hint="For Kling 3.0, Seedance 2.0 video generation (text-to-video, multi-reference)."
+                linkUrl="https://piapi.ai/"
+                linkText="Get your key from PiAPI"
+              />
+              <ApiKeyField
+                label="fal.ai Key"
+                value={falApiKey}
+                onChange={setFalApiKey}
+                placeholder="Enter your fal.ai key (for Kling video)"
+                statusOk="Key configured"
+                statusEmpty="No key (fal.ai Kling disabled)"
+                hint="For Kling v3 video generation via fal.ai (faster, cheaper)."
+                linkUrl="https://fal.ai/dashboard/keys"
+                linkText="Get your key from fal.ai"
+              />
+              <ApiKeyField
+                label="Atlas Cloud Key"
+                value={atlasApiKey}
+                onChange={setAtlasApiKey}
+                placeholder="Enter your Atlas Cloud key (for Seedance)"
+                statusOk="Key configured"
+                statusEmpty="No key (Atlas Seedance disabled)"
+                hint="For Seedance 2.0 video via Atlas Cloud (~$0.18/s Fast, ~$0.25/s Pro)."
+                linkUrl="https://www.atlascloud.ai/"
+                linkText="Get your key from Atlas Cloud"
               />
             </>
           )}

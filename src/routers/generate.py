@@ -92,75 +92,171 @@ async def generate_image_endpoint(
 @router.post("/video")
 async def generate_video(
     prompt: str = Form(...),
-    model: str = Form("seedance-2.0"),
-    mode: str = Form("t2v"),
+    model: str = Form("kling-3.0-omni"),
     aspect_ratio: str = Form("16:9"),
     duration: int = Form(5),
-    quality: str = Form("high"),
+    quality: str = Form("720p"),
     api_key: str = Form(""),
-    image_urls: str = Form(""),  # comma-separated URLs for i2v mode
+    audio_url: str = Form(""),
+    ref_images: list[UploadFile] | None = File(default=None),
+    ref_video: UploadFile | None = File(default=None),
 ):
-    """Submit a video generation request (Seedance 2.0 / Kling 3.0). Returns request_id for polling."""
-    from src.video_gen import VideoGenError, submit_image_to_video, submit_text_to_video
+    """Submit a video generation request via PiAPI, fal.ai, or Atlas Cloud."""
+    if model.startswith("fal-"):
+        return await _generate_video_fal(prompt, model, api_key, aspect_ratio, duration, ref_images)
+    if model.startswith("atlas-"):
+        return await _generate_video_atlas(
+            prompt, model, api_key, aspect_ratio, duration, audio_url, ref_images, ref_video,
+        )
+    return await _generate_video_piapi(
+        prompt, model, api_key, aspect_ratio, duration, quality, audio_url, ref_images, ref_video,
+    )
 
-    key = api_key or os.environ.get("AYCB_MUAPI_KEY", "")
+
+async def _generate_video_piapi(
+    prompt: str, model: str, api_key: str, aspect_ratio: str,
+    duration: int, quality: str, audio_url: str,
+    ref_images: list[UploadFile] | None, ref_video: UploadFile | None,
+):
+    from src.video_gen import VideoGenError, submit_text_to_video, submit_with_refs
+
+    key = api_key or os.environ.get("AYCB_PIAPI_KEY", "")
     if not key:
-        raise HTTPException(400, "MuAPI key required. Set AYCB_MUAPI_KEY or pass api_key.")
-
+        raise HTTPException(400, "PiAPI key required. Set AYCB_PIAPI_KEY or pass api_key.")
     try:
-        if mode == "i2v" and image_urls:
-            urls = [u.strip() for u in image_urls.split(",") if u.strip()]
-            result = await submit_image_to_video(
-                api_key=key,
-                model_id=model,
-                prompt=prompt,
-                image_urls=urls,
-                aspect_ratio=aspect_ratio,
-                duration=duration,
-                quality=quality,
+        has_refs = (ref_images and len(ref_images) > 0) or ref_video or audio_url
+        if has_refs:
+            image_bytes: list[tuple[str, bytes]] = []
+            if ref_images:
+                for i, f in enumerate(ref_images[:12]):
+                    data = await f.read()
+                    ext = Path(f.filename or "ref.png").suffix or ".png"
+                    image_bytes.append((f"ref_{i}{ext}", data))
+            video_bytes: tuple[str, bytes] | None = None
+            if ref_video:
+                data = await ref_video.read()
+                ext = Path(ref_video.filename or "ref.mp4").suffix or ".mp4"
+                video_bytes = (f"ref_video{ext}", data)
+            result = await submit_with_refs(
+                api_key=key, model_id=model, prompt=prompt,
+                ref_image_bytes=image_bytes or None, ref_video_bytes=video_bytes,
+                audio_url=audio_url, aspect_ratio=aspect_ratio, duration=duration, quality=quality,
             )
         else:
             result = await submit_text_to_video(
-                api_key=key,
-                model_id=model,
-                prompt=prompt,
-                aspect_ratio=aspect_ratio,
-                duration=duration,
-                quality=quality,
+                api_key=key, model_id=model, prompt=prompt,
+                aspect_ratio=aspect_ratio, duration=duration, quality=quality,
             )
-        _log(f"Video generation submitted — model={model}, mode={mode}, request_id={result.get('request_id')}")
+        _log(f"Video submitted (PiAPI) — model={model}, request_id={result.get('request_id')}")
         return result
     except VideoGenError as e:
-        raise HTTPException(502, str(e))
+        raise HTTPException(422, str(e))
+
+
+async def _generate_video_fal(
+    prompt: str, model: str, api_key: str, aspect_ratio: str,
+    duration: int, ref_images: list[UploadFile] | None,
+):
+    from src.fal_video_gen import FalVideoGenError, submit_text_to_video as fal_t2v, submit_with_refs as fal_refs
+
+    key = api_key or os.environ.get("AYCB_FAL_KEY", "")
+    if not key:
+        raise HTTPException(400, "fal.ai key required. Set AYCB_FAL_KEY or pass api_key.")
+    try:
+        has_refs = ref_images and len(ref_images) > 0
+        if has_refs:
+            image_bytes: list[tuple[str, bytes]] = []
+            for i, f in enumerate(ref_images[:2]):
+                data = await f.read()
+                ext = Path(f.filename or "ref.png").suffix or ".png"
+                image_bytes.append((f"ref_{i}{ext}", data))
+            result = await fal_refs(
+                api_key=key, model_id=model, prompt=prompt,
+                ref_image_bytes=image_bytes, aspect_ratio=aspect_ratio, duration=duration,
+            )
+        else:
+            result = await fal_t2v(
+                api_key=key, model_id=model, prompt=prompt,
+                aspect_ratio=aspect_ratio, duration=duration,
+            )
+        _log(f"Video submitted (fal) — model={model}, request_id={result.get('request_id')}")
+        return result
+    except FalVideoGenError as e:
+        raise HTTPException(422, str(e))
+
+
+async def _generate_video_atlas(
+    prompt: str, model: str, api_key: str, aspect_ratio: str,
+    duration: int, audio_url: str,
+    ref_images: list[UploadFile] | None, ref_video: UploadFile | None,
+):
+    from src.atlas_video_gen import AtlasVideoGenError, submit_text_to_video as atlas_t2v, submit_with_refs as atlas_refs
+
+    key = api_key or os.environ.get("AYCB_ATLAS_KEY", "")
+    if not key:
+        raise HTTPException(400, "Atlas Cloud key required. Set AYCB_ATLAS_KEY or pass api_key.")
+    try:
+        has_refs = (ref_images and len(ref_images) > 0) or ref_video or audio_url
+        if has_refs:
+            image_bytes: list[tuple[str, bytes]] = []
+            if ref_images:
+                for i, f in enumerate(ref_images[:9]):
+                    data = await f.read()
+                    ext = Path(f.filename or "ref.png").suffix or ".png"
+                    image_bytes.append((f"ref_{i}{ext}", data))
+            video_bytes: tuple[str, bytes] | None = None
+            if ref_video:
+                data = await ref_video.read()
+                ext = Path(ref_video.filename or "ref.mp4").suffix or ".mp4"
+                video_bytes = (f"ref_video{ext}", data)
+            result = await atlas_refs(
+                api_key=key, model_id=model, prompt=prompt,
+                ref_image_bytes=image_bytes or None, ref_video_bytes=video_bytes,
+                audio_url=audio_url, aspect_ratio=aspect_ratio, duration=duration,
+            )
+        else:
+            result = await atlas_t2v(
+                api_key=key, model_id=model, prompt=prompt,
+                aspect_ratio=aspect_ratio, duration=duration,
+            )
+        _log(f"Video submitted (Atlas) — model={model}, request_id={result.get('request_id')}")
+        return result
+    except AtlasVideoGenError as e:
+        raise HTTPException(422, str(e))
 
 
 @router.get("/video/status/{request_id}")
-async def video_generation_status(request_id: str, api_key: str = ""):
-    """Poll video generation status. Returns {status, url?, ...}."""
-    from src.video_gen import VideoGenError, get_result as videogen_get_result
-
-    key = api_key or os.environ.get("AYCB_MUAPI_KEY", "")
-    if not key:
-        raise HTTPException(400, "MuAPI key required.")
-    try:
-        result = await videogen_get_result(key, request_id)
-        return result
-    except VideoGenError as e:
-        raise HTTPException(502, str(e))
-
-
-@router.post("/video/image-upload")
-async def video_image_upload(image: UploadFile = File(...)):
-    """Upload an image for i2v mode — saves to temp and returns a local URL.
-    This allows the frontend to pass local images as URLs for Seedance i2v."""
-    import uuid
-    ext = Path(image.filename or "image.png").suffix or ".png"
-    tmp_dir = Path(tempfile.gettempdir()) / "aycb_video_refs"
-    tmp_dir.mkdir(exist_ok=True)
-    tmp_path = tmp_dir / f"{uuid.uuid4().hex}{ext}"
-    content = await image.read()
-    tmp_path.write_bytes(content)
-    return {"path": str(tmp_path), "note": "For i2v, images must be publicly accessible URLs. Upload to a public host or use the built-in image hosting."}
+async def video_generation_status(
+    request_id: str, api_key: str = "", provider: str = "piapi", endpoint: str = "",
+):
+    """Poll video generation status. Provider: 'piapi', 'fal', or 'atlas'."""
+    if provider == "fal":
+        from src.fal_video_gen import FalVideoGenError, get_result as fal_get_result
+        key = api_key or os.environ.get("AYCB_FAL_KEY", "")
+        if not key:
+            raise HTTPException(400, "fal.ai key required.")
+        try:
+            return await fal_get_result(key, request_id, endpoint)
+        except FalVideoGenError as e:
+            raise HTTPException(422, str(e))
+    elif provider == "atlas":
+        from src.atlas_video_gen import AtlasVideoGenError, get_result as atlas_get_result
+        key = api_key or os.environ.get("AYCB_ATLAS_KEY", "")
+        if not key:
+            raise HTTPException(400, "Atlas Cloud key required.")
+        try:
+            return await atlas_get_result(key, request_id)
+        except AtlasVideoGenError as e:
+            raise HTTPException(422, str(e))
+    else:
+        from src.video_gen import VideoGenError, get_result as videogen_get_result
+        key = api_key or os.environ.get("AYCB_PIAPI_KEY", "")
+        if not key:
+            raise HTTPException(400, "PiAPI key required.")
+        try:
+            return await videogen_get_result(key, request_id)
+        except VideoGenError as e:
+            raise HTTPException(422, str(e))
 
 
 @router.post("/local")

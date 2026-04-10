@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image as PILImage
 from config.settings import settings
-from src.shared import _log, _save_to_bridge
+from src.shared import _log, _save_to_bridge, _save_video_to_bridge
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
 
@@ -120,6 +120,24 @@ def _find_png_meta(stem: str) -> dict | None:
         return meta
     except Exception as e:
         _log(f"PNG meta read error for '{stem}': {e}")
+        return None
+
+
+def _find_json_meta(stem: str) -> dict | None:
+    """Read metadata from .meta.json sidecar for a video file."""
+    import json as _json
+    safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
+    if not safe_id:
+        return None
+    pattern = str(settings.media_dir / "**" / f"{safe_id}.meta.json")
+    matches = _glob.glob(pattern, recursive=True)
+    if not matches:
+        return None
+    try:
+        text = Path(matches[0]).read_text(encoding="utf-8")
+        return _json.loads(text)
+    except Exception as e:
+        _log(f"JSON meta read error for '{stem}': {e}")
         return None
 
 
@@ -296,6 +314,43 @@ async def bridge_media(
         return {"status": "error", "detail": str(e)}
 
 
+@router.post("/video")
+async def bridge_video(
+    video_url: str = Form(...),
+    prompt: str = Form(""),
+    model: str = Form(""),
+    model_name: str = Form(""),
+    aspect_ratio: str = Form(""),
+    duration: int = Form(0),
+    cost_usd: str = Form("0"),
+    project_name: str = Form(""),
+):
+    """Download a generated video from CDN and save to shared/Media/ with metadata."""
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            resp = await client.get(video_url)
+            if resp.status_code != 200:
+                return {"status": "error", "detail": f"Download failed ({resp.status_code})"}
+            video_bytes = resp.content
+
+        result = _save_video_to_bridge(
+            video_bytes=video_bytes,
+            prompt=prompt,
+            model=model,
+            model_name=model_name,
+            aspect_ratio=aspect_ratio,
+            duration=duration,
+            cost_usd=float(cost_usd) if cost_usd else 0.0,
+            project_name=project_name,
+        )
+        return result or {"status": "error", "detail": "Save failed"}
+    except Exception as e:
+        _log(f"Video bridge — error: {e}")
+        return {"status": "error", "detail": str(e)}
+
+
 @router.delete("/media/{stem}")
 async def delete_bridge_media(stem: str):
     """Delete a bridged image from shared/Media/.
@@ -314,16 +369,20 @@ async def delete_bridge_media(stem: str):
 
 @router.get("/meta/{stem}")
 async def get_bridge_meta(stem: str):
-    """Read metadata from PNG tEXt chunks for a generated image.
+    """Read metadata from PNG tEXt chunks or .meta.json sidecar.
 
-    stem is the filename stem, e.g. 'generated_1774482284911'.
-    Returns the parsed meta dict if found, or {} if not.
+    stem is the filename stem, e.g. 'generated_1774482284911' or 'video_1774482284911'.
     """
     try:
         safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
         if not safe_id:
             return {}
+        # Try PNG metadata first
         data = await asyncio.to_thread(_find_png_meta, safe_id)
+        if data:
+            return data
+        # Try .meta.json sidecar (videos)
+        data = await asyncio.to_thread(_find_json_meta, safe_id)
         return data if data is not None else {}
     except Exception as e:
         _log(f"Meta read error: {e}")

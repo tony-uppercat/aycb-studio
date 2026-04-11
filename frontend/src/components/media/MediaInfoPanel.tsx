@@ -150,6 +150,16 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
         {/* Section: Review */}
         <section className={s.section}>
           <h3 className={s.sectionTitle}>Review</h3>
+          {onFavoriteToggle && (
+            <div className={s.favRow}>
+              <button
+                className={`${s.favButton} ${rev?.favorite ? s.favButtonActive : ''}`}
+                onClick={() => onFavoriteToggle(entry.id)}
+              >
+                {rev?.favorite ? '★ Favorite' : '☆ Add to favorites'}
+              </button>
+            </div>
+          )}
           {reviewBadge ? (
             <>
               <div className={`${s.reviewBadge} ${reviewBadge.cls}`}>{reviewBadge.label}</div>
@@ -158,18 +168,7 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
                 <DL l="Date" v={rev?.reviewed_at ? new Date(rev.reviewed_at).toLocaleDateString() : null} />
                 <DL l="Comments" v={rev && rev.comments_count > 0 ? `${rev.comments_count}` : null} />
                 <DL l="Drawings" v={rev && rev.drawings_count > 0 ? `${rev.drawings_count}` : null} />
-                {onFavoriteToggle ? (
-                  <div className={s.favRow}>
-                    <button
-                      className={`${s.favButton} ${rev?.favorite ? s.favButtonActive : ''}`}
-                      onClick={() => onFavoriteToggle(entry.id)}
-                    >
-                      {rev?.favorite ? '★ Favorite' : '☆ Add to favorites'}
-                    </button>
-                  </div>
-                ) : (
-                  <DL l="Favorite" v={rev?.favorite ? '★ Yes' : null} />
-                )}
+                {!onFavoriteToggle && <DL l="Favorite" v={rev?.favorite ? '★ Yes' : null} />}
               </dl>
             </>
           ) : <p className={s.none}>Not reviewed</p>}

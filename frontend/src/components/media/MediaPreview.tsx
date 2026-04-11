@@ -1,12 +1,14 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { downloadFromUrl } from '../../utils/downloadManager'
-import { toggleFavorite, fetchReviewStatus, getStemForMedia, type ReviewStatus } from '../../utils/reviewStatus'
+import { fetchReviewStatus, getStemForMedia, type ReviewStatus } from '../../utils/reviewStatus'
+import { useFavoriteToggle } from '../../hooks/useFavoriteToggle'
+import { loadMedia } from '../../mediaStore'
 import { type DiskMediaEntry } from './FullscreenMediaBrowser'
 import { FullscreenViewer } from './FullscreenViewer'
 import styles from './MediaPreview.module.css'
 
 interface GalleryOpts {
-  urls: string[]
+  urls?: string[]      // optional: pre-loaded blob URLs (from history panel); loaded on demand if absent
   mediaIds?: string[]
   index: number
 }
@@ -62,41 +64,27 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
   const [captures, setCaptures] = useState<string[]>([])
   const [editText, setEditText] = useState('')
 
-  // Favorite state (optimistic toggle for FullscreenViewer)
-  const [, setIsFavorite] = useState(false)
-
-  // Review status for info panel
-  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(null)
-
-  // Reset when media changes (render-phase derived state)
-  const [prevMediaId, setPrevMediaId] = useState(media?.mediaId)
-  if (prevMediaId !== media?.mediaId) {
-    setPrevMediaId(media?.mediaId)
-    setIsFavorite(false)
-    setReviewStatus(null)
-  }
+  // Review statuses keyed by mediaId — covers single entry and all gallery entries
+  const [reviewStatusesMap, setReviewStatusesMap] = useState<Record<string, ReviewStatus | null>>({})
+  const handleFavoriteToggle = useFavoriteToggle(setReviewStatusesMap)
 
   // Keep a stable ref to media for callbacks
   const mediaRef = useRef(media)
   useEffect(() => { mediaRef.current = media }, [media])
 
-  // Fetch review + favorite status when media with mediaId is opened
+  // Fetch review statuses for current entry and all gallery entries
   useEffect(() => {
-    if (!media?.mediaId) return
+    setReviewStatusesMap({})
+    const ids: string[] = media?.gallery?.mediaIds?.filter(Boolean) as string[] ?? []
+    if (media?.mediaId && !ids.includes(media.mediaId)) ids.push(media.mediaId)
+    if (ids.length === 0) return
     let cancelled = false
-    fetchReviewStatus(media.mediaId).then(status => {
-      if (cancelled) return
-      setIsFavorite(status?.favorite ?? false)
-      setReviewStatus(status)
-    })
+    for (const id of ids) {
+      fetchReviewStatus(id).then(status => {
+        if (!cancelled) setReviewStatusesMap(prev => ({ ...prev, [id]: status }))
+      })
+    }
     return () => { cancelled = true }
-  }, [media?.mediaId])
-
-  const handleFavoriteToggle = useCallback(async () => {
-    if (!media?.mediaId) return
-    setIsFavorite(prev => !prev)
-    const ok = await toggleFavorite(media.mediaId)
-    if (!ok) setIsFavorite(prev => !prev)
   }, [media])
 
   const openPreview = useCallback((url: string, type: 'image' | 'video' | 'text', opts?: PreviewOpts) => {
@@ -118,12 +106,15 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
   const viewerEntries = useMemo<DiskMediaEntry[]>(() => {
     if (!media || media.type === 'text') return []
     if (media.gallery) {
-      return media.gallery.urls.map((url, i) => {
-        const mid = media.gallery!.mediaIds?.[i]
+      const urls = media.gallery.urls ?? []
+      const mediaIds = media.gallery.mediaIds ?? []
+      const count = Math.max(urls.length, mediaIds.length)
+      return Array.from({ length: count }, (_, i) => {
+        const mid = mediaIds[i]
         const stem = mid ? (getStemForMedia(mid) ?? mid) : ''
         return {
           id: mid || `gallery-${i}`,
-          filename: url.split('/').pop()?.split('?')[0] || `image-${i}`,
+          filename: urls[i]?.split('/').pop()?.split('?')[0] || `image-${i + 1}.png`,
           project: '', path: '', size: 0,
           type: (media.type === 'image' ? 'image/png' : 'video/mp4') as string,
           modified: '', thumb: null,
@@ -144,21 +135,32 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
 
   const viewerInitialIndex = media?.gallery?.index ?? 0
 
-  // Map entry ID to its src URL for gallery mode
+  // Map entry ID → pre-loaded blob URL (only when urls were provided)
   const gallerySrcMap = useMemo(() => {
     if (!media?.gallery) return null
+    const urls = media.gallery.urls ?? []
+    if (urls.length === 0) return null
     const map = new Map<string, string>()
-    media.gallery.urls.forEach((url, i) => {
+    urls.forEach((url, i) => {
       const mid = media.gallery!.mediaIds?.[i]
-      map.set(mid || `gallery-${i}`, url)
+      if (url) map.set(mid || `gallery-${i}`, url)
     })
-    return map
+    return map.size > 0 ? map : null
   }, [media?.gallery])
 
   const getViewerSrc = useCallback((entry: DiskMediaEntry) => {
     if (gallerySrcMap) return gallerySrcMap.get(entry.id)
+    if (media?.gallery) return undefined  // gallery without pre-loaded URLs — use loadFullSrc
     return media?.url
-  }, [media?.url, gallerySrcMap])
+  }, [media?.url, gallerySrcMap, media?.gallery])
+
+  // Async per-entry loader for gallery mode when URLs aren't pre-loaded
+  const loadGalleryFullSrc = useCallback(async (entry: DiskMediaEntry): Promise<string | undefined> => {
+    if (entry.id.startsWith('gallery-')) return undefined  // no real mediaId
+    const file = await loadMedia(entry.id)
+    if (!file) return undefined
+    return URL.createObjectURL(file)
+  }, [])
 
   // Keyboard handler for text mode only
   useEffect(() => {
@@ -190,8 +192,9 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
           initialIndex={viewerInitialIndex}
           onClose={close}
           getSrc={getViewerSrc}
-          reviewStatuses={media.mediaId && reviewStatus ? { [viewerEntry.id]: reviewStatus } : undefined}
-          onFavoriteToggle={media.mediaId ? () => handleFavoriteToggle() : undefined}
+          loadFullSrc={media.gallery?.mediaIds?.length ? loadGalleryFullSrc : undefined}
+          reviewStatuses={Object.keys(reviewStatusesMap).length ? reviewStatusesMap : undefined}
+          onFavoriteToggle={(id) => { void handleFavoriteToggle(id) }}
           onDownload={(src, filename) => {
             downloadFromUrl(src, filename)
           }}

@@ -25,8 +25,12 @@ const RF_INTERNAL_KEYS = new Set([
  * Data keys whose values can be extremely large (e.g. embedded base64 images)
  * and are NOT needed to reconstruct the canvas — media is stored in IndexedDB
  * by mediaId.  Stripping these keeps serialized payloads lean.
+ *
+ *  - `result` / `analysisHistory`: runtime outputs of regular nodes.
+ *  - `last_preview_b64`: cached base64 thumbnail rendered on a subnet node;
+ *    re-derived at runtime, never user-authored.
  */
-const LARGE_DATA_KEYS = new Set(['result', 'analysisHistory'])
+const LARGE_DATA_KEYS = new Set(['result', 'analysisHistory', 'last_preview_b64'])
 
 /**
  * Strip non-serializable values and transient React Flow properties from nodes
@@ -34,8 +38,11 @@ const LARGE_DATA_KEYS = new Set(['result', 'analysisHistory'])
  *
  *  - File objects and blob: URLs → removed (media lives in IndexedDB via mediaId)
  *  - React Flow internal keys (measured, selected, …) → removed
- *  - Large embedded-data keys (result, analysisHistory) → removed
+ *  - Large embedded-data keys (result, analysisHistory, last_preview_b64) → removed
  *  - Functions, Symbols, undefined → removed (not JSON-serializable)
+ *  - Subnet nodes: `data.sub_graph.nodes` recursed through serializeNodes so
+ *    nested children are cleaned the same way. `edges`/`viewport` passed through
+ *    unchanged (already plain data). `external_inputs`/`external_outputs` stay.
  */
 export function serializeNodes(nodes: Node[]): Node[] {
   return nodes.map(n => {
@@ -49,15 +56,33 @@ export function serializeNodes(nodes: Node[]): Node[] {
 
     // Build clean data without non-serializable / oversized entries
     const data: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(n.data as Record<string, unknown>)) {
+    const raw_data = (n.data ?? {}) as Record<string, unknown>
+    for (const [k, v] of Object.entries(raw_data)) {
       if (v instanceof File) continue
       if (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'undefined') continue
       if (typeof v === 'string' && v.startsWith('blob:')) continue
       if (LARGE_DATA_KEYS.has(k)) continue
       data[k] = v
     }
-    clean.data = data
 
+    // Recurse into nested sub_graph for subnet containers so File objects and
+    // runtime keys inside nested children are stripped at every depth.
+    if (n.type === 'subnet') {
+      const raw_sg = raw_data.sub_graph
+      const sg = (raw_sg && typeof raw_sg === 'object')
+        ? raw_sg as { nodes?: unknown; edges?: unknown; viewport?: unknown }
+        : null
+      if (sg) {
+        const nested_nodes = Array.isArray(sg.nodes) ? (sg.nodes as Node[]) : []
+        data.sub_graph = {
+          nodes: serializeNodes(nested_nodes),
+          edges: Array.isArray(sg.edges) ? sg.edges : [],
+          viewport: sg.viewport ?? { x: 0, y: 0, zoom: 1 },
+        }
+      }
+    }
+
+    clean.data = data
     return clean as Node
   })
 }
@@ -97,12 +122,16 @@ export async function loadDefaultProject(): Promise<PersistedCanvas | null> {
   }
 }
 
+const BACKUP_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+
 /**
  * Save canvas to IndexedDB (sole source of truth for multi-project support).
+ * Also backs up to disk via POST /api/canvas/backup every 5 minutes.
  * Debounced at 500ms.
  */
 export function useCanvasPersistence(nodes: Node[], edges: Edge[], activeProjectId?: string | null): void {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const backupTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { getViewport, getNodes, getEdges } = useReactFlow()
   const setSaveStatus = useCanvasStore(s => s.setSaveStatus)
   // Capture projectId in a ref so the debounced callback always uses the value
@@ -113,8 +142,9 @@ export function useCanvasPersistence(nodes: Node[], edges: Edge[], activeProject
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
 
-    // Mark unsaved while waiting for debounce
-    setSaveStatus('unsaved')
+    // Skip the Zustand set entirely if already 'unsaved' — avoids state merge +
+    // subscriber notifications on every React Flow internal node update.
+    if (useCanvasStore.getState().saveStatus !== 'unsaved') setSaveStatus('unsaved')
 
     saveTimerRef.current = setTimeout(() => {
       setSaveStatus('saving')
@@ -147,6 +177,32 @@ export function useCanvasPersistence(nodes: Node[], edges: Edge[], activeProject
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
   }, [nodes, edges, getViewport, getNodes, getEdges, setSaveStatus])
+
+  // Disk backup: POST canvas to backend every 5 minutes
+  useEffect(() => {
+    if (!activeProjectId) return
+
+    const doBackup = () => {
+      const pid = projectIdRef.current
+      if (!pid) return
+      const payload = {
+        project_id: pid,
+        nodes: serializeNodes(getNodes()),
+        edges: getEdges(),
+        viewport: getViewport(),
+      }
+      fetch('/api/canvas/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(err => console.warn('[AYCB] Canvas disk backup failed:', err))
+    }
+
+    backupTimerRef.current = setInterval(doBackup, BACKUP_INTERVAL_MS)
+    return () => {
+      if (backupTimerRef.current) clearInterval(backupTimerRef.current)
+    }
+  }, [activeProjectId, getNodes, getEdges, getViewport])
 }
 
 /**

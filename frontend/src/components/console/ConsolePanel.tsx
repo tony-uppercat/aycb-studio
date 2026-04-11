@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNodes } from '@xyflow/react';
+import { useStore } from '@xyflow/react';
 import { api } from '../../api';
 import { listMedia } from '../../mediaStore';
 import type { MediaEntry } from '../../mediaStore';
@@ -55,10 +55,12 @@ export function ConsolePanel({ open, onToggle }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('server');
   const [consoleHeight, setConsoleHeight] = useState(loadConsoleHeight);
   const consoleHeightRef = useRef(consoleHeight);
+  // Direct container refs — scrolling these avoids scrollIntoView propagating up to overflow:hidden ancestors
+  const consoleBodyRef = useRef<HTMLDivElement>(null)
+  const fbListRef = useRef<HTMLDivElement>(null)
 
   // ── Server tab ──────────────────────────────────────────────────────────────
   const [logs, setLogs] = useState<string[]>([]);
-  const serverBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -72,17 +74,20 @@ export function ConsolePanel({ open, onToggle }: Props) {
   }, [open]);
 
   useEffect(() => {
-    serverBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (activeTab !== 'server') return
+    const el = consoleBodyRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [logs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Network tab ──────────────────────────────────────────────────────────────
   const networkLog = useCanvasStore((s) => s.networkLog);
   const clearNetworkLog = useCanvasStore((s) => s.clearNetworkLog);
-  const networkBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    networkBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [networkLog]);
+    if (activeTab !== 'network') return
+    const el = consoleBodyRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [networkLog]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Media tab ──────────────────────────────────────────────────────────────
   const [mediaEntries, setMediaEntries] = useState<MediaEntry[]>([]);
@@ -120,30 +125,32 @@ export function ConsolePanel({ open, onToggle }: Props) {
   // ── Errors tab ──────────────────────────────────────────────────────────────
   const storeErrors = useCanvasStore((s) => s.errors);
   const clearStoreErrors = useCanvasStore((s) => s.clearErrors);
-  const errorsBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    errorsBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [storeErrors]);
+    if (activeTab !== 'errors') return
+    const el = consoleBodyRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [storeErrors]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Costs tab ──────────────────────────────────────────────────────────────
   const storeCosts = useCanvasStore((s) => s.costs);
   const clearStoreCosts = useCanvasStore((s) => s.clearCosts);
-  const costsBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    costsBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [storeCosts]);
+    if (activeTab !== 'costs') return
+    const el = consoleBodyRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [storeCosts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Feedback tab ──────────────────────────────────────────────────────────────
-  const allNodes = useNodes();
+  // Only subscribe to the selected node — avoids re-rendering on every position change during drag
+  const selectedNode = useStore(s => s.nodes.find(n => n.selected) ?? null)
   const defaultFbWidth = () => { try { return Number(localStorage.getItem(STORAGE_KEYS.FEEDBACK_WIDTH)) || 320 } catch { return 320 } }
   const [fbWidth, setFbWidth] = useState(defaultFbWidth)
   const fbWidthRef = useRef(fbWidth)
   const [feedbackEntries, setFeedbackEntries] = useState<FeedbackEntry[]>(loadFeedback);
   const [fbText, setFbText] = useState('');
   const [fbCategory, setFbCategory] = useState<FeedbackCategory>('bug');
-  const feedbackBottomRef = useRef<HTMLDivElement>(null);
   const [fixedOpen, setFixedOpen] = useState(false);
   const [fbTab, setFbTab] = useState<FbTab>('feedback');
 
@@ -171,7 +178,8 @@ export function ConsolePanel({ open, onToggle }: Props) {
   }, [feedbackEntries]);
 
   useEffect(() => {
-    feedbackBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = fbListRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [feedbackEntries]);
 
   const submitFeedback = useCallback(() => {
@@ -179,7 +187,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
     const isUrgent = fbText.trimStart().startsWith('!!!')
     const cleanText = isUrgent ? fbText.trimStart().slice(3).trim() : fbText.trim()
     if (!cleanText) return;
-    const selected = allNodes.find(n => n.selected);
+    const selected = selectedNode;
     const entry: FeedbackEntry = {
       id: `fb_${Date.now()}`,
       text: cleanText,
@@ -217,7 +225,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
         body: JSON.stringify(entry),
       }).catch(() => { /* backend may be down */ })
     }
-  }, [fbText, fbCategory, allNodes, feedbackEntries]);
+  }, [fbText, fbCategory, selectedNode, feedbackEntries]);
 
   const [reportStatus, setReportStatus] = useState<string>('');
 
@@ -352,7 +360,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
         <>
 
           <div className={styles.splitBody}>
-          <div className={styles.consoleBody}>
+          <div className={styles.consoleBody} ref={consoleBodyRef}>
             {/* Server tab */}
             {activeTab === 'server' && (
               <>
@@ -368,7 +376,6 @@ export function ConsolePanel({ open, onToggle }: Props) {
                     >{copiedLine === `s-${i}` ? '✓ copied' : line}</p>
                   );
                 })}
-                <div ref={serverBottomRef} />
               </>
             )}
 
@@ -398,7 +405,6 @@ export function ConsolePanel({ open, onToggle }: Props) {
                     </div>
                   );
                 })}
-                <div ref={networkBottomRef} />
               </>
             )}
 
@@ -460,7 +466,6 @@ export function ConsolePanel({ open, onToggle }: Props) {
                     </div>
                   );
                 })}
-                <div ref={errorsBottomRef} />
               </>
             )}
 
@@ -500,7 +505,6 @@ export function ConsolePanel({ open, onToggle }: Props) {
                     </span>
                   </div>
                 )}
-                <div ref={costsBottomRef} />
               </>
             )}
 
@@ -550,7 +554,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
 
             {fbTab === 'feedback' && (
               <>
-                <div className={styles.fbList}>
+                <div className={styles.fbList} ref={fbListRef}>
                   {feedbackEntries.length === 0 && <p className={styles.consoleEmpty}>No feedback yet...</p>}
                   {fixedOpen && resolvedEntries.map((entry) => (
                     <div key={entry.id} className={`${styles.fbRow} ${styles.fbResolved}`}>
@@ -576,7 +580,6 @@ export function ConsolePanel({ open, onToggle }: Props) {
                       <button className={styles.fbCheckBtn} onClick={() => markFixed(entry.id)} title="Mark fixed">{'\u2713'}</button>
                     </div>
                   ))}
-                  <div ref={feedbackBottomRef} />
                 </div>
                 <div className={styles.fbForm} onClick={e => e.stopPropagation()}>
                   <div className={styles.fbCategories}>
@@ -594,7 +597,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                       value={fbText}
                       onChange={e => setFbText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitFeedback() } }}
-                      placeholder={allNodes.some(n => n.selected) ? `Feedback on selected node...` : 'Write feedback...'}
+                      placeholder={selectedNode ? 'Feedback on selected node...' : 'Write feedback...'}
                     />
                     <button className={styles.fbSendBtn} onClick={submitFeedback} disabled={!fbText.trim()}>Send</button>
                   </div>

@@ -117,8 +117,8 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                 onClick={e => {
                   e.stopPropagation()
                   const currentSrc = `data:image/png;base64,${h.imageB64}`
-                  const urls = h.historyThumbs.filter(Boolean) as string[]
-                  if (urls.length > 1) {
+                  if (h.historyIds.length > 1) {
+                    const urls = h.historyThumbs.filter(Boolean) as string[]
                     openPreview(currentSrc, 'image', { mediaId: h.currentMediaId ?? undefined, gallery: { urls, mediaIds: h.historyIds, index: h.historyIndex } })
                   } else {
                     openPreview(currentSrc, 'image', { mediaId: h.currentMediaId ?? undefined })
@@ -129,8 +129,8 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             ? <img src={h.historyPreview} alt="history" className={styles.previewImg}
                 onClick={e => {
                   e.stopPropagation()
-                  const urls = h.historyThumbs.filter(Boolean) as string[]
-                  if (urls.length > 1) {
+                  if (h.historyIds.length > 1) {
+                    const urls = h.historyThumbs.filter(Boolean) as string[]
                     openPreview(h.historyPreview!, 'image', { mediaId: h.currentMediaId ?? undefined, gallery: { urls, mediaIds: h.historyIds, index: h.historyIndex } })
                   } else {
                     openPreview(h.historyPreview!, 'image', { mediaId: h.currentMediaId ?? undefined })

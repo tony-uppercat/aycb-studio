@@ -12,13 +12,35 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
   const { updateNodeData, addNodes, addEdges, getNode, getNodes, getEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
 
-  // Subscribe to upstream changes
+  // Subscribe to upstream changes (text-in)
   useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'text-in')
     if (!edge) return ''
     const src = state.nodes.find(n => n.id === edge.source)
     return String((src?.data as Record<string, unknown>)?.outputText ?? '')
   })
+
+  // Real-time subscription to all bracket-{key}-in input pins
+  const bracketPinValuesJson = useStore(state => {
+    const result: Record<string, string> = {}
+    for (const edge of state.edges) {
+      if (edge.target !== id) continue
+      if (!edge.targetHandle?.startsWith('text-bk-') || !edge.targetHandle.endsWith('-in')) continue
+      const key = edge.targetHandle.slice(8, -3) // strip 'text-bk-' (8) and '-in' (3)
+      const src = state.nodes.find(n => n.id === edge.source)
+      if (!src) continue
+      const d = src.data as Record<string, unknown>
+      const outputPins = d.outputPins as Record<string, string> | undefined
+      if (outputPins && edge.sourceHandle && edge.sourceHandle in outputPins) {
+        result[key] = outputPins[edge.sourceHandle]
+      } else {
+        result[key] = (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
+      }
+    }
+    return JSON.stringify(result)
+  })
+  const bracketPinValues = useMemo(() => JSON.parse(bracketPinValuesJson) as Record<string, string>, [bracketPinValuesJson])
+  const connectedBrackets = useMemo(() => new Set(Object.keys(bracketPinValues)), [bracketPinValues])
 
   function handleRun() {
     const upstream = pullText(id, 'text-in', getNodes, getEdges)
@@ -75,8 +97,9 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     [uniqueNames, jsonDefs]
   )
 
-  // Resolve value: override > JSON definition > original name
+  // Resolve value: pin > override > JSON definition > original name
   function resolveVal(entry: { key: string; val: unknown }): string {
+    if (entry.key in bracketPinValues) return bracketPinValues[entry.key]
     if (entry.key in overrides) return overrides[entry.key]
     return typeof entry.val === 'string' ? entry.val : String(entry.val)
   }
@@ -100,14 +123,14 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     }
     return vals
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, overrides, excludedKeys, jsonDefs])
+  }, [entries, overrides, excludedKeys, jsonDefs, bracketPinValuesJson])
 
   // Items output: resolved values list
   const itemsOutput = useMemo(() => {
     if (includedEntries.length === 0) return ''
     return includedEntries.map(e => resolveVal(e)).join('\n')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includedEntries, overrides])
+  }, [includedEntries, overrides, bracketPinValuesJson])
 
   // Template output: rebuilt text with name-based substitution (strips brackets)
   const templateOutput = useMemo(() => {
@@ -131,6 +154,15 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includedEntries, overrides])
 
+  // Dynamic input slots: text-in + one per bracket entry
+  const bracketInputSlots: SlotDef[] = useMemo(() => {
+    const slots: SlotDef[] = [{ id: 'text-in', label: 'Text Input', type: 'text' as const }]
+    entries.forEach(entry => {
+      slots.push({ id: `text-bk-${entry.key}-in`, label: entry.key, type: 'text' as const })
+    })
+    return slots
+  }, [entries])
+
   // Dynamic output slots
   const outputSlots: SlotDef[] = useMemo(() => {
     const slots: SlotDef[] = [{ id: 'text-out', label: 'Output', type: 'text' as const }]
@@ -146,12 +178,12 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     })
     return slots
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includedEntries, pinsCollapsed, overrides])
+  }, [includedEntries, pinsCollapsed, overrides, bracketPinValuesJson])
 
   // Notify React Flow when pin count changes
   useEffect(() => {
     updateNodeInternals(id)
-  }, [outputSlots.length, pinsCollapsed, id, updateNodeInternals])
+  }, [outputSlots.length, bracketInputSlots.length, pinsCollapsed, id, updateNodeInternals])
 
   // Sync output to node data (skip if unchanged)
   const prevOutputRef = useRef('')
@@ -251,7 +283,9 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     brackets,
     entries,
     includedEntries,
+    bracketInputSlots,
     outputSlots,
+    connectedBrackets,
     effectiveOutput,
     computedOutput,
     allIncluded,

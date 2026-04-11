@@ -22,7 +22,7 @@ import { migrateStorageKeys } from '../../presets'
 migrateStorageKeys()
 import { useCanvasDragDrop } from '../../hooks/useCanvasDragDrop'
 import { useCanvasHistory } from '../../hooks/useCanvasHistory'
-import { useCanvasPersistence } from '../../hooks/useCanvasPersistence'
+import { useCanvasPersistence, serializeNodes } from '../../hooks/useCanvasPersistence'
 import { useAutosave } from '../../hooks/useAutosave'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useConnectionHandlers } from '../../hooks/useConnectionHandlers'
@@ -37,6 +37,8 @@ import { BackendBanner } from '../BackendBanner'
 import { SaveIndicator } from '../SaveIndicator'
 import { ProjectSwitcher } from '../project/ProjectSwitcher'
 import { CanvasContextMenu, type ContextMenuTarget } from './CanvasContextMenu'
+import { SubnetEditor } from './SubnetEditor'
+import { setRootTree, resetRootTree } from '../../hooks/rootTreeGetter'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { CollageEditor } from '../CollageEditor'
 import type { CollageImage } from '../CollageEditor'
@@ -72,6 +74,17 @@ function FlowCanvasInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const { screenToFlowPosition, getNodes, getEdges, setViewport, getViewport, fitView } = useReactFlow()
+
+  // Mirror the root canvas tree into a module-level snapshot so subnet-input
+  // proxy onRun callbacks can walk the full tree synchronously via getRootTree.
+  useEffect(() => {
+    setRootTree({ root_nodes: nodes, root_edges: edges })
+  }, [nodes, edges])
+
+  // Clear the mirror when switching projects so a stale tree can't leak.
+  useEffect(() => {
+    resetRootTree()
+  }, [activeProject.projectId])
 
   // ── Shift+Rect additive selection ────────────────────────────────────────
   const shiftKeyRef = useRef(false)
@@ -127,6 +140,8 @@ function FlowCanvasInner() {
 
   const onDragStop = useCallback(
     (event: React.MouseEvent, node: Node) => {
+      // Ctrl+drag copy: create clones at destination, snap originals back to source
+      if (onNodeDragStop()) return
       // Try to insert the node into a nearby edge first
       const inserted = tryInsertOnEdge(event, node)
       if (!inserted) {
@@ -183,7 +198,7 @@ function FlowCanvasInner() {
   useCanvasCustomEvents({ getNodes, setNodes, setEdges, setExportStatus, screenToFlowPosition, canvasRef })
 
   // ── Keyboard shortcuts (group/ungroup, copy/paste, bypass, delete, etc.) ──
-  const { onNodeDragStart, handleStopAll } = useKeyboardShortcuts({
+  const { onNodeDragStart, onNodeDragStop, handleStopAll } = useKeyboardShortcuts({
     getNodes,
     getEdges,
     setNodes,
@@ -194,7 +209,6 @@ function FlowCanvasInner() {
     toggleFullscreenBrowser,
     fitView,
     screenToFlowPosition,
-    nodes,
   })
 
   // ── Connection handling (connect start/end, add-node-from-drag, validate) ──
@@ -214,6 +228,30 @@ function FlowCanvasInner() {
   const { handleProjectExport, handleProjectImport, handleExportToFolder } = useProjectIO({
     getNodes, getEdges, getViewport, setNodes, setEdges, setViewport, model, doEmbed,
   })
+
+  // ── Canvas backup to disk ────────────────────────────────────────────────
+  const handleProjectBackup = useCallback(() => {
+    const pid = activeProject.projectId
+    if (!pid) return
+    const payload = {
+      project_id: pid,
+      nodes: serializeNodes(getNodes()),
+      edges: getEdges(),
+      viewport: getViewport(),
+    }
+    fetch('/api/canvas/backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(err => console.warn('[AYCB] Manual canvas backup failed:', err))
+  }, [activeProject.projectId, getNodes, getEdges, getViewport])
+
+  const handleOpenBackupFolder = useCallback(() => {
+    const pid = activeProject.projectId
+    if (!pid) return
+    fetch(`/api/canvas/backup/open?project_id=${encodeURIComponent(pid)}`)
+      .catch(err => console.warn('[AYCB] Open backup folder failed:', err))
+  }, [activeProject.projectId])
 
   // ── Canvas right-click context menu ──────────────────────────────────────
 
@@ -409,6 +447,8 @@ function FlowCanvasInner() {
             project={activeProject}
             onExport={handleProjectExport}
             onImport={handleProjectImport}
+            onBackup={handleProjectBackup}
+            onOpenFolder={handleOpenBackupFolder}
           />
           <button
             className={styles.addBtn}
@@ -635,6 +675,7 @@ function FlowCanvasInner() {
           onExport={handleCollageExport}
         />
       )}
+      <SubnetEditor />
       <ConsolePanel open={consoleOpen} onToggle={toggleConsole} />
     </div>
   )

@@ -23,6 +23,28 @@ function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[
   const node = getNodes().find(n => n.id === sourceId)
   if (!node) return null
   const d = node.data as Record<string, unknown>
+
+  // Subnet source: caller is pulling from an external output handle on a subnet
+  // container. Walk into sub_graph and find the subnet-output proxy whose
+  // handle_id matches. Caller then reads proxy.data.result via the fallback chain.
+  if (node.type === 'subnet') {
+    const sub_graph = d.sub_graph as { nodes: Node[] } | undefined
+    if (!sub_graph) return null
+    const proxy = sub_graph.nodes.find(
+      (n) =>
+        n.type === 'subnet-output' &&
+        (n.data as Record<string, unknown>).handle_id === handleId,
+    )
+    return proxy ?? null
+  }
+
+  // Subnet-input source: caller is pulling from a subnet-input proxy INSIDE a
+  // subnet. The proxy's onRun has already cached the external value in
+  // data.result, so just return the proxy node itself.
+  if (node.type === 'subnet-input') {
+    return node
+  }
+
   if (!d._bypassed) return node
   // Node is bypassed — follow its incoming edges to find the real upstream
   const incoming = getEdges().find(e => e.target === sourceId)
@@ -43,7 +65,7 @@ export function pullText(
 ): string {
   const edge = getEdges().find(e => e.target === nodeId && e.targetHandle === handleId)
   if (!edge) return ''
-  const src = resolveSource(edge.source, handleId, getNodes, getEdges)
+  const src = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
   if (!src) return ''
   const d = src.data as Record<string, unknown>
 
@@ -53,7 +75,7 @@ export function pullText(
     return outputPins[edge.sourceHandle]
   }
 
-  return (d.outputText as string) || (d.text as string) || (d.prompt as string) || ''
+  return (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
 }
 
 /**
@@ -68,7 +90,7 @@ export async function pullMedia(
 ): Promise<{ file: File | null; mediaId: string | null }> {
   const edge = getEdges().find(e => e.target === nodeId && e.targetHandle === handleId)
   if (!edge) return { file: null, mediaId: null }
-  const src = resolveSource(edge.source, handleId, getNodes, getEdges)
+  const src = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
   if (!src) return { file: null, mediaId: null }
   const d = src.data as Record<string, unknown>
 
@@ -83,6 +105,10 @@ export async function pullMedia(
     file = d.videoFile
   } else if (mediaId) {
     file = await loadMedia(mediaId)
+  }
+
+  if (!file && d.result instanceof File) {
+    file = d.result
   }
 
   return { file, mediaId }

@@ -9,6 +9,34 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UseActiveProject } from '../../hooks/useActiveProject'
 import styles from './ProjectSwitcher.module.css'
 
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function IconSave() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+      <polyline points="17,21 17,13 7,13 7,21" />
+      <polyline points="7,3 7,8 15,8" />
+    </svg>
+  )
+}
+
+function IconCheck() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+function IconFolder() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+    </svg>
+  )
+}
+
 // ── Relative time helper ─────────────────────────────────────────────────────
 
 function relativeTime(iso: string): string {
@@ -42,9 +70,11 @@ interface ProjectSwitcherProps {
   project: UseActiveProject
   onExport: () => void
   onImport: () => void
+  onBackup: () => void
+  onOpenFolder: () => void
 }
 
-export function ProjectSwitcher({ project, onExport, onImport }: ProjectSwitcherProps) {
+export function ProjectSwitcher({ project, onExport, onImport, onBackup, onOpenFolder }: ProjectSwitcherProps) {
   const {
     projectId,
     projectName,
@@ -59,6 +89,9 @@ export function ProjectSwitcher({ project, onExport, onImport }: ProjectSwitcher
   } = project
 
   const [open, setOpen] = useState(false)
+  const [backed, setBacked] = useState(false)
+  const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -78,6 +111,13 @@ export function ProjectSwitcher({ project, onExport, onImport }: ProjectSwitcher
   useEffect(() => {
     if (open) void refreshProjects()
   }, [open, refreshProjects])
+
+  const handleBackup = useCallback(() => {
+    onBackup()
+    setBacked(true)
+    if (backupTimerRef.current) clearTimeout(backupTimerRef.current)
+    backupTimerRef.current = setTimeout(() => setBacked(false), 2000)
+  }, [onBackup])
 
   const handleToggle = useCallback(() => {
     setOpen(prev => !prev)
@@ -158,6 +198,27 @@ export function ProjectSwitcher({ project, onExport, onImport }: ProjectSwitcher
 
   return (
     <div className={styles.wrapper}>
+      <button
+        className={`${styles.backupBtn} ${backed ? styles.backupBtnOk : ''}`}
+        onClick={handleBackup}
+        onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
+        title="Backup to disk"
+        aria-label="Backup canvas to disk"
+      >
+        {backed ? <IconCheck /> : <IconSave />}
+      </button>
+
+      {ctxMenu && (
+        <>
+          <div className={styles.ctxBackdrop} onClick={() => setCtxMenu(null)} />
+          <div className={styles.ctxMenu} style={{ left: ctxMenu.x, top: ctxMenu.y }}>
+            <button className={styles.ctxItem} onClick={() => { onOpenFolder(); setCtxMenu(null) }}>
+              <IconFolder />
+              Open Folder in Explorer
+            </button>
+          </div>
+        </>
+      )}
       <button className={styles.trigger} onClick={handleToggle} title="Switch project">
         <span className={styles.triggerName}>{projectName}</span>
         <svg

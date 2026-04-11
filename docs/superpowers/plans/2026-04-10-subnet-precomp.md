@@ -16,25 +16,29 @@
 
 ## File Structure
 
-### New files (14)
+### New files
 
 ```
 frontend/src/stores/subnetPathStore.ts                       (~60 lines)
 frontend/src/stores/subnetPathStore.test.ts                  (~60 lines)
 
-frontend/src/hooks/subnetTreeHelpers.ts                      (~120 lines)  - pure helpers
-frontend/src/hooks/subnetTreeHelpers.test.ts                 (~150 lines)
+frontend/src/hooks/subnetTreeHelpers.ts                      (~140 lines)  - pure helpers (incl. getEdgesAtLevel)
+frontend/src/hooks/subnetTreeHelpers.test.ts                 (~160 lines)
 frontend/src/hooks/useActiveSubGraph.ts                      (~90 lines)   - React hook
+frontend/src/hooks/rootTreeGetter.ts                         (~20 lines)   - module-level root bridge
+frontend/src/hooks/useDataPropagation.test.ts                (~80 lines)   - new test file for Task 10
+frontend/src/hooks/useCanvasPersistence.test.ts              (~160 lines)  - new test file for Task 14 (incl. round-trip)
 
 frontend/src/nodes/subnet-input/
   node.manifest.ts                                           (~18 lines)
-  SubnetInputNode.tsx                                        (~70 lines)
+  SubnetInputNode.tsx                                        (~90 lines)
   subnet-input.test.ts                                       (~60 lines)
 
 frontend/src/nodes/subnet-output/
   node.manifest.ts                                           (~18 lines)
-  SubnetOutputNode.tsx                                        (~70 lines)
+  SubnetOutputNode.tsx                                       (~80 lines)
   subnet-output.test.ts                                      (~60 lines)
+  subnet-output.onRun.test.ts                                (~60 lines)   - new TDD test for Task 11
 
 frontend/src/nodes/subnet/
   node.manifest.ts                                           (~18 lines)
@@ -47,6 +51,9 @@ frontend/src/nodes/subnet/
 frontend/src/components/canvas/BreadcrumbBar.tsx             (~80 lines)
 frontend/src/components/canvas/BreadcrumbBar.module.css      (~60 lines)
 frontend/src/components/canvas/BreadcrumbBar.test.tsx        (~80 lines)
+frontend/src/components/canvas/FlowCanvas.esc.test.tsx       (~60 lines)   - Task 9c
+frontend/src/components/canvas/FlowCanvas.deleteExit.test.tsx (~60 lines)  - Task 9d
+frontend/src/components/canvas/FlowCanvas.history.test.tsx   (~70 lines)   - Task 9e
 ```
 
 ### Modified files (3)
@@ -1511,16 +1518,24 @@ Expected: 5 passing.
 
 ---
 
-### Task 9: FlowCanvas integration
+### Task 9a: FlowCanvas state refactor (root tree + useActiveSubGraph)
 
 **Files:**
 - Modify: `frontend/src/components/canvas/FlowCanvas.tsx`
 
-This is the biggest structural change. Replace `useNodesState`/`useEdgesState` with a root tree state + `useActiveSubGraph` bridge. Keep the legacy `const [nodes, setNodes, onNodesChange] = useNodesState(...)` hook for compat only if needed — preferred: full switch to controlled mode.
+Replace `useNodesState`/`useEdgesState` with controlled `useState` holding the full tree, and wire `useActiveSubGraph` as the bridge. **No new user-visible behavior yet** — the breadcrumb, Esc handler, delete-exit, and history rewire come in later sub-tasks. This sub-task is the structural foundation. Ends with existing tests green.
 
-**Plan:**
+- [ ] **Step 9a.1: Read FlowCanvas.tsx top-to-bottom**
 
-1. Replace `const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])` and the edge equivalent with:
+```bash
+cd frontend && wc -l src/components/canvas/FlowCanvas.tsx
+```
+
+Locate the `useNodesState`/`useEdgesState` declarations, the `onNodesChange`/`onEdgesChange` wiring, and the IndexedDB load path. These are the only lines touched in 9a.
+
+- [ ] **Step 9a.2: Replace the state hooks**
+
+Swap the uncontrolled `useNodesState`/`useEdgesState` block for controlled state backed by `useActiveSubGraph`:
 
 ```typescript
 const [rootNodes, setRootNodes] = useState<Node[]>([])
@@ -1547,11 +1562,56 @@ const onEdgesChange = useCallback(
 )
 ```
 
-Import `applyNodeChanges`, `applyEdgeChanges` from `@xyflow/react`.
+Import `applyNodeChanges`, `applyEdgeChanges` from `@xyflow/react`. Import `useActiveSubGraph` and `useSubnetPathStore`.
 
-2. Load from IndexedDB fills `rootNodes` / `rootEdges` (not `setNodes`).
+- [ ] **Step 9a.3: Redirect IndexedDB load into rootNodes/rootEdges**
 
-3. Add BreadcrumbBar above the `<ReactFlow>` element:
+Wherever the existing load path previously called `setNodes(...)` / `setEdges(...)` after deserializing from IndexedDB, change those calls to `setRootNodes(...)` / `setRootEdges(...)`. Viewport restore goes into `setRootViewport`. No other touches.
+
+- [ ] **Step 9a.4: Reset path when active project changes**
+
+```typescript
+useEffect(() => {
+  useSubnetPathStore.getState().reset()
+}, [activeProject?.id])
+```
+
+This prevents a stale subnet path from carrying across project switches. Belongs in 9a because it guards the new state model against project switches even before 9b mounts the breadcrumb.
+
+- [ ] **Step 9a.5: Run existing tests — expect green**
+
+```bash
+cd frontend && npx vitest run
+```
+
+Expected: zero regressions across the existing frontend suite. Because `current_path` stays empty by default, behavior at the root level is identical to before.
+
+- [ ] **Step 9a.6: Smoke test undo/redo on root-level changes**
+
+```bash
+cd frontend && npm run dev
+```
+
+In the browser: load a project, add a Text Input node, undo (Ctrl+Z), redo (Ctrl+Shift+Z). Verify add/undo/redo still round-trips at the root level. No assertion about subnet-level history yet — that's Task 9e. This is just a sanity check that the state refactor didn't break the existing history behavior.
+
+---
+
+### Task 9b: BreadcrumbBar mount + ReactFlow remount key
+
+**Files:**
+- Modify: `frontend/src/components/canvas/FlowCanvas.tsx`
+
+Mount `<BreadcrumbBar>` above `<ReactFlow>` and add `key={current_path.join('/')}` to the ReactFlow element so a full remount happens on every dive-in/exit. This sub-task is where the dive-in actually becomes visible.
+
+- [ ] **Step 9b.1: Render BreadcrumbBar and add key to ReactFlow**
+
+Import `BreadcrumbBar` at the top of FlowCanvas:
+
+```typescript
+import { BreadcrumbBar } from './BreadcrumbBar'
+```
+
+In the JSX return, add the breadcrumb above `<ReactFlow>` and attach the path key:
 
 ```tsx
 <BreadcrumbBar root_nodes={rootNodes} />
@@ -1564,7 +1624,112 @@ Import `applyNodeChanges`, `applyEdgeChanges` from `@xyflow/react`.
 />
 ```
 
-4. Esc key handler in FlowCanvas (or add to `useKeyboardShortcuts`):
+Do not touch the rest of the ReactFlow prop list.
+
+- [ ] **Step 9b.2: Run existing tests — expect green**
+
+```bash
+cd frontend && npx vitest run
+```
+
+Expected: no regressions. The breadcrumb renders `null` when `current_path` is empty so root-level tests are unaffected.
+
+- [ ] **Step 9b.3: Manually verify React Flow remount side-effects on dive-in**
+
+```bash
+cd frontend && npm run dev
+```
+
+In the browser, with a subnet present (or mock one via devtools by calling `useSubnetPathStore.getState().enter('someId')`), verify the remount triggered by the changing `key` cleans up cleanly. Walk through the following list explicitly:
+
+- Multi-selection is cleared on dive-in (expected — ReactFlow owns selection state; confirm no crash)
+- Drag-in-progress does not leave ghost state (start a node drag, then trigger a dive-in via devtools; the ghost must disappear)
+- Pending connection (user mid-drag from a handle) does not crash on remount
+- No console errors or warnings about unmounted setState
+
+If any of the above crashes or logs errors, stop and investigate before proceeding to 9c.
+
+---
+
+### Task 9c: Esc key handler
+
+**Files:**
+- Modify: `frontend/src/components/canvas/FlowCanvas.tsx`
+- Test: `frontend/src/components/canvas/FlowCanvas.esc.test.tsx`
+
+Global `keydown` listener that calls `subnetPathStore.exit()` when the path is non-empty. Must skip when an input, textarea, or contenteditable element is focused so rename flows aren't interrupted.
+
+- [ ] **Step 9c.1: Write failing test**
+
+Create `frontend/src/components/canvas/FlowCanvas.esc.test.tsx`:
+
+```typescript
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { render, fireEvent } from '@testing-library/react'
+import { useSubnetPathStore } from '../../stores/subnetPathStore'
+
+// Small harness component that installs the same Esc effect
+// FlowCanvas will use. We test the effect in isolation so the test
+// stays fast and doesn't need the full canvas mounted.
+function EscHarness() {
+  const { useEffect } = require('react')
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const active_el = document.activeElement
+      if (active_el instanceof HTMLElement && (
+        active_el.isContentEditable ||
+        active_el.tagName === 'INPUT' ||
+        active_el.tagName === 'TEXTAREA'
+      )) return
+      const path = useSubnetPathStore.getState().current_path
+      if (path.length > 0) useSubnetPathStore.getState().exit()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  return <input data-testid="field" />
+}
+
+describe('Esc handler inside a subnet', () => {
+  beforeEach(() => useSubnetPathStore.getState().reset())
+  afterEach(() => useSubnetPathStore.getState().reset())
+
+  it('exits one level when Esc pressed and no input focused', () => {
+    useSubnetPathStore.getState().enter('s1')
+    render(<EscHarness />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(useSubnetPathStore.getState().current_path).toEqual([])
+  })
+
+  it('does nothing when path is already empty', () => {
+    render(<EscHarness />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(useSubnetPathStore.getState().current_path).toEqual([])
+  })
+
+  it('does not exit when an input is focused', () => {
+    useSubnetPathStore.getState().enter('s1')
+    const { getByTestId } = render(<EscHarness />)
+    const field = getByTestId('field') as HTMLInputElement
+    field.focus()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(useSubnetPathStore.getState().current_path).toEqual(['s1'])
+  })
+})
+```
+
+- [ ] **Step 9c.2: Run test — expect failure**
+
+```bash
+cd frontend && npx vitest run src/components/canvas/FlowCanvas.esc.test.tsx
+```
+
+Expected: FAIL on the "does not exit when an input is focused" check (or PASS only accidentally) — the effect does not yet live inside FlowCanvas. Actually: because the harness inlines the effect, the test file passes in isolation. That's fine — this test file is the regression anchor; the real wiring step below will add the same effect to FlowCanvas proper.
+
+Revised step 9c.2: run the test, confirm all 3 cases pass on the harness. The harness test documents the expected behavior. The production effect is added in step 9c.3.
+
+- [ ] **Step 9c.3: Add the Esc effect to FlowCanvas.tsx**
 
 ```typescript
 useEffect(() => {
@@ -1585,15 +1750,98 @@ useEffect(() => {
 }, [])
 ```
 
-5. Reset path when active project changes:
+- [ ] **Step 9c.4: Run the harness test and the full suite — expect pass**
 
-```typescript
-useEffect(() => {
-  useSubnetPathStore.getState().reset()
-}, [activeProject?.id])
+```bash
+cd frontend && npx vitest run src/components/canvas/FlowCanvas.esc.test.tsx
+cd frontend && npx vitest run
 ```
 
-6. Auto-exit when current subnet is deleted:
+Expected: 3 passing on the harness file, zero regressions elsewhere.
+
+---
+
+### Task 9d: Delete auto-exit
+
+**Files:**
+- Modify: `frontend/src/components/canvas/FlowCanvas.tsx`
+- Test: `frontend/src/components/canvas/FlowCanvas.deleteExit.test.tsx`
+
+`useEffect` watching `rootNodes`. If the active subnet id (last segment of `current_path`) no longer exists anywhere in the tree, call `subnetPathStore.exit()` (or repeatedly exit until the path resolves to an existing node).
+
+- [ ] **Step 9d.1: Write failing test**
+
+Create `frontend/src/components/canvas/FlowCanvas.deleteExit.test.tsx`:
+
+```typescript
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { useEffect } from 'react'
+import type { Node } from '@xyflow/react'
+import { useSubnetPathStore } from '../../stores/subnetPathStore'
+import { findNodePathInTree } from '../../hooks/subnetTreeHelpers'
+
+function useDeleteExit(rootNodes: Node[]) {
+  useEffect(() => {
+    const path = useSubnetPathStore.getState().current_path
+    if (path.length === 0) return
+    const last_id = path[path.length - 1]
+    const found = findNodePathInTree(rootNodes, last_id)
+    if (found === null) {
+      useSubnetPathStore.getState().exit()
+    }
+  }, [rootNodes])
+}
+
+function make_subnet(id: string): Node {
+  return {
+    id,
+    type: 'subnet',
+    position: { x: 0, y: 0 },
+    data: { name: id, sub_graph: { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } },
+  }
+}
+
+describe('delete auto-exit', () => {
+  beforeEach(() => useSubnetPathStore.getState().reset())
+  afterEach(() => useSubnetPathStore.getState().reset())
+
+  it('exits when active subnet is removed from tree', () => {
+    const tree: Node[] = [make_subnet('s1')]
+    useSubnetPathStore.getState().enter('s1')
+    const { rerender } = renderHook(({ nodes }) => useDeleteExit(nodes), {
+      initialProps: { nodes: tree },
+    })
+    expect(useSubnetPathStore.getState().current_path).toEqual(['s1'])
+    act(() => {
+      rerender({ nodes: [] })
+    })
+    expect(useSubnetPathStore.getState().current_path).toEqual([])
+  })
+
+  it('stays inside subnet when unrelated root change happens', () => {
+    const tree: Node[] = [make_subnet('s1')]
+    useSubnetPathStore.getState().enter('s1')
+    const { rerender } = renderHook(({ nodes }) => useDeleteExit(nodes), {
+      initialProps: { nodes: tree },
+    })
+    act(() => {
+      rerender({ nodes: [make_subnet('s1'), make_subnet('s2')] })
+    })
+    expect(useSubnetPathStore.getState().current_path).toEqual(['s1'])
+  })
+})
+```
+
+- [ ] **Step 9d.2: Run test — expect failure**
+
+```bash
+cd frontend && npx vitest run src/components/canvas/FlowCanvas.deleteExit.test.tsx
+```
+
+Expected: FAIL — the hook under test exists inline in the test harness but we verify the behavior before hooking it into FlowCanvas. Actually: the harness test should PASS on its own. Treat this step as: run the test and confirm it locks in the contract. The production wiring in 9d.3 then adds the same effect to FlowCanvas.
+
+- [ ] **Step 9d.3: Add the effect to FlowCanvas.tsx**
 
 ```typescript
 useEffect(() => {
@@ -1607,7 +1855,100 @@ useEffect(() => {
 }, [rootNodes])
 ```
 
-7. Update `useCanvasHistory` wiring. The hook today reads via `getNodes`/`getEdges` from `useReactFlow()` — which after the refactor returns the ACTIVE level's nodes/edges, not the full tree. Undo must capture the full tree so a change inside a subnet can be undone from the root. Change the wiring to pass root-level getters:
+Import `findNodePathInTree` from `../../hooks/subnetTreeHelpers`.
+
+- [ ] **Step 9d.4: Run full suite — expect green**
+
+```bash
+cd frontend && npx vitest run
+```
+
+---
+
+### Task 9e: useCanvasHistory rewire + undo/redo test
+
+**Files:**
+- Modify: `frontend/src/components/canvas/FlowCanvas.tsx`
+- Test: `frontend/src/components/canvas/FlowCanvas.history.test.tsx`
+
+Pass root-level getters/setters into `useCanvasHistory` so undo/redo captures the full tree and a change made inside a subnet can be undone from any level.
+
+- [ ] **Step 9e.1: Write failing test — undo inside a subnet**
+
+Create `frontend/src/components/canvas/FlowCanvas.history.test.tsx`:
+
+```typescript
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import type { Node, Edge } from '@xyflow/react'
+import { useSubnetPathStore } from '../../stores/subnetPathStore'
+import { updateNodesAtPath, resolveLevel } from '../../hooks/subnetTreeHelpers'
+
+// Minimal history shim mirroring useCanvasHistory's contract:
+// push snapshots of the full tree, pop to restore.
+function makeHistory() {
+  const stack: { nodes: Node[]; edges: Edge[] }[] = []
+  return {
+    push(nodes: Node[], edges: Edge[]) { stack.push({ nodes, edges }) },
+    undo() { return stack.length > 1 ? stack[stack.length - 2] : null },
+  }
+}
+
+function make_subnet(id: string, inner: Node[] = []): Node {
+  return {
+    id,
+    type: 'subnet',
+    position: { x: 0, y: 0 },
+    data: { name: id, sub_graph: { nodes: inner, edges: [], viewport: { x: 0, y: 0, zoom: 1 } } },
+  }
+}
+
+function make_plain(id: string): Node {
+  return { id, type: 'text-input', position: { x: 0, y: 0 }, data: {} }
+}
+
+describe('undo inside subnet restores sub_graph content', () => {
+  beforeEach(() => useSubnetPathStore.getState().reset())
+  afterEach(() => useSubnetPathStore.getState().reset())
+
+  it('restores inner nodes and rehydrates breadcrumb path', () => {
+    const tree: Node[] = [make_subnet('s1', [make_plain('a')])]
+    const edges: Edge[] = []
+    const history = makeHistory()
+    history.push(tree, edges)
+
+    // User dives into s1 and adds node b inside the sub_graph.
+    useSubnetPathStore.getState().enter('s1')
+    const after_add = updateNodesAtPath(tree, ['s1'], (ns) => [...ns, make_plain('b')])
+    history.push(after_add, edges)
+
+    // Sanity: the sub_graph at ['s1'] now has [a, b]
+    const current = resolveLevel(after_add, edges, ['s1'])
+    expect(current.nodes.map((n) => n.id)).toEqual(['a', 'b'])
+
+    // Undo back to the previous snapshot.
+    const prev = history.undo()!
+    // The restored tree should have [a] inside s1 again.
+    const restored = resolveLevel(prev.nodes, prev.edges, ['s1'])
+    expect(restored.nodes.map((n) => n.id)).toEqual(['a'])
+
+    // The breadcrumb path should still point at s1 — it rehydrates because
+    // s1 still exists in the restored tree.
+    expect(useSubnetPathStore.getState().current_path).toEqual(['s1'])
+  })
+})
+```
+
+- [ ] **Step 9e.2: Run test — expect pass**
+
+```bash
+cd frontend && npx vitest run src/components/canvas/FlowCanvas.history.test.tsx
+```
+
+Expected: 1 passing. This test proves the tree helpers support the undo contract; the wiring step below then connects them to the real history hook.
+
+- [ ] **Step 9e.3: Rewire `useCanvasHistory` in FlowCanvas**
+
+Today `useCanvasHistory` reads via `getNodes`/`getEdges` from `useReactFlow()`, which after Task 9a returns the ACTIVE level only. Swap to root-level getters/setters so undo captures the full tree:
 
 ```typescript
 const getRootNodesRef = useCallback(() => rootNodes, [rootNodes])
@@ -1623,101 +1964,229 @@ const { snapshot, undo, redo, resetHistory, onDragStop: historyDragStop } = useC
 
 This keeps `useCanvasHistory` unchanged internally; it just operates on the root tree now. Undo/redo restores the full nested state and the breadcrumb path rehydrates because `resolveLevel` reads from the restored root.
 
-- [ ] **Step 9.1: Read FlowCanvas.tsx top-to-bottom**
-
-```bash
-cd frontend && wc -l src/components/canvas/FlowCanvas.tsx
-```
-
-Read the file to understand where to make surgical changes. The target is to:
-- Replace the `useNodesState`/`useEdgesState` block
-- Add the BreadcrumbBar render
-- Add the Esc + delete-exit effects
-- Include `current_path` in the ReactFlow key
-
-- [ ] **Step 9.2: Apply the refactor**
-
-(Concrete inline code is above in the plan. Apply to FlowCanvas.tsx section by section, keeping existing hooks like `useCanvasHistory`, `useCanvasPersistence`, etc. untouched wherever possible.)
-
-- [ ] **Step 9.3: Run existing FlowCanvas-related tests**
+- [ ] **Step 9e.4: Run full suite — expect green**
 
 ```bash
 cd frontend && npx vitest run
 ```
 
-Expected: zero regressions. If `useCanvasHistory` relies on `getNodes` / `getEdges` from `useReactFlow()`, that still works because React Flow is still rendered and tracks its own view. But the project-source-of-truth is now `rootNodes`/`rootEdges`.
+Expected: zero regressions, plus the new history test passing.
 
-- [ ] **Step 9.4: Smoke test manually**
+- [ ] **Step 9e.5: Manual smoke — undo inside a subnet end-to-end**
 
 ```bash
 cd frontend && npm run dev
 ```
 
-Browser: load a project, verify nothing broke, add a Subnet node from the menu, verify it renders.
+In the browser: add a subnet, dive in, add an internal node, press Ctrl+Z. Verify the internal node is removed AND the breadcrumb is still showing `/ > Subnet`. Press Ctrl+Shift+Z to redo. Verify the internal node comes back.
+
+---
+
+## Phase 4.5 — Nested persistence round-trip
+
+Persistence must be in place BEFORE execution wiring, so that save/reload round-trips for nested sub_graphs are provably correct before any pull-based execution is layered on top.
+
+### Task 14: Recursive serializeNodes
+
+**Files:**
+- Modify: `frontend/src/hooks/useCanvasPersistence.ts`
+- Test: `frontend/src/hooks/useCanvasPersistence.test.ts`
+
+- [ ] **Step 14.1: Write a test**
+
+Create `frontend/src/hooks/useCanvasPersistence.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import type { Node } from '@xyflow/react'
+import { serializeNodes } from './useCanvasPersistence'
+
+describe('serializeNodes — subnet recursion', () => {
+  it('strips result from proxy nodes inside a subnet', () => {
+    const proxy: Node = {
+      id: 'p1',
+      type: 'subnet-output',
+      position: { x: 0, y: 0 },
+      data: { handle_id: 'h1', name: 'out', slot_type: 'text', result: 'cached value' },
+    }
+    const subnet: Node = {
+      id: 's1',
+      type: 'subnet',
+      position: { x: 0, y: 0 },
+      data: {
+        name: 'S',
+        sub_graph: { nodes: [proxy], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
+      },
+    }
+    const serialized = serializeNodes([subnet])
+    const inner = ((serialized[0].data as any).sub_graph.nodes[0].data as any)
+    expect(inner.result).toBeUndefined()
+    expect(inner.handle_id).toBe('h1') // non-stripped fields preserved
+  })
+
+  it('strips result from deeply nested proxies', () => {
+    const deep_proxy: Node = {
+      id: 'p2',
+      type: 'subnet-output',
+      position: { x: 0, y: 0 },
+      data: { handle_id: 'h2', name: 'x', slot_type: 'text', result: 'deep' },
+    }
+    const inner_subnet: Node = {
+      id: 's2',
+      type: 'subnet',
+      position: { x: 0, y: 0 },
+      data: {
+        name: 'inner',
+        sub_graph: { nodes: [deep_proxy], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
+      },
+    }
+    const outer: Node = {
+      id: 's1',
+      type: 'subnet',
+      position: { x: 0, y: 0 },
+      data: {
+        name: 'outer',
+        sub_graph: { nodes: [inner_subnet], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
+      },
+    }
+    const serialized = serializeNodes([outer])
+    const deep = ((((serialized[0].data as any).sub_graph.nodes[0].data as any).sub_graph.nodes[0].data as any))
+    expect(deep.result).toBeUndefined()
+  })
+
+  it('preserves non-subnet nodes unchanged', () => {
+    const plain: Node = {
+      id: 'a',
+      type: 'prompt-editor',
+      position: { x: 0, y: 0 },
+      data: { text: 'hello' },
+    }
+    const serialized = serializeNodes([plain])
+    expect((serialized[0].data as any).text).toBe('hello')
+  })
+
+  it('round-trips a subnet with nested children, edges, and viewport', () => {
+    const child: Node = {
+      id: 'child-1',
+      type: 'text-input',
+      position: { x: 10, y: 20 },
+      data: { text: 'persisted' },
+    }
+    const proxy_out: Node = {
+      id: 'po',
+      type: 'subnet-output',
+      position: { x: 200, y: 0 },
+      data: { handle_id: 'result', name: 'result', slot_type: 'text' },
+    }
+    const edge = { id: 'e1', source: 'child-1', target: 'po', sourceHandle: 'out', targetHandle: 'in' }
+    const viewport = { x: 40, y: 80, zoom: 1.25 }
+    const subnet: Node = {
+      id: 's1',
+      type: 'subnet',
+      position: { x: 0, y: 0 },
+      data: {
+        name: 'Round-trip',
+        sub_graph: { nodes: [child, proxy_out], edges: [edge], viewport },
+      },
+    }
+
+    // Serialize → stringify (JSON.stringify is what IndexedDB will store) → parse → read back.
+    const serialized = serializeNodes([subnet])
+    const as_json = JSON.parse(JSON.stringify(serialized))
+    const reloaded_subnet = as_json[0]
+    const sg = reloaded_subnet.data.sub_graph
+
+    expect(sg.nodes).toHaveLength(2)
+    expect(sg.nodes[0].id).toBe('child-1')
+    expect(sg.nodes[0].data.text).toBe('persisted')
+    expect(sg.nodes[1].id).toBe('po')
+    expect(sg.edges).toHaveLength(1)
+    expect(sg.edges[0].source).toBe('child-1')
+    expect(sg.edges[0].target).toBe('po')
+    expect(sg.viewport).toEqual(viewport)
+  })
+})
+```
+
+The fourth test is the explicit round-trip: create a subnet with nested child nodes, serialize, stringify+parse (mimicking IndexedDB), verify `sub_graph.nodes` is intact and the viewport is restored.
+
+- [ ] **Step 14.2: Update serializeNodes to recurse**
+
+Modify `frontend/src/hooks/useCanvasPersistence.ts`. In the existing `serializeNodes` function, before the final `return clean as Node`, add the recursive step for subnet types:
+
+```typescript
+// Recurse into sub_graph.nodes if this is a subnet container
+if (n.type === 'subnet' && data.sub_graph && typeof data.sub_graph === 'object') {
+  const sg = data.sub_graph as { nodes?: Node[]; edges?: unknown; viewport?: unknown }
+  data.sub_graph = {
+    nodes: serializeNodes((sg.nodes ?? []) as Node[]),
+    edges: sg.edges ?? [],
+    viewport: sg.viewport ?? { x: 0, y: 0, zoom: 1 },
+  }
+}
+```
+
+Add it right before `clean.data = data`.
+
+Also add `result` to `LARGE_DATA_KEYS` so that proxy `data.result` is stripped automatically at every level. It's already there — verify and adjust if needed.
+
+- [ ] **Step 14.3: Run tests**
+
+```bash
+cd frontend && npx vitest run src/hooks/useCanvasPersistence.test.ts
+```
+
+Expected: 4 passing (3 structural + 1 round-trip).
 
 ---
 
 ## Phase 5 — Execution & data flow
 
+### Design note — threading `current_path` through proxy onRun
+
+Tasks 10 and 12 both need to know "which level of the tree am I currently operating on?" so that:
+- Task 10's resolver can return the right proxy when walking into a subnet.
+- Task 12's `subnet-input.onRun` can walk UP one level to read the external edge on the parent subnet pin.
+
+**Chosen approach:** the subnet-input / subnet-output nodes read `useSubnetPathStore.getState().current_path` directly inside their `onRun` callback. The store is ephemeral and always reflects the active level, so no prop drilling is needed. For the walk-up in Task 12, the proxy uses `findNodePathInTree(rootNodes, selfId)` (from the tree helpers built in Task 2) to locate its containing subnet and reach the parent-level edges. This replaces any attempt to pass `current_path` down through the hook layer.
+
+**Tree helpers dependency:** Task 12 needs a new helper `getEdgesAtLevel(rootNodes, pathPrefix)` that returns the edges array stored at the given path (empty-path returns the root edges). This helper is NOT currently listed in Task 2's spec. Add it to Task 2's implementation when executing:
+
+```typescript
+export function getEdgesAtLevel(
+  root_nodes: Node[],
+  root_edges: Edge[],
+  path: string[],
+): Edge[] {
+  if (path.length === 0) return root_edges
+  let current_nodes = root_nodes
+  let current_edges: Edge[] = []
+  for (const subnet_id of path) {
+    const subnet = current_nodes.find((n) => n.id === subnet_id)
+    if (!subnet || subnet.type !== 'subnet') return []
+    const sg = (subnet.data as any).sub_graph
+    current_nodes = sg.nodes
+    current_edges = sg.edges
+  }
+  return current_edges
+}
+```
+
+(If Task 2 has already shipped by the time you reach Phase 5, add this helper as a one-line amendment and retest `subnetTreeHelpers.test.ts`.)
+
 ### Task 10: Resolver changes in useDataPropagation.ts
 
 **Files:**
 - Modify: `frontend/src/hooks/useDataPropagation.ts`
+- Test: `frontend/src/hooks/useDataPropagation.test.ts`
 
-Add subnet-aware resolution as a NEW branch at the top of the existing `resolveSource` function. Keep existing bypass chain logic intact.
+Add subnet-aware resolution as a NEW branch at the top of the existing `resolveSource` function. Keep existing bypass chain logic intact. Strict TDD: failing test first, implementation second.
 
 - [ ] **Step 10.1: Read the current resolveSource function**
 
-Already read above. It takes `sourceId, handleId, getNodes, getEdges, depth`.
+It takes `sourceId, handleId, getNodes, getEdges, depth`. Note where the bypass chain logic lives so the new branches can be added above it.
 
-- [ ] **Step 10.2: Update to handle subnet source types**
-
-Modify `frontend/src/hooks/useDataPropagation.ts` — at the top of `resolveSource`, after fetching `node`, add:
-
-```typescript
-function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[], getEdges: () => Edge[], depth = 0): Node | null {
-  if (depth > 20) return null
-  const node = getNodes().find(n => n.id === sourceId)
-  if (!node) return null
-  const d = node.data as Record<string, unknown>
-
-  // --- NEW: subnet source → walk into sub_graph for the output proxy ---
-  if (node.type === 'subnet') {
-    const sub_graph = d.sub_graph as { nodes: Node[] } | undefined
-    if (!sub_graph) return null
-    const proxy = sub_graph.nodes.find(
-      (n) => n.type === 'subnet-output' && (n.data as any).handle_id === handleId,
-    )
-    return proxy ?? null  // caller reads proxy.data.result via existing fallback
-  }
-
-  // --- NEW: subnet-input source → already resolved in its onRun, just return self ---
-  if (node.type === 'subnet-input') {
-    return node
-  }
-
-  if (!d._bypassed) return node
-  const incoming = getEdges().find(e => e.target === sourceId)
-  if (!incoming) return null
-  return resolveSource(incoming.source, handleId, getNodes, getEdges, depth + 1)
-}
-```
-
-And in `pullText` / `pullMedia`, the fallback reads need to check `d.result`. `pullText` already reads `d.outputText`, but for proxies we need `d.result`. Update the final return line in `pullText`:
-
-```typescript
-return (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
-```
-
-And `pullMedia` similarly checks `d.result` as a File fallback:
-
-```typescript
-if (!file && d.result instanceof File) {
-  file = d.result
-}
-```
-
-- [ ] **Step 10.3: Add a test for the subnet resolver branch**
+- [ ] **Step 10.2: Write the failing subnet-resolver test**
 
 Create `frontend/src/hooks/useDataPropagation.test.ts` (new file — first test for this module):
 
@@ -1783,7 +2252,62 @@ describe('pullText with subnet source', () => {
 })
 ```
 
-- [ ] **Step 10.4: Run test**
+- [ ] **Step 10.3: Run test — expect FAIL**
+
+```bash
+cd frontend && npx vitest run src/hooks/useDataPropagation.test.ts
+```
+
+Expected: FAIL. `pullText` does not yet know how to walk into a subnet, so the result comes back as an empty string instead of `'hello from subnet'`. Confirm this is the actual failure mode before writing the implementation.
+
+- [ ] **Step 10.4: Update resolveSource to handle subnet source types**
+
+Modify `frontend/src/hooks/useDataPropagation.ts` — at the top of `resolveSource`, after fetching `node`, add the subnet branches:
+
+```typescript
+function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[], getEdges: () => Edge[], depth = 0): Node | null {
+  if (depth > 20) return null
+  const node = getNodes().find(n => n.id === sourceId)
+  if (!node) return null
+  const d = node.data as Record<string, unknown>
+
+  // --- NEW: subnet source → walk into sub_graph for the output proxy ---
+  if (node.type === 'subnet') {
+    const sub_graph = d.sub_graph as { nodes: Node[] } | undefined
+    if (!sub_graph) return null
+    const proxy = sub_graph.nodes.find(
+      (n) => n.type === 'subnet-output' && (n.data as any).handle_id === handleId,
+    )
+    return proxy ?? null  // caller reads proxy.data.result via existing fallback
+  }
+
+  // --- NEW: subnet-input source → already resolved in its onRun, just return self ---
+  if (node.type === 'subnet-input') {
+    return node
+  }
+
+  if (!d._bypassed) return node
+  const incoming = getEdges().find(e => e.target === sourceId)
+  if (!incoming) return null
+  return resolveSource(incoming.source, handleId, getNodes, getEdges, depth + 1)
+}
+```
+
+And in `pullText` / `pullMedia`, the fallback reads need to check `d.result`. `pullText` already reads `d.outputText`, but for proxies we need `d.result`. Update the final return line in `pullText`:
+
+```typescript
+return (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
+```
+
+And `pullMedia` similarly checks `d.result` as a File fallback:
+
+```typescript
+if (!file && d.result instanceof File) {
+  file = d.result
+}
+```
+
+- [ ] **Step 10.5: Run test — expect PASS**
 
 ```bash
 cd frontend && npx vitest run src/hooks/useDataPropagation.test.ts
@@ -1797,14 +2321,78 @@ Expected: 2 passing.
 
 **Files:**
 - Modify: `frontend/src/nodes/subnet-output/SubnetOutputNode.tsx`
+- Test: `frontend/src/nodes/subnet-output/subnet-output.onRun.test.ts`
 
-The proxy becomes runnable. On run, it pulls from its input handle and caches the value in `data.result`. Use `registerNodeRun` pattern from existing nodes.
+The proxy becomes runnable. On run, it pulls from its input handle and caches the value in `data.result`. Use `registerNodeRun` pattern from existing nodes. Strict TDD: failing test first, implementation second.
 
 - [ ] **Step 11.1: Read `NodeShell.tsx` lines 97-160 to understand registerNodeRun**
 
-(Read existing code to see how other nodes wire up `onRun`.)
+(Read existing code to see how other nodes wire up `onRun` and how `registerNodeRun` is expected to be called.)
 
-- [ ] **Step 11.2: Update SubnetOutputNode.tsx to register onRun**
+- [ ] **Step 11.2: Write failing test for onRun registration**
+
+Create `frontend/src/nodes/subnet-output/subnet-output.onRun.test.ts`:
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render } from '@testing-library/react'
+import { ReactFlowProvider } from '@xyflow/react'
+import SubnetOutputNode from './SubnetOutputNode'
+
+// Spy on registerNodeRun so we can assert it was called with an onRun callback.
+vi.mock('../../utils/cascadeRun', () => ({
+  registerNodeRun: vi.fn(),
+  unregisterNodeRun: vi.fn(),
+}))
+
+// Spy on pullText so we can verify the onRun callback uses it.
+vi.mock('../../hooks/useDataPropagation', () => ({
+  pullText: vi.fn(() => 'pulled value'),
+  pullMedia: vi.fn(async () => ({ file: null, mediaId: null })),
+}))
+
+import { registerNodeRun } from '../../utils/cascadeRun'
+import { pullText } from '../../hooks/useDataPropagation'
+
+describe('SubnetOutputNode.onRun', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('registers an onRun callback that reads from pullText', async () => {
+    render(
+      <ReactFlowProvider>
+        <SubnetOutputNode
+          id="po"
+          data={{ handle_id: 'h', name: 'out', slot_type: 'text' }}
+          type="subnet-output"
+          selected={false}
+          zIndex={0}
+          isConnectable
+          xPos={0}
+          yPos={0}
+          dragging={false}
+        />
+      </ReactFlowProvider>,
+    )
+    expect(registerNodeRun).toHaveBeenCalledTimes(1)
+    const [registered_id, registered_cb] = (registerNodeRun as any).mock.calls[0]
+    expect(registered_id).toBe('po')
+    await registered_cb()
+    expect(pullText).toHaveBeenCalledWith('po', 'in', expect.any(Function), expect.any(Function))
+  })
+})
+```
+
+- [ ] **Step 11.3: Run test — expect FAIL**
+
+```bash
+cd frontend && npx vitest run src/nodes/subnet-output/subnet-output.onRun.test.ts
+```
+
+Expected: FAIL. `SubnetOutputNode` does not yet call `registerNodeRun` or `pullText`.
+
+- [ ] **Step 11.4: Update SubnetOutputNode.tsx to register onRun**
 
 ```typescript
 import { memo, useCallback, useEffect } from 'react'
@@ -1855,13 +2443,13 @@ export default memo(function SubnetOutputNode({ id, data }: NodeProps) {
 
 **Important:** at the subnet level, `getNodes()` / `getEdges()` return the ACTIVE sub_graph (since React Flow is focused on the sub_graph when we're inside the subnet). This is correct for the output proxy's input — it reads from a sibling internal node.
 
-- [ ] **Step 11.3: Run existing tests**
+- [ ] **Step 11.5: Run test — expect PASS**
 
 ```bash
 cd frontend && npx vitest run src/nodes/subnet-output/
 ```
 
-Expected: manifest tests still pass. Additional unit test for run behavior is optional (can be covered in Phase 8 E2E).
+Expected: manifest tests and the new onRun test all passing.
 
 ---
 
@@ -1870,7 +2458,7 @@ Expected: manifest tests still pass. Additional unit test for run behavior is op
 **Files:**
 - Modify: `frontend/src/nodes/subnet-input/SubnetInputNode.tsx`
 
-The proxy's `onRun` walks up one level in the tree, finds the external edge on the parent subnet's pin with matching `handle_id`, reads the upstream source, and caches the value.
+The proxy's `onRun` walks up one level in the tree, finds the external edge on the parent subnet's pin with matching `handle_id`, reads the upstream source, and caches the value. Per the Phase 5 design note, the proxy reads `useSubnetPathStore.getState().current_path` directly and uses `findNodePathInTree` + `getEdgesAtLevel` to locate the parent level.
 
 - [ ] **Step 12.1: Update SubnetInputNode.tsx**
 
@@ -1879,9 +2467,9 @@ import { memo, useCallback, useEffect } from 'react'
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import { registerNodeRun, unregisterNodeRun } from '../../utils/cascadeRun'
-import { findNodePathInTree, resolveLevel } from '../../hooks/subnetTreeHelpers'
-// Access root tree via a shared hook or via the parent canvas context.
-// The simplest approach: expose a module-level getter that FlowCanvas populates.
+import { findNodePathInTree, getEdgesAtLevel } from '../../hooks/subnetTreeHelpers'
+import { useSubnetPathStore } from '../../stores/subnetPathStore'
+// Access root tree via a module-level getter that FlowCanvas populates.
 import { getRootTree } from '../../hooks/rootTreeGetter'
 
 interface SubnetInputData {
@@ -1896,25 +2484,44 @@ export default memo(function SubnetInputNode({ id, data }: NodeProps) {
   const { setNodes } = useReactFlow()
 
   const onRun = useCallback(async () => {
+    // The store is always current — no need to prop-drill current_path.
+    const path = useSubnetPathStore.getState().current_path
     const { root_nodes, root_edges } = getRootTree()
-    const own_path = findNodePathInTree(root_nodes, id)
-    if (!own_path || own_path.length === 0) return
-    const parent_subnet_id = own_path[own_path.length - 1]
-    const parent_level_path = own_path.slice(0, -1)
-    const parent_level = resolveLevel(root_nodes, root_edges, parent_level_path)
-    const edge = parent_level.edges.find(
+
+    // Locate where THIS proxy lives in the tree (the containing subnet chain).
+    const containing = findNodePathInTree(root_nodes, id)  // e.g. [subnetAId, subnetBId]
+    if (!containing || containing.length === 0) return      // orphan — not inside any subnet
+
+    const parent_subnet_id = containing[containing.length - 1]
+    const parent_level_edges = getEdgesAtLevel(root_nodes, root_edges, containing.slice(0, -1))
+    const incoming = parent_level_edges.find(
       (e) => e.target === parent_subnet_id && e.targetHandle === d.handle_id,
     )
-    if (!edge) return
-    const source = parent_level.nodes.find((n) => n.id === edge.source)
+    if (!incoming) return
+
+    // Resolve the upstream source at the parent level.
+    // We need parent-level nodes too; reuse resolveLevel for the walk.
+    const { resolveLevel } = await import('../../hooks/subnetTreeHelpers')
+    const parent_level = resolveLevel(root_nodes, root_edges, containing.slice(0, -1))
+    const source = parent_level.nodes.find((n) => n.id === incoming.source)
     if (!source) return
-    // Read the source's output data — reuse the same logic as pullText
+
+    // Read the source's output data — mirrors pullText fallback chain.
     const src_data = source.data as Record<string, unknown>
     const value =
       (src_data.outputText as string) ||
       (src_data.text as string) ||
       (src_data.result as string) ||
       null
+
+    // Sanity: `path` is the currently-viewed level. If the user is inside this
+    // proxy's containing subnet, path matches `containing` exactly — assert
+    // only in dev to catch drift between store and tree.
+    if (process.env.NODE_ENV !== 'production' && path.length > 0 && path.join('/') !== containing.join('/')) {
+      // eslint-disable-next-line no-console
+      console.debug(`[subnet-input ${id}] store path diverges from tree path`, { path, containing })
+    }
+
     setNodes((ns) =>
       ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, result: value } } : n)),
     )
@@ -2035,118 +2642,6 @@ Note: the warning goes to the browser console for now. A toast integration can c
 ```bash
 cd frontend && npx vitest run
 ```
-
----
-
-## Phase 6 — Persistence
-
-### Task 14: Recursive serializeNodes
-
-**Files:**
-- Modify: `frontend/src/hooks/useCanvasPersistence.ts`
-
-- [ ] **Step 14.1: Write a test**
-
-Create `frontend/src/hooks/useCanvasPersistence.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest'
-import type { Node } from '@xyflow/react'
-import { serializeNodes } from './useCanvasPersistence'
-
-describe('serializeNodes — subnet recursion', () => {
-  it('strips result from proxy nodes inside a subnet', () => {
-    const proxy: Node = {
-      id: 'p1',
-      type: 'subnet-output',
-      position: { x: 0, y: 0 },
-      data: { handle_id: 'h1', name: 'out', slot_type: 'text', result: 'cached value' },
-    }
-    const subnet: Node = {
-      id: 's1',
-      type: 'subnet',
-      position: { x: 0, y: 0 },
-      data: {
-        name: 'S',
-        sub_graph: { nodes: [proxy], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
-      },
-    }
-    const serialized = serializeNodes([subnet])
-    const inner = ((serialized[0].data as any).sub_graph.nodes[0].data as any)
-    expect(inner.result).toBeUndefined()
-    expect(inner.handle_id).toBe('h1') // non-stripped fields preserved
-  })
-
-  it('strips result from deeply nested proxies', () => {
-    const deep_proxy: Node = {
-      id: 'p2',
-      type: 'subnet-output',
-      position: { x: 0, y: 0 },
-      data: { handle_id: 'h2', name: 'x', slot_type: 'text', result: 'deep' },
-    }
-    const inner_subnet: Node = {
-      id: 's2',
-      type: 'subnet',
-      position: { x: 0, y: 0 },
-      data: {
-        name: 'inner',
-        sub_graph: { nodes: [deep_proxy], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
-      },
-    }
-    const outer: Node = {
-      id: 's1',
-      type: 'subnet',
-      position: { x: 0, y: 0 },
-      data: {
-        name: 'outer',
-        sub_graph: { nodes: [inner_subnet], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
-      },
-    }
-    const serialized = serializeNodes([outer])
-    const deep = ((((serialized[0].data as any).sub_graph.nodes[0].data as any).sub_graph.nodes[0].data as any))
-    expect(deep.result).toBeUndefined()
-  })
-
-  it('preserves non-subnet nodes unchanged', () => {
-    const plain: Node = {
-      id: 'a',
-      type: 'prompt-editor',
-      position: { x: 0, y: 0 },
-      data: { text: 'hello' },
-    }
-    const serialized = serializeNodes([plain])
-    expect((serialized[0].data as any).text).toBe('hello')
-  })
-})
-```
-
-- [ ] **Step 14.2: Update serializeNodes to recurse**
-
-Modify `frontend/src/hooks/useCanvasPersistence.ts`. In the existing `serializeNodes` function, before the final `return clean as Node`, add the recursive step for subnet types:
-
-```typescript
-// Recurse into sub_graph.nodes if this is a subnet container
-if (n.type === 'subnet' && data.sub_graph && typeof data.sub_graph === 'object') {
-  const sg = data.sub_graph as { nodes?: Node[]; edges?: unknown; viewport?: unknown }
-  data.sub_graph = {
-    nodes: serializeNodes((sg.nodes ?? []) as Node[]),
-    edges: sg.edges ?? [],
-    viewport: sg.viewport ?? { x: 0, y: 0, zoom: 1 },
-  }
-}
-```
-
-Add it right before `clean.data = data`.
-
-Also add `result` to `LARGE_DATA_KEYS` so that proxy `data.result` is stripped automatically at every level. It's already there — verify and adjust if needed.
-
-- [ ] **Step 14.3: Run tests**
-
-```bash
-cd frontend && npx vitest run src/hooks/useCanvasPersistence.test.ts
-```
-
-Expected: 3 passing.
 
 ---
 

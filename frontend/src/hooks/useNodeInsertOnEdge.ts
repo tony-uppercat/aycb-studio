@@ -144,9 +144,11 @@ export function useNodeInsertOnEdge(params: UseNodeInsertOnEdgeParams): UseNodeI
     const nodeType = draggedNode.type
     if (!nodeType) return null
 
+    // Pre-check: skip the per-edge loop entirely if this node type can't be spliced
+    if (!NODE_CATALOG.find(e => e.type === nodeType)) return null
+
     const center = getNodeCenter(draggedNode)
     const edges = getEdges()
-    const nodes = getNodes()
 
     let best: { edge: Edge; distance: number; handles: { inputHandle: string; outputHandle: string } } | null = null
 
@@ -157,8 +159,9 @@ export function useNodeInsertOnEdge(params: UseNodeInsertOnEdgeParams): UseNodeI
       // Skip edges connected to the dragged node itself
       if (edge.source === draggedNode.id || edge.target === draggedNode.id) continue
 
-      const sourceNode = nodes.find(n => n.id === edge.source) ?? getNode(edge.source)
-      const targetNode = nodes.find(n => n.id === edge.target) ?? getNode(edge.target)
+      // O(1) RF internal map lookup — replaces O(n_nodes) nodes.find per edge
+      const sourceNode = getNode(edge.source)
+      const targetNode = getNode(edge.target)
       if (!sourceNode || !targetNode) continue
 
       // Check compatibility before computing distance
@@ -176,7 +179,7 @@ export function useNodeInsertOnEdge(params: UseNodeInsertOnEdgeParams): UseNodeI
     }
 
     return best
-  }, [getEdges, getNodes, getNode])
+  }, [getEdges, getNode])
 
   const onNodeDrag: OnNodeDrag = useCallback((_event, node) => {
     const result = findNearestCompatibleEdge(node)

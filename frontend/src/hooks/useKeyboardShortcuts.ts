@@ -17,8 +17,6 @@ export interface UseKeyboardShortcutsParams {
   toggleFullscreenBrowser: () => void
   fitView: (options?: { nodes?: Node[]; duration?: number; padding?: number }) => void
   screenToFlowPosition: (position: { x: number; y: number }) => { x: number; y: number }
-  /** React state nodes — needed by ungroupSelected which iterates nodes directly */
-  nodes: Node[]
 }
 
 /** Compute the absolute position of a node by walking up the parentId chain. */
@@ -61,7 +59,14 @@ function expandGroupChildren(selected: Node[], allNodes: Node[]): Node[] {
 }
 
 /**
+ * Data keys that represent runtime outputs — clones start fresh without them.
+ * historyIds / mediaId: generate-type nodes only (upload nodes keep mediaId).
+ */
+const CLONE_STRIP = new Set(['result', 'analysisHistory', 'last_preview_b64'])
+
+/**
  * Clone a set of nodes + their internal edges, remapping IDs and parentId references.
+ * Runtime output data (history, results) is stripped so clones start clean.
  */
 function cloneNodesAndEdges(
   nodes: Node[], edges: Edge[], prefix: string, offset = { x: 0, y: 0 }
@@ -71,15 +76,29 @@ function cloneNodesAndEdges(
     oldToNew.set(node.id, getNextNodeId(node.type ?? prefix))
   }
   const nodeIds = new Set(nodes.map(n => n.id))
-  const clones: Node[] = nodes.map(node => ({
-    ...node,
-    id: oldToNew.get(node.id)!,
-    position: { x: node.position.x + (node.parentId && nodeIds.has(node.parentId) ? 0 : offset.x), y: node.position.y + (node.parentId && nodeIds.has(node.parentId) ? 0 : offset.y) },
-    // Remap parentId if the parent is also being cloned
-    ...(node.parentId && oldToNew.has(node.parentId) ? { parentId: oldToNew.get(node.parentId)! } : {}),
-    selected: false,
-    dragging: false,
-  }))
+  const clones: Node[] = nodes.map(node => {
+    const rawData = node.data as Record<string, unknown>
+    const cleanData: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(rawData)) {
+      if (CLONE_STRIP.has(k)) continue
+      cleanData[k] = v
+    }
+    // Generate-type nodes (those with historyIds) also lose their output mediaId
+    if ('historyIds' in rawData) {
+      delete cleanData.historyIds
+      delete cleanData.mediaId
+    }
+    return {
+      ...node,
+      id: oldToNew.get(node.id)!,
+      data: cleanData,
+      position: { x: node.position.x + (node.parentId && nodeIds.has(node.parentId) ? 0 : offset.x), y: node.position.y + (node.parentId && nodeIds.has(node.parentId) ? 0 : offset.y) },
+      // Remap parentId if the parent is also being cloned
+      ...(node.parentId && oldToNew.has(node.parentId) ? { parentId: oldToNew.get(node.parentId)! } : {}),
+      selected: false,
+      dragging: false,
+    }
+  })
   const clonedEdges: Edge[] = edges
     .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
     .map(e => ({
@@ -117,9 +136,10 @@ export function useKeyboardShortcuts({
   toggleFullscreenBrowser,
   fitView,
   screenToFlowPosition,
-  nodes,
 }: UseKeyboardShortcutsParams): {
   onNodeDragStart: (event: React.MouseEvent) => void
+  /** Returns true if a Ctrl+drag copy was handled — caller must skip historyDragStop */
+  onNodeDragStop: () => boolean
   handleStopAll: () => void
 } {
   // ── Stop all running nodes ──────────────────────────────────────────────
@@ -201,66 +221,87 @@ export function useKeyboardShortcuts({
   }, [getNodes, getEdges, setNodes, snapshot])
 
   const ungroupSelected = useCallback(() => {
-    const selectedGroups = nodes.filter(n => n.selected && n.type === 'group')
+    const allNodes = getNodes()
+    const selectedGroups = allNodes.filter(n => n.selected && n.type === 'group')
     if (selectedGroups.length === 0) return
 
     const groupIds = new Set(selectedGroups.map(g => g.id))
 
-    const updated = nodes
+    const updated = allNodes
       .filter(n => !groupIds.has(n.id))
       .map(n => {
         if (!n.parentId || !groupIds.has(n.parentId)) return n
         const parent = selectedGroups.find(g => g.id === n.parentId)
         if (!parent) return n
         // Compute the absolute position of the parent to restore child's abs position
-        const parentAbs = getAbsolutePosition(parent, nodes)
+        const parentAbs = getAbsolutePosition(parent, allNodes)
         return {
           ...n,
           parentId: parent.parentId, // inherit grandparent (or undefined if top-level)
           extent: parent.parentId ? ('parent' as const) : undefined,
           position: {
-            x: n.position.x + parentAbs.x - (parent.parentId ? getAbsolutePosition(nodes.find(pp => pp.id === parent.parentId)!, nodes).x : 0),
-            y: n.position.y + parentAbs.y - (parent.parentId ? getAbsolutePosition(nodes.find(pp => pp.id === parent.parentId)!, nodes).y : 0),
+            x: n.position.x + parentAbs.x - (parent.parentId ? getAbsolutePosition(allNodes.find(pp => pp.id === parent.parentId)!, allNodes).x : 0),
+            y: n.position.y + parentAbs.y - (parent.parentId ? getAbsolutePosition(allNodes.find(pp => pp.id === parent.parentId)!, allNodes).y : 0),
           },
         }
       })
 
     snapshot(updated, getEdges())
     setNodes(updated)
-  }, [nodes, getEdges, setNodes, snapshot])
+  }, [getNodes, getEdges, setNodes, snapshot])
 
   // ── Clipboard for Ctrl+C / Ctrl+V ───────────────────────────────────────
   const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
 
   // ── Ctrl+Drag to duplicate selected nodes ───────────────────────────────
-  const duplicatingRef = useRef(false)
+  // React Flow captures dragItems BEFORE onNodeDragStart fires and always includes
+  // the clicked node via `node.id === nodeId` — so we cannot redirect the drag to a
+  // clone. Instead: save source state at drag-start, let originals move naturally,
+  // then on drag-stop create clones at destination and snap originals back to source.
+  const dragCopyRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
 
   const onNodeDragStart = useCallback((_event: React.MouseEvent) => {
     if (!(_event.ctrlKey || _event.metaKey)) {
-      duplicatingRef.current = false
+      dragCopyRef.current = null
       return
     }
-
-    // Ctrl held — duplicate all selected nodes (including group children)
     const allNodes = getNodes()
-    const allEdges = getEdges()
     const selected = expandGroupChildren(allNodes.filter(n => n.selected), allNodes)
-    if (selected.length === 0) return
+    if (selected.length === 0) { dragCopyRef.current = null; return }
+    // Save source positions + current edges (cloning deferred to drag stop)
+    dragCopyRef.current = { nodes: selected, edges: getEdges() }
+  }, [getNodes, getEdges])
 
-    duplicatingRef.current = true
+  const onNodeDragStop = useCallback((): boolean => {
+    const saved = dragCopyRef.current
+    dragCopyRef.current = null
+    if (!saved) return false
 
-    const { clones, clonedEdges } = cloneNodesAndEdges(selected, allEdges, 'clone')
-    const selectedIds = new Set(selected.map(n => n.id))
+    const currentNodes = getNodes()
+    const savedIds = new Set(saved.nodes.map(n => n.id))
+    const { clones, clonedEdges } = cloneNodesAndEdges(saved.nodes, saved.edges, 'clone')
 
-    // Deselect originals (they stay in place), add clones (unselected)
-    const postNodes = [
-      ...getNodes().map(n => selectedIds.has(n.id) ? { ...n } : n),
-      ...clones,
+    // clones[i] ↔ saved.nodes[i] (cloneNodesAndEdges preserves order)
+    const destPos = new Map(currentNodes.filter(n => savedIds.has(n.id)).map(n => [n.id, n.position]))
+    const srcPos  = new Map(saved.nodes.map(n => [n.id, n.position]))
+    // Identify clone IDs so we can select only top-level clones (not children of copied groups)
+    const cloneIdSet = new Set(clones.map(c => c.id))
+
+    const finalNodes = [
+      // Originals: snap back to source position, deselect
+      ...currentNodes.map(n => savedIds.has(n.id) ? { ...n, position: srcPos.get(n.id)!, selected: false } : n),
+      // Clones: place at destination; select top-level clones, not children of copied groups
+      ...clones.map((c, i) => ({
+        ...c,
+        position: destPos.get(saved.nodes[i].id) ?? c.position,
+        selected: !c.parentId || !cloneIdSet.has(c.parentId),
+      })),
     ]
-    const postEdges = [...getEdges(), ...clonedEdges]
-    snapshot(postNodes, postEdges)
-    setNodes(postNodes)
-    setEdges(postEdges)
+    const finalEdges = [...getEdges(), ...clonedEdges]
+    setNodes(finalNodes)
+    setEdges(finalEdges)
+    snapshot(finalNodes, finalEdges)
+    return true
   }, [getNodes, getEdges, setNodes, setEdges, snapshot])
 
   // ── Unified keyboard handler ─────────────────────────────────────────────
@@ -586,5 +627,5 @@ export function useKeyboardShortcuts({
     return () => { document.removeEventListener('keydown', onKey, true) }
   }, [groupSelected, ungroupSelected, getNodes, getEdges, setNodes, setEdges, snapshot, screenToFlowPosition, fitView, toggleAddMenu, toggleMinimap, toggleFullscreenBrowser])
 
-  return { onNodeDragStart, handleStopAll }
+  return { onNodeDragStart, onNodeDragStop, handleStopAll }
 }

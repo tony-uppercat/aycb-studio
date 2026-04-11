@@ -2,6 +2,37 @@
 
 .wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.backupBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  background: #1c1c20;
+  border: 1px solid #2e2e33;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.backupBtn:hover {
+  background: #27272a;
+  border-color: #3a3a40;
+  color: #a1a1aa;
+}
+
+.backupBtnOk {
+  color: #22c55e;
+  border-color: #166534;
+  background: #052e16;
 }
 
 .trigger {
@@ -287,6 +318,48 @@
   background: #27272a;
   color: #e5e5e5;
   border-color: #3a3a40;
+}
+
+/* ── Backup context menu ── */
+
+.ctxBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.ctxMenu {
+  position: fixed;
+  z-index: 101;
+  background: #18181b;
+  border: 1px solid #2e2e33;
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 190px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: dropIn 0.1s ease-out;
+}
+
+.ctxItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: #d4d4d8;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.ctxItem:hover {
+  background: #27272a;
+  color: #f5f5f5;
 }
 
 /* ── Inline rename input ── */

@@ -22,7 +22,7 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
 
   return (
     <NodeShell name="Bracket Parser" selected={selected} icon="🔧"
-      inputSlots={[{ id: 'text-in', label: 'Text Input', type: 'text' }]}
+      inputSlots={h.bracketInputSlots}
       outputSlots={h.outputSlots}
       onRun={h.handleRun}
     >
@@ -77,7 +77,8 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
               </div>
               {h.entries.map(entry => {
                 const excluded = h.excludedKeys.has(entry.key)
-                const isEditing = h.editingKey === entry.key
+                const isPinConnected = h.connectedBrackets.has(entry.key)
+                const isEditing = h.editingKey === entry.key && !isPinConnected
                 const isOverridden = entry.key in h.overrides
                 const hasJsonDef = entry.key in h.jsonDefs
                 const displayVal = h.resolveVal(entry)
@@ -120,17 +121,17 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
                       <span
                         className={styles.blendKey}
                         style={{
-                          color: isOverridden ? '#d97706' : hasJsonDef ? '#22c55e' : '#888',
-                          fontSize: 9, cursor: 'pointer',
+                          color: isPinConnected ? '#3b82f6' : isOverridden ? '#d97706' : hasJsonDef ? '#22c55e' : '#888',
+                          fontSize: 9, cursor: isPinConnected ? 'default' : 'pointer',
                         }}
-                        title={`${displayVal}\n\nClick to edit${isOverridden ? ' — Right-click to reset' : ''}`}
-                        onClick={() => h.setEditingKey(entry.key)}
-                        onContextMenu={isOverridden ? (e) => {
+                        title={isPinConnected ? `via pin: ${displayVal}` : `${displayVal}\n\nClick to edit${isOverridden ? ' — Right-click to reset' : ''}`}
+                        onClick={isPinConnected ? undefined : () => h.setEditingKey(entry.key)}
+                        onContextMenu={(!isPinConnected && isOverridden) ? (e) => {
                           e.preventDefault()
                           h.setOverrides(prev => { const next = { ...prev }; delete next[entry.key]; return next })
                         } : undefined}
                       >
-                        {isOverridden && '* '}{valPreview}
+                        {!isPinConnected && isOverridden && '* '}{valPreview}
                       </span>
                     )}
                   </div>

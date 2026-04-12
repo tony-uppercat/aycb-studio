@@ -1,4 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(/c/Users/upper/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh:*)",
+      "Bash(python:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(node -e ':*)",
+      "Bash(curl:*)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -11,11 +21,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(/c/Users/upper/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh:*)"
     ]
   }
 }

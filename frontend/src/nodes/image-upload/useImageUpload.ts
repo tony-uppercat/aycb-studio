@@ -8,6 +8,8 @@ import { useSplitOverlay } from '../../hooks/useSplitOverlay'
 import type { ImageUploadNodeData } from '../../types'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { CANVAS_EVENTS } from '../../events/canvasEvents'
+import { readPngTextChunks } from '../../utils/pngMeta'
+import { saveMediaMeta } from '../../utils/reviewStatus'
 
 export function useImageUpload(id: string, data: ImageUploadNodeData, selected?: boolean) {
   const { openPreview, isOpen: previewOpen } = useMediaPreview()
@@ -29,6 +31,13 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
 
     const mediaId = data.mediaId || generateMediaId()
     await saveMediaForProject(mediaId, f)
+
+    // Extract PNG tEXt metadata and persist to localStorage
+    if (f.type === 'image/png' || f.name.endsWith('.png')) {
+      readPngTextChunks(f).then(chunks => {
+        if (Object.keys(chunks).length > 0) saveMediaMeta(mediaId, chunks)
+      }).catch(() => { /* not a valid PNG */ })
+    }
 
     updateNodeData(id, { mediaId })
   }, [id, data, preview, updateNodeData])

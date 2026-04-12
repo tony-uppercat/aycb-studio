@@ -8,8 +8,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { type DiskMediaEntry } from './FullscreenMediaBrowser'
-import { type ReviewStatus, getMediaMeta } from '../../utils/reviewStatus'
+import { type ReviewStatus, getMediaMeta, saveMediaMeta } from '../../utils/reviewStatus'
 import { formatSize, formatDate } from '../../utils/mediaFormatting'
+import { readPngTextChunks } from '../../utils/pngMeta'
 import s from './MediaInfoPanel.module.css'
 
 /* ── Types ── */
@@ -76,6 +77,32 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
       })
     return () => { dead = true }
   }, [entry.id, entry.meta])
+
+  // Fallback: read PNG tEXt chunks directly from the image blob when no metadata found
+  useEffect(() => {
+    if (metaResult.loading || metaResult.data || !src) return
+    if (entry.type.startsWith('video/')) return
+    let dead = false
+    fetch(src).then(r => r.blob()).then(blob => {
+      if (dead) return
+      return readPngTextChunks(blob)
+    }).then(chunks => {
+      if (dead || !chunks || Object.keys(chunks).length === 0) return
+      const data: Meta = {
+        prompt: chunks.prompt,
+        model: chunks.model,
+        model_name: chunks.model_name,
+        aspect_ratio: chunks.aspect_ratio,
+        image_size: chunks.image_size,
+        cost_usd: chunks.cost_usd ? parseFloat(chunks.cost_usd) : undefined,
+      }
+      if (Object.values(data).some(v => v != null)) {
+        saveMediaMeta(entry.id, chunks)
+        setMetaResult(prev => prev.id === entry.id ? { ...prev, data } : prev)
+      }
+    }).catch(() => { /* not a PNG or fetch failed */ })
+    return () => { dead = true }
+  }, [metaResult.loading, metaResult.data, src, entry.id, entry.type])
 
   // Detect natural image dimensions via Image() constructor (skip for videos)
   useEffect(() => {

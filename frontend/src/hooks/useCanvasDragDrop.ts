@@ -3,6 +3,8 @@ import { useReactFlow } from '@xyflow/react'
 
 import { saveMediaForProject, generateMediaId } from '../mediaStore'
 import { importProject } from '../utils/projectIO'
+import { readPngTextChunks } from '../utils/pngMeta'
+import { saveMediaMeta } from '../utils/reviewStatus'
 
 export function getNextNodeId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`
@@ -120,6 +122,11 @@ export function useCanvasDragDrop(): UseCanvasDragDropResult {
 
       if (file.type.startsWith('image/')) {
         saveMediaForProject(mediaId, file).catch(console.error)
+        if (file.type === 'image/png' || file.name.endsWith('.png')) {
+          readPngTextChunks(file).then(chunks => {
+            if (Object.keys(chunks).length > 0) saveMediaMeta(mediaId, chunks)
+          }).catch(() => {})
+        }
         addNodes({ id: nodeId, type: 'imageUpload', position, data: { mediaId } })
       } else if (file.type.startsWith('video/')) {
         saveMediaForProject(mediaId, file).catch(console.error)
@@ -203,6 +210,11 @@ export function useCanvasDragDrop(): UseCanvasDragDropResult {
           const mediaId = generateMediaId()
           const pos = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
           saveMediaForProject(mediaId, file).catch(console.error)
+          if (file.type === 'image/png' || file.name.endsWith('.png')) {
+            readPngTextChunks(file).then(chunks => {
+              if (Object.keys(chunks).length > 0) saveMediaMeta(mediaId, chunks)
+            }).catch(() => {})
+          }
           addNodes({
             id: nodeId,
             type: 'imageUpload',

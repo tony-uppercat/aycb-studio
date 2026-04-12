@@ -1,10 +1,8 @@
 import { io } from 'socket.io-client'
 
-// Connect directly to backend port for real WebSocket (no Vite proxy latency).
-// In dev: same hostname, port 5101. Vite proxy adds latency + breaks WS upgrade.
-const backendUrl = `${window.location.protocol}//${window.location.hostname}:5101`
-
-export const socket = io(backendUrl, {
+// Use relative path — Vite proxy forwards /socket.io to backend (ws: true).
+// This works from localhost AND LAN (no cross-port / CORS issues).
+export const socket = io({
   autoConnect: false,
   transports: ['websocket', 'polling'],
 })

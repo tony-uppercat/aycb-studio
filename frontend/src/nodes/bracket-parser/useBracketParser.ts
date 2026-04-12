@@ -117,9 +117,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     const vals: Record<string, string> = {}
     for (const entry of entries) {
       if (!excludedKeys.has(entry.key)) {
-        vals[entry.key] = entry.key in overrides
-          ? overrides[entry.key]
-          : (jsonDefs[entry.key] ?? entry.key)
+        vals[entry.key] = resolveVal(entry)
       }
     }
     return vals
@@ -153,7 +151,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     })
     return pins
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includedEntries, overrides])
+  }, [includedEntries, overrides, bracketPinValuesJson])
 
   // Dynamic input slots: text-in + one per bracket entry
   const bracketInputSlots: SlotDef[] = useMemo(() => {

@@ -41,14 +41,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AYCB API", version="2.0.0", lifespan=lifespan)
 
 # ── CORS ────────────────────────────────────────────────────────────────────
-_CORS_ORIGINS = os.environ.get("AYCB_CORS_ORIGINS", "").split(",") if os.environ.get("AYCB_CORS_ORIGINS") else [
-    "http://localhost:5100",
-    "http://127.0.0.1:5100",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_CORS_ORIGINS,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

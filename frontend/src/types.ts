@@ -163,6 +163,8 @@ export interface JsonParserNodeData extends Record<string, unknown> {
   maxDepth?: number  // max nesting depth to show (0 = unlimited)
   outputOverride?: string | null  // manual override of full output text
   pinsCollapsed?: boolean  // collapse dynamic output pins (show only main text-out)
+  previewCollapsed?: boolean  // collapse output preview area
+  textCollapsed?: boolean  // collapse manual input textarea
 }
 
 export interface BracketParserNodeData extends Record<string, unknown> {
@@ -175,6 +177,7 @@ export interface BracketParserNodeData extends Record<string, unknown> {
   output_override?: string | null
   pins_collapsed?: boolean
   preview_collapsed?: boolean
+  text_collapsed?: boolean
 }
 
 export interface JsonParserBlendNodeData extends Record<string, unknown> {

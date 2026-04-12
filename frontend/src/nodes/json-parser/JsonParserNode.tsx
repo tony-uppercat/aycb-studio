@@ -53,8 +53,17 @@ export function JsonParserNode({ id, data, selected }: NodeProps<JsonParserNodeT
         </p>
 
         {h.manualMode && (
-          <textarea className={styles.promptInput} placeholder="Paste JSON here..."
-            value={h.manualInput} onChange={e => h.setManualInput(e.target.value)} rows={4} />
+          <>
+            <button
+              className={styles.blendAllNone}
+              style={{ alignSelf: 'flex-start', fontSize: 8, color: '#666' }}
+              onClick={() => h.setTextCollapsed(v => !v)}
+            >{h.textCollapsed ? 'Show Text' : 'Hide Text'}</button>
+            {!h.textCollapsed && (
+              <textarea className={styles.promptInput} placeholder="Paste JSON here..."
+                value={h.manualInput} onChange={e => h.setManualInput(e.target.value)} rows={4} />
+            )}
+          </>
         )}
 
         {h.parseMode === 'json' && (
@@ -188,7 +197,13 @@ export function JsonParserNode({ id, data, selected }: NodeProps<JsonParserNodeT
 
         {/* Colorized JSON output — click to edit override */}
         {h.effectiveOutput && (
-          h.editingOutput ? (
+          <>
+            <button
+              className={styles.blendAllNone}
+              style={{ alignSelf: 'flex-start', fontSize: 8, color: '#666' }}
+              onClick={() => h.setPreviewCollapsed(v => !v)}
+            >{h.previewCollapsed ? 'Show Preview' : 'Hide Preview'}</button>
+            {!h.previewCollapsed && (h.editingOutput ? (
             <textarea
               ref={h.outputTextareaRef}
               className={`${styles.resultArea} nokey`}
@@ -226,7 +241,8 @@ export function JsonParserNode({ id, data, selected }: NodeProps<JsonParserNodeT
                 h.setOutputOverride(null)
               } : undefined}
             />
-          )
+          ))}
+          </>
         )}
         {h.outputOverride !== null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#d97706' }}>

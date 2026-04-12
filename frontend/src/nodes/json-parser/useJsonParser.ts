@@ -92,6 +92,8 @@ export function useJsonParser(id: string, data: JsonParserNodeData) {
 
   // Collapse/expand dynamic output pins
   const [pinsCollapsed, setPinsCollapsed] = useState(data.pinsCollapsed === true)
+  const [previewCollapsed, setPreviewCollapsed] = useState(data.previewCollapsed === true)
+  const [textCollapsed, setTextCollapsed] = useState(data.textCollapsed === true)
 
   // Full output override: editable directly from preview area
   const [outputOverride, setOutputOverride] = useState<string | null>(
@@ -231,9 +233,9 @@ export function useJsonParser(id: string, data: JsonParserNodeData) {
     updateNodeData(id, {
       outputText: effectiveOutput, outputPins, jsonPath: path, parseMode, outputFormat, flatten, overrides,
       excludedKeys: [...excludedKeys], excludedSections: [...excludedSections], outputLimit, maxDepth,
-      outputOverride: outputOverride, pinsCollapsed,
+      outputOverride: outputOverride, pinsCollapsed, previewCollapsed, textCollapsed,
     })
-  }, [effectiveOutput, path, parseMode, outputFormat, flatten, overrides, excludedKeys, excludedSections, outputLimit, maxDepth, outputPins, id, updateNodeData, outputOverride, pinsCollapsed])
+  }, [effectiveOutput, path, parseMode, outputFormat, flatten, overrides, excludedKeys, excludedSections, outputLimit, maxDepth, outputPins, id, updateNodeData, outputOverride, pinsCollapsed, previewCollapsed, textCollapsed])
 
   // Display label: in newline mode show first 2 words of value, otherwise show key
   function entryLabel(entry: { key: string; val: unknown }): string {
@@ -339,6 +341,8 @@ export function useJsonParser(id: string, data: JsonParserNodeData) {
     editingKey, setEditingKey,
     escapedRef,
     pinsCollapsed, setPinsCollapsed,
+    previewCollapsed, setPreviewCollapsed,
+    textCollapsed, setTextCollapsed,
     outputOverride, setOutputOverride,
     editingOutput, setEditingOutput,
     outputTextareaRef,

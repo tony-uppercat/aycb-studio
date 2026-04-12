@@ -70,6 +70,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
   const escapedRef = useRef(false)
   const [pinsCollapsed, setPinsCollapsed] = useState(data.pins_collapsed === true)
   const [previewCollapsed, setPreviewCollapsed] = useState(data.preview_collapsed === true)
+  const [textCollapsed, setTextCollapsed] = useState(data.text_collapsed === true)
   const [outputOverride, setOutputOverride] = useState<string | null>(
     typeof data.output_override === 'string' ? data.output_override : null
   )
@@ -197,9 +198,9 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
       outputText: effectiveOutput, outputPins, output_mode: outputMode, overrides,
       excluded_keys: [...excludedKeys], output_limit: outputLimit,
       output_override: outputOverride, pins_collapsed: pinsCollapsed,
-      preview_collapsed: previewCollapsed,
+      preview_collapsed: previewCollapsed, text_collapsed: textCollapsed,
     })
-  }, [effectiveOutput, outputMode, overrides, excludedKeys, outputLimit, outputPins, id, updateNodeData, outputOverride, pinsCollapsed, previewCollapsed])
+  }, [effectiveOutput, outputMode, overrides, excludedKeys, outputLimit, outputPins, id, updateNodeData, outputOverride, pinsCollapsed, previewCollapsed, textCollapsed])
 
   // Toggle exclude (with Alt+Click isolate)
   function toggleExclude(key: string, e?: React.MouseEvent) {
@@ -273,6 +274,7 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     escapedRef,
     pinsCollapsed, setPinsCollapsed,
     previewCollapsed, setPreviewCollapsed,
+    textCollapsed, setTextCollapsed,
     outputOverride, setOutputOverride,
     editingOutput, setEditingOutput,
     outputTextareaRef,

@@ -51,8 +51,17 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
         </p>
 
         {h.manualMode && (
-          <textarea className={styles.promptInput} placeholder="Paste text with [brackets] here..."
-            value={h.manualInput} onChange={e => h.setManualInput(e.target.value)} rows={4} />
+          <>
+            <button
+              className={styles.blendAllNone}
+              style={{ alignSelf: 'flex-start', fontSize: 8, color: '#666' }}
+              onClick={() => h.setTextCollapsed(v => !v)}
+            >{h.textCollapsed ? 'Show Text' : 'Hide Text'}</button>
+            {!h.textCollapsed && (
+              <textarea className={styles.promptInput} placeholder="Paste text with [brackets] here..."
+                value={h.manualInput} onChange={e => h.setManualInput(e.target.value)} rows={4} />
+            )}
+          </>
         )}
 
         {h.unpackError && <p className={styles.error}>{h.unpackError}</p>}

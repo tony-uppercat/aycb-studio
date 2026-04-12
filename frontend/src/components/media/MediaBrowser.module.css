@@ -227,6 +227,20 @@
   transform: scale(1.04);
 }
 
+.videoPlaceholder {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #1a1a1e;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .thumbPlaceholder {
   width: 100%;
   aspect-ratio: 1;

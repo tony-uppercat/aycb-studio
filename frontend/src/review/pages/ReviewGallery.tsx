@@ -14,8 +14,9 @@ import { MoveDialog } from '../components/MoveDialog'
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal'
 import { Sidebar } from '../components/Sidebar'
 import { Lightbox } from '../components/Lightbox'
+import { AssetsPanel } from '../components/AssetsPanel'
 
-type Tab = 'gallery' | 'references'
+type Tab = 'gallery' | 'references' | 'assets'
 
 export function ReviewGallery() {
   const [tab, setTab] = useState<Tab>('gallery')
@@ -230,6 +231,7 @@ export function ReviewGallery() {
         <div className="rh-tab-bar">
           <button className={`rh-tab ${tab === 'gallery' ? 'rh-tab-active' : ''}`} onClick={() => setTab('gallery')}>Gallery</button>
           <button className={`rh-tab ${tab === 'references' ? 'rh-tab-active' : ''}`} onClick={() => setTab('references')}>References</button>
+          <button className={`rh-tab ${tab === 'assets' ? 'rh-tab-active' : ''}`} onClick={() => setTab('assets')}>Assets</button>
         </div>
 
         {tab === 'gallery' && <>
@@ -290,6 +292,8 @@ export function ReviewGallery() {
             )}
           </div>
         )}
+
+        <AssetsPanel active={tab === 'assets'} />
       </div>
 
       {lightboxMedia && (

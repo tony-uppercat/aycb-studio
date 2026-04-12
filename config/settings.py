@@ -23,6 +23,10 @@ class Settings(BaseSettings):
         return self.shared_root / "References"
 
     @property
+    def assets_dir(self) -> Path:
+        return self.shared_root / "Assets"
+
+    @property
     def thumbnails_dir(self) -> Path:
         return self.shared_root / "data" / "thumbnails"
 

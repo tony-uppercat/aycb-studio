@@ -18,8 +18,8 @@ export function useBackendHealth() {
   }
 
   const check = useCallback(async () => {
-    // Only check on localhost
-    if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    // Only check when served via Vite (port 5100) or localhost
+    if (location.port !== '5100' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
       useCanvasStore.getState().setBackendStatus('cloud')
       return
     }

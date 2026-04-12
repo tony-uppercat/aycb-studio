@@ -21,6 +21,7 @@ import { fetchReviewStatus, getStemForMedia, type ReviewStatus } from '../../uti
 import { FullscreenViewer } from './FullscreenViewer'
 import { MediaGridItem } from './MediaGridItem'
 import { ReferencesTab } from '../ReferencesTab'
+import { AssetsTab } from '../AssetsTab'
 import { type DiskMediaEntry } from './FullscreenMediaBrowser'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { downloadFile, downloadFromUrl } from '../../utils/downloadManager'
@@ -32,7 +33,7 @@ interface Props {
   onClose: () => void
 }
 
-type ActiveTab = 'media' | 'references'
+type ActiveTab = 'media' | 'references' | 'assets'
 
 export function MediaBrowser({ open, onClose }: Props) {
   const toggleFullscreenBrowser = useCanvasStore(s => s.toggleFullscreenBrowser)
@@ -306,6 +307,12 @@ export function MediaBrowser({ open, onClose }: Props) {
           >
             References
           </button>
+          <button
+            className={`${styles.tabBtn} ${activeTab === 'assets' ? styles.tabBtnActive : ''}`}
+            onClick={() => setActiveTab('assets')}
+          >
+            Assets
+          </button>
         </div>
 
         {activeTab === 'media' && (
@@ -409,6 +416,13 @@ export function MediaBrowser({ open, onClose }: Props) {
             onDragEnd={handleDragEnd}
           />
         )}
+
+        {activeTab === 'assets' && (
+          <AssetsTab
+            open={open && activeTab === 'assets'}
+            onDragEnd={handleDragEnd}
+          />
+        )}
       </div>
 
       {/* Fullscreen gallery viewer — media tab */}
@@ -423,7 +437,7 @@ export function MediaBrowser({ open, onClose }: Props) {
             type: e.type,
             modified: '',
             thumb: thumbs.get(e.id) ?? null,
-            meta: `/api/bridge/meta/${encodeURIComponent(getStemForMedia(e.id) ?? e.id)}`,
+            meta: `/api/bridge/meta/${encodeURIComponent(getStemForMedia(e.id) ?? e.name.replace(/\.[^.]+$/, ''))}`,
           }))}
           getSrc={e => thumbs.get(e.id) ?? undefined}
           loadFullSrc={async (e) => {

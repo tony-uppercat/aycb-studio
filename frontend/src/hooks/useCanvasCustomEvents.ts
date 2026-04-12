@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { addEdge } from '@xyflow/react'
 import { saveMediaForProject, generateMediaId } from '../mediaStore'
+import { registerBridgeStem } from '../utils/reviewStatus'
 import { splitImageToGrid } from '../utils/imageSplitGrid'
 import { getNextNodeId } from './useCanvasDragDrop'
 import { edgeStyle } from '../utils/edgeStyles'
@@ -176,6 +177,7 @@ export function useCanvasCustomEvents({
         const file = new File([blob], filename, { type })
         const mediaId = generateMediaId()
         await saveMediaForProject(mediaId, file)
+        registerBridgeStem(mediaId, filename.replace(/\.[^.]+$/, ''))
 
         const rect = canvasRef.current?.getBoundingClientRect()
         const screenCX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2

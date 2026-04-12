@@ -70,6 +70,19 @@ export const rhApi = {
   // Download/stream URLs
   downloadUrl: (id: number) => `${BASE}/download/${id}`,
 
+  // Assets
+  listAssets: (params?: { directory?: string }, signal?: AbortSignal) =>
+    get<{ items: unknown[]; total: number }>('/assets', params as Record<string, string>, signal),
+  deleteAsset: (id: number) => del(`/assets/${id}`),
+  getAssetDirectories: (signal?: AbortSignal) => get<{ directories: string[] }>('/assets/directories', undefined, signal),
+  // Asset folders
+  listAssetFolders: (parent?: string, signal?: AbortSignal) =>
+    get<{ folders: string[] }>('/asset-folders', parent ? { parent } : undefined, signal),
+  createAssetFolder: (path: string) => post<{ ok: boolean; path: string }>('/asset-folders', { path }),
+  deleteAssetFolder: (path: string) => del(`/asset-folders?path=${encodeURIComponent(path)}`),
+  renameAssetFolder: (path: string, new_name: string) =>
+    post<{ ok: boolean; new_path: string }>(`/asset-folders/rename?path=${encodeURIComponent(path)}`, { new_name }),
+
   // Logs
   getLogs: (signal?: AbortSignal) => get<{ logs: string[] }>('/logs', undefined, signal),
 

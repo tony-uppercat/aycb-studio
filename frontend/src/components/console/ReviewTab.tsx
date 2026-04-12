@@ -61,7 +61,7 @@ function saveLocal(items: ReviewItem[]) {
 /* ── API helpers ───────────────────────────────────────────────────────────── */
 
 function isBackendAvailable(): boolean {
-  return location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  return location.port === '5100' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 }
 
 async function fetchItems(signal?: AbortSignal): Promise<ReviewItem[]> {

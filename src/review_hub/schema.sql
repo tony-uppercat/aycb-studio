@@ -92,3 +92,20 @@ CREATE INDEX IF NOT EXISTS idx_comments_media_id ON comments(media_id);
 CREATE INDEX IF NOT EXISTS idx_favorites_media_id ON favorites(media_id);
 CREATE INDEX IF NOT EXISTS idx_drawings_media_id ON drawings(media_id);
 CREATE INDEX IF NOT EXISTS idx_references_uploaded_by ON [references](uploaded_by);
+
+CREATE TABLE IF NOT EXISTS assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    filepath TEXT,
+    directory TEXT,
+    file_size INTEGER,
+    mime_type TEXT,
+    width INTEGER,
+    height INTEGER,
+    thumbnail_path TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_assets_directory ON assets(directory);
+CREATE INDEX IF NOT EXISTS idx_assets_filename ON assets(filename);

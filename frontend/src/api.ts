@@ -11,7 +11,7 @@ import { STORAGE_KEYS } from './storage/keys'
 const BASE = '/api'
 
 function isBackendAvailable(): boolean {
-  return location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  return location.port === '5100' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
 }
 
 function recordRequest(method: string, path: string, status: number, duration: number) {

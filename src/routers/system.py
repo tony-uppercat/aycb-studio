@@ -21,18 +21,40 @@ router = APIRouter(prefix="/api", tags=["system"])
 
 _START_TIME = time.time()
 
+def _detect_lan_ips() -> list[str]:
+    """Return all non-loopback LAN IPv4 addresses. Prefers 192.168/10/172.16 prefixes."""
+    import socket as _socket
+    ips: list[str] = []
+    try:
+        hostname = _socket.gethostname()
+        all_addrs = _socket.getaddrinfo(hostname, None, _socket.AF_INET)
+        for info in all_addrs:
+            ip = info[4][0]
+            if ip.startswith(("192.168.", "10.", "172.")):
+                ips.append(ip)
+    except Exception:
+        pass
+    # Fallback: default-route interface
+    if not ips:
+        try:
+            s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ips.append(s.getsockname()[0])
+            s.close()
+        except Exception as e:
+            _log(f"LAN IP detection failed: {e}")
+    return list(dict.fromkeys(ips))  # deduplicate preserving order
+
+
 @router.get("/health")
 def health():
-    import socket as _socket
-    local_ip = ""
-    try:
-        s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-    except Exception as e:
-        _log(f"LAN IP detection failed: {e}")
-    return {"status": "ok", "local_ip": local_ip, "started_at": _START_TIME}
+    lan_ips = _detect_lan_ips()
+    return {
+        "status": "ok",
+        "local_ip": lan_ips[0] if lan_ips else "",
+        "lan_ips": lan_ips,
+        "started_at": _START_TIME,
+    }
 
 
 @router.post("/restart")

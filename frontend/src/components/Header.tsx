@@ -2,22 +2,25 @@ import { useEffect, useState } from 'react'
 import styles from './Header.module.css'
 
 export function Header() {
-  const [lanIp, setLanIp] = useState('')
+  const [lanIps, setLanIps] = useState<string[]>([])
 
   useEffect(() => {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 3000)
     fetch('/api/health', { signal: controller.signal })
       .then(r => r.json())
-      .then(d => { if (d.local_ip) setLanIp(d.local_ip) })
+      .then(d => {
+        const ips: string[] = d.lan_ips ?? (d.local_ip ? [d.local_ip] : [])
+        setLanIps(ips)
+      })
       .catch(err => { if (err.name !== 'AbortError') console.warn('[Header] health fetch failed:', err) })
       .finally(() => clearTimeout(timeout))
     return () => { clearTimeout(timeout); controller.abort() }
   }, [])
 
-  const lanUrl = lanIp ? `http://${lanIp}:5100/review` : ''
-  const tooltip = lanUrl
-    ? `Review Hub\nLAN: ${lanUrl}`
+  const lanLines = lanIps.map(ip => `http://${ip}:5100/review`)
+  const tooltip = lanLines.length
+    ? `Review Hub\nLAN:\n${lanLines.join('\n')}`
     : 'Open Review Hub'
 
   return (

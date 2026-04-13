@@ -50,17 +50,19 @@ async def delete_link(db: aiosqlite.Connection, link_id: int) -> bool:
 
 
 async def list_links_for_directory(
-    db: aiosqlite.Connection, directory: str
+    db: aiosqlite.Connection, directory: str | None = None
 ) -> list[dict]:
-    """List all links in a directory, joined with media fields."""
-    cursor = await db.execute(
-        """SELECT l.id AS link_id, l.media_id, l.directory, l.created_at AS linked_at,
-                  m.filename, m.filepath, m.thumbnail_path, m.mime_type,
-                  m.file_size, m.width, m.height
-           FROM media_asset_links l
-           JOIN media m ON m.id = l.media_id
-           WHERE l.directory = ?
-           ORDER BY l.created_at DESC""",
-        (directory,),
-    )
+    """List links joined with media fields. None = all links."""
+    base = """SELECT l.id AS link_id, l.media_id, l.directory, l.created_at AS linked_at,
+                     m.filename, m.filepath, m.thumbnail_path, m.mime_type,
+                     m.file_size, m.width, m.height
+              FROM media_asset_links l
+              JOIN media m ON m.id = l.media_id"""
+    if directory is not None:
+        cursor = await db.execute(
+            base + " WHERE l.directory = ? ORDER BY l.created_at DESC",
+            (directory,),
+        )
+    else:
+        cursor = await db.execute(base + " ORDER BY l.created_at DESC")
     return _rows_to_list(await cursor.fetchall())

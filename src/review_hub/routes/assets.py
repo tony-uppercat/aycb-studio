@@ -86,7 +86,7 @@ async def list_assets(directory: str | None = None):
         items = await q.list_assets(db, directory=directory)
         enriched = [_enrich(i) for i in items]
         # Merge linked media items into the response
-        links = await alq.list_links_for_directory(db, directory or "")
+        links = await alq.list_links_for_directory(db, directory)
         for lnk in links:
             item = _linked_to_asset(lnk)
             if item is not None:

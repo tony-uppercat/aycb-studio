@@ -59,17 +59,26 @@ def _query_assets_sync(directory: str | None) -> list[dict]:
             result.append(item)
 
         # Merge linked media items from media_asset_links
-        link_dir = directory if directory is not None else ""
-        link_rows = con.execute(
-            """SELECT l.id AS link_id, l.media_id, l.directory,
-                      m.filename, m.filepath, m.thumbnail_path, m.mime_type,
-                      m.file_size, m.width, m.height
-               FROM media_asset_links l
-               JOIN media m ON m.id = l.media_id
-               WHERE l.directory = ?
-               ORDER BY l.created_at DESC""",
-            (link_dir,),
-        ).fetchall()
+        if directory is not None:
+            link_rows = con.execute(
+                """SELECT l.id AS link_id, l.media_id, l.directory,
+                          m.filename, m.filepath, m.thumbnail_path, m.mime_type,
+                          m.file_size, m.width, m.height
+                   FROM media_asset_links l
+                   JOIN media m ON m.id = l.media_id
+                   WHERE l.directory = ?
+                   ORDER BY l.created_at DESC""",
+                (directory,),
+            ).fetchall()
+        else:
+            link_rows = con.execute(
+                """SELECT l.id AS link_id, l.media_id, l.directory,
+                          m.filename, m.filepath, m.thumbnail_path, m.mime_type,
+                          m.file_size, m.width, m.height
+                   FROM media_asset_links l
+                   JOIN media m ON m.id = l.media_id
+                   ORDER BY l.created_at DESC""",
+            ).fetchall()
         for lr in link_rows:
             lnk = dict(lr)
             media_url = None

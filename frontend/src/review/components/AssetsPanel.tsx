@@ -31,6 +31,7 @@ export function AssetsPanel({ active, split_mode }: Props) {
   const [folders, setFolders] = useState<string[]>([])
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [assets, setAssets] = useState<AssetItem[]>([])
+  const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -67,7 +68,7 @@ export function AssetsPanel({ active, split_mode }: Props) {
 
   const handleCreateFolder = async () => {
     const name = newFolderName.trim(); if (!name) return
-    try { await rhApi.createAssetFolder(activeFolder ? `${activeFolder}/${name}` : name); toast.success(`Folder "${name}" created`); setNewFolderName(''); void loadFolders(activeFolder) }
+    try { await rhApi.createAssetFolder(activeFolder ? `${activeFolder}/${name}` : name); toast.success(`Folder "${name}" created`); setNewFolderName(''); setShowNewFolder(false); void loadFolders(activeFolder) }
     catch { toast.error('Failed to create folder') }
   }
   const handleDeleteFolder = async (fullPath: string) => {
@@ -151,35 +152,51 @@ export function AssetsPanel({ active, split_mode }: Props) {
 
   return (
     <div className="rh-assets-layout">
-      <div className="rh-assets-sidebar">
-        <div className="rh-assets-sidebar-header">Folders</div>
-        <div className={`rh-assets-folder-row ${activeFolder === null ? 'rh-assets-folder-active' : ''}`} onClick={() => setActiveFolder(null)}>All Assets</div>
-        {folders.map(folder => (
-          <div
-            key={folder}
-            className={`rh-assets-folder-row ${activeFolder === folder ? 'rh-assets-folder-active' : ''}${dropTarget === (activeFolder ? `${activeFolder}/${folder}` : folder) ? ' rh-assets-folder-drop-active' : ''}`}
-            onContextMenu={e => handleFolderContext(e, folder)}
-            onDragOver={e => handleFolderDragOver(e, folder)} onDragLeave={() => setDropTarget(null)} onDrop={e => handleFolderDrop(e, folder)}
-          >
-            {renamingFolder === folder
-              ? <input className="rh-assets-rename-input" value={renameValue} autoFocus onChange={e => setRenameValue(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') void handleRename(); if (e.key === 'Escape') setRenamingFolder(null) }}
-                  onBlur={() => setRenamingFolder(null)} onClick={e => e.stopPropagation()} />
-              : <span className="rh-assets-folder-name" onClick={() => setActiveFolder(activeFolder ? `${activeFolder}/${folder}` : folder)}>{folder}</span>}
-            {is_admin && renamingFolder !== folder && (
-              <span className="rh-assets-folder-actions">
-                <button className="rh-assets-icon-btn" onClick={() => handleStartRename(folder)} title="Rename">&#9998;</button>
-                <button className="rh-assets-icon-btn rh-assets-icon-danger" onClick={() => handleDeleteFolder(activeFolder ? `${activeFolder}/${folder}` : folder)} title="Delete">&#10005;</button>
-              </span>
-            )}
+      <aside className="rh-sidebar">
+        <div className="rh-sidebar-header">
+          Folders
+          {is_admin && <button className="rh-sidebar-new-btn" onClick={() => setShowNewFolder(v => !v)} title="New Folder">+</button>}
+        </div>
+        {showNewFolder && (
+          <div className="rh-sidebar-new-row">
+            <input className="rh-sidebar-new-input" ref={newFolderRef} placeholder="Folder name..." value={newFolderName} autoFocus
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false) }} />
+            <button className="rh-sidebar-new-confirm" onClick={handleCreateFolder}>&#10003;</button>
           </div>
-        ))}
-        {is_admin && <div className="rh-assets-new-folder">
-          <input className="rh-assets-new-folder-input" ref={newFolderRef} placeholder="New folder..." value={newFolderName}
-            onChange={e => setNewFolderName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleCreateFolder() }} />
-          <button className="rh-assets-create-btn" onClick={handleCreateFolder}>+</button>
-        </div>}
-      </div>
+        )}
+        <div className="rh-sidebar-list">
+          <button className={`rh-dir-item${activeFolder === null ? ' rh-dir-item--active' : ''}`} onClick={() => setActiveFolder(null)}>
+            <span className="rh-dir-icon">&#9632;</span>
+            <span className="rh-dir-name">All Assets</span>
+            <span className="rh-dir-arrow">&#8250;</span>
+          </button>
+          {folders.map(folder => {
+            const fullPath = activeFolder ? `${activeFolder}/${folder}` : folder
+            const isActive = activeFolder === fullPath
+            const isDrop = dropTarget === fullPath
+            return (
+              <button
+                key={folder}
+                className={`rh-dir-item${isActive ? ' rh-dir-item--active' : ''}${isDrop ? ' rh-assets-folder-drop-active' : ''}`}
+                onClick={() => setActiveFolder(fullPath)}
+                onContextMenu={e => handleFolderContext(e, folder)}
+                onDragOver={e => handleFolderDragOver(e, folder)}
+                onDragLeave={() => setDropTarget(null)}
+                onDrop={e => handleFolderDrop(e, folder)}
+              >
+                <span className="rh-dir-icon">&#9632;</span>
+                {renamingFolder === folder
+                  ? <input className="rh-assets-rename-input" value={renameValue} autoFocus
+                      onChange={e => setRenameValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void handleRename(); if (e.key === 'Escape') setRenamingFolder(null) }}
+                      onBlur={() => setRenamingFolder(null)} onClick={e => e.stopPropagation()} />
+                  : <span className="rh-dir-name">{folder}</span>}
+              </button>
+            )
+          })}
+        </div>
+      </aside>
 
       <div className={`rh-assets-content${dropTarget === 'grid' ? ' rh-assets-drop-active' : ''}`} onContextMenu={handleGridContext}
         onDragOver={handleGridDragOver} onDragLeave={handleGridDragLeave} onDrop={handleGridDrop}>

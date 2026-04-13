@@ -92,4 +92,9 @@ export const rhApi = {
   addFeedback: (body: { message: string; category?: string; author?: string; urgent?: boolean }) =>
     post<{ id: number }>('/feedback', body),
   resolveFeedback: (id: number) => post<{ ok: boolean }>(`/feedback/${id}/resolve`),
+
+  // Asset links
+  linkAsset: (body: { media_id: number; directory: string }) =>
+    post<{ status: string; id: number }>('/assets/link', body),
+  unlinkAsset: (link_id: number) => del(`/assets/link/${link_id}`),
 }

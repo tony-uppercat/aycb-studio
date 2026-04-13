@@ -2295,6 +2295,15 @@
   color: #fff; font-size: 16px; width: 28px; cursor: pointer;
 }
 
+.rh-assets-breadcrumb {
+  display: flex; align-items: center; gap: 2px;
+  font-size: 12px; padding: 0 0 10px; color: var(--text-dim, #666);
+}
+.rh-assets-crumb-link { color: var(--accent, #F52776); cursor: pointer; }
+.rh-assets-crumb-link:hover { text-decoration: underline; }
+.rh-assets-crumb-sep { margin: 0 3px; color: var(--text-dim, #555); }
+.rh-assets-crumb-cur { color: var(--text-primary, #e8e8e8); }
+
 .rh-assets-content {
   flex: 1;
   overflow-y: auto;
@@ -2367,4 +2376,82 @@
   position: absolute; top: 0; right: 0;
   background: rgba(0,0,0,0.6); border: none; border-radius: 4px;
   color: #fff; font-size: 18px; padding: 6px 12px; cursor: pointer;
+}
+
+/* ── Split Screen ─────────────────────────── */
+.rh-split-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.rh-split-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.rh-split-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.rh-split-divider {
+  width: 5px;
+  flex-shrink: 0;
+  background: var(--border, #272727);
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.rh-split-divider:hover,
+.rh-split-divider:active {
+  background: var(--accent, #F52776);
+}
+.rh-split-divider-grip {
+  width: 3px;
+  height: 24px;
+  background: var(--text-dim, #555);
+  border-radius: 2px;
+}
+.rh-split-divider:hover .rh-split-divider-grip {
+  background: var(--text-primary, #fafafa);
+}
+
+/* Tab: Split active */
+.rh-tab-split { margin-left: auto; }
+.rh-tab-split-active {
+  color: var(--accent, #F52776);
+  border-bottom-color: var(--accent, #F52776);
+  background: var(--accent-glow, #F5277615);
+}
+
+/* Drag feedback */
+.rh-card--dragging {
+  opacity: 0.4;
+  outline: 2px solid var(--accent, #F52776);
+  outline-offset: -2px;
+}
+.rh-assets-drop-active {
+  outline: 2px dashed var(--accent, #F52776);
+  outline-offset: -2px;
+  background: var(--accent-glow, #F5277610);
+}
+.rh-assets-folder-drop-active {
+  background: var(--accent-glow, #F5277620);
+  outline: 1px dashed var(--accent, #F52776);
+}
+.rh-asset-link-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 10px;
+  color: var(--accent, #F52776);
+  background: var(--surface-1, #111);
+  padding: 1px 4px;
+  border-radius: 2px;
+  line-height: 1;
 }

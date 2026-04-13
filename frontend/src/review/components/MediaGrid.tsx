@@ -12,6 +12,7 @@ interface Props {
   on_card_select?: (id: number, e: React.MouseEvent) => void
   on_context_menu?: (id: number, e: React.MouseEvent) => void
   on_delete?: (id: number) => void
+  split_mode?: boolean
 }
 
 export function MediaGrid({
@@ -25,6 +26,7 @@ export function MediaGrid({
   on_card_select,
   on_context_menu,
   on_delete,
+  split_mode = false,
 }: Props) {
   const handleClick = useCallback((id: number) => {
     onDoubleClick(id)
@@ -47,6 +49,7 @@ export function MediaGrid({
           on_select={(e) => on_card_select?.(item.id, e)}
           on_context_menu={(e) => on_context_menu?.(item.id, e)}
           on_delete={on_delete ? () => on_delete(item.id) : undefined}
+          split_mode={split_mode}
         />
       ))}
     </div>

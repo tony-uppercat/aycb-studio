@@ -21,6 +21,7 @@ interface MediaCardProps {
   selected: boolean
   show_checkbox: boolean
   is_admin: boolean
+  split_mode?: boolean
   on_click: () => void
   on_select: (e: React.MouseEvent) => void
   on_context_menu: (e: React.MouseEvent) => void
@@ -60,19 +61,35 @@ export function MediaCard({
   selected,
   show_checkbox,
   is_admin,
+  split_mode,
   on_click,
   on_select,
   on_context_menu,
   on_delete,
 }: MediaCardProps) {
+  const [isDragging, setIsDragging] = React.useState(false)
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/x-media-id', String(media.id))
+    e.dataTransfer.effectAllowed = 'link'
+    setIsDragging(true)
+  }
+
+  const handleDragEnd = () => {
+    setIsDragging(false)
+  }
+
   const is_video = media.mime_type?.startsWith('video/') ?? false
   const duration = is_video ? parseDuration(media.metadata) : null
   const model = parseModel(media.metadata)
 
   return (
     <div
-      className={`rh-card${selected ? ' rh-card--selected' : ''}`}
+      className={`rh-card${selected ? ' rh-card--selected' : ''}${isDragging ? ' rh-card--dragging' : ''}`}
       tabIndex={0}
+      draggable={!!split_mode}
+      onDragStart={split_mode ? handleDragStart : undefined}
+      onDragEnd={split_mode ? handleDragEnd : undefined}
       onClick={on_click}
       onContextMenu={on_context_menu}
       onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); on_click() } }}

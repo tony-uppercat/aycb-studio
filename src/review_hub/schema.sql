@@ -109,3 +109,15 @@ CREATE TABLE IF NOT EXISTS assets (
 
 CREATE INDEX IF NOT EXISTS idx_assets_directory ON assets(directory);
 CREATE INDEX IF NOT EXISTS idx_assets_filename ON assets(filename);
+
+CREATE TABLE IF NOT EXISTS media_asset_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_id INTEGER NOT NULL,
+    directory TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(media_id, directory),
+    FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_asset_links_media ON media_asset_links(media_id);
+CREATE INDEX IF NOT EXISTS idx_media_asset_links_dir ON media_asset_links(directory);

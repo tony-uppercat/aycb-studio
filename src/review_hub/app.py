@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.review_hub.db import init_db
 from src.review_hub.scanner import run_scanner, set_sio
-from src.review_hub.routes import media, comments, favorites, drawings, references, upload, download, folders, feedback, logs, assets, asset_folders
+from src.review_hub.routes import media, comments, favorites, drawings, references, upload, download, folders, feedback, logs, assets, asset_folders, asset_links
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
@@ -68,8 +68,20 @@ async def comment_new(sid, data):
     await sio.emit("comment_new", data, room="review", skip_sid=sid)
 
 @sio.event
+async def comment_delete(sid, data):
+    await sio.emit("comment_delete", data, room="review", skip_sid=sid)
+
+@sio.event
 async def favorite_toggle(sid, data):
     await sio.emit("favorite_toggle", data, room="review", skip_sid=sid)
+
+@sio.event
+async def asset_link_new(sid, data):
+    await sio.emit("asset_link_new", data, room="review", skip_sid=sid)
+
+@sio.event
+async def asset_link_delete(sid, data):
+    await sio.emit("asset_link_delete", data, room="review", skip_sid=sid)
 
 @sio.event
 async def ping_check(sid, data):
@@ -104,7 +116,7 @@ async def rh_startup() -> None:
 def mount_review_hub(app: FastAPI) -> None:
     """Mount Review Hub routes, socket.io, static files, and scanner onto FastAPI app."""
     # Routes (BEFORE static mounts to prevent path interception)
-    for router_mod in [media, comments, favorites, drawings, references, upload, download, folders, feedback, logs, assets, asset_folders]:
+    for router_mod in [media, comments, favorites, drawings, references, upload, download, folders, feedback, logs, assets, asset_folders, asset_links]:
         app.include_router(router_mod.router)
 
     # Socket.io ASGI mount

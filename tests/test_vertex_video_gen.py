@@ -1,4 +1,4 @@
-"""Tests for src/vertex_video_gen.py — Google Veo 3.1 via Vertex AI."""
+"""Tests for src/vertex_video_gen.py — Google Veo 3.1 via Gemini API."""
 import pytest
 
 
@@ -57,7 +57,7 @@ class TestSubmitTextToVideo:
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             result = asyncio.run(submit_text_to_video(
                 api_key="", model_id="vertex-veo-3.1",
                 prompt="a cat", aspect_ratio="16:9", duration=8, quality="720p",
@@ -86,7 +86,7 @@ class TestSubmitWithRefs:
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1-fast", prompt="go",
                 ref_image_bytes=[("a.png", b"\x89PNG\r\n")],
@@ -107,7 +107,7 @@ class TestSubmitWithRefs:
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="morph",
                 ref_image_bytes=[("a.png", b"A"), ("b.png", b"B")],
@@ -129,7 +129,7 @@ class TestSubmitWithRefs:
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="scene",
                 ref_image_bytes=[("a.png", b"A"), ("b.png", b"B"), ("c.png", b"C")],
@@ -147,7 +147,7 @@ class TestSubmitWithRefs:
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="scene",
                 ref_image_bytes=[("a.png", b"A"), ("b.png", b"B"),
@@ -168,7 +168,7 @@ class TestSubmitWithRefs:
         client.models.generate_videos.return_value = op
 
         caplog.set_level(logging.WARNING, logger="src.vertex_video_gen")
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="x",
                 ref_image_bytes=None,
@@ -188,7 +188,7 @@ class TestSubmitWithRefs:
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="x",
                 ref_image_bytes=None,
@@ -214,7 +214,7 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             result = asyncio.run(get_result(
                 api_key="", request_id="projects/p/locations/us/operations/abc",
             ))
@@ -235,7 +235,7 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             result = asyncio.run(get_result(api_key="", request_id="rid"))
 
         assert result["status"] == "failed"
@@ -269,7 +269,7 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             result = asyncio.run(vertex_video_gen.get_result(
                 api_key="",
                 request_id="projects/p/locations/us/operations/ABC-XYZ",
@@ -295,6 +295,6 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+        with patch("src.vertex_video_gen._get_client", return_value=client):
             with pytest.raises(VertexVideoGenError, match="no video"):
                 asyncio.run(get_result(api_key="", request_id="rid"))

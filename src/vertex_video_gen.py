@@ -1,4 +1,11 @@
-"""Video generation API client — Veo 3.1 via Google Vertex AI."""
+"""Video generation API client — Veo 3.1 via Google Gemini API.
+
+The file is named ``vertex_video_gen`` for historical reasons; the initial
+implementation used Vertex AI. Veo 3.1 is now invoked through the Gemini
+Developer API with a simple API key (``AYCB_GEMINI_KEY``) — no gcloud /
+ADC / GCP project required. See the companion ``src/vertex_client.py``
+which still powers Imagen edit via Vertex.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import settings
-from src.vertex_client import get_vertex_client
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +92,17 @@ def _build_config(
     )
 
 
+def _get_client(api_key: str) -> Any:
+    """Build a fresh genai client for the Gemini Developer API."""
+    from google import genai
+    return genai.Client(api_key=api_key)
+
+
 def _submit_sync(
-    vertex_model: str, prompt: str, config: Any, image: Any | None,
+    api_key: str, vertex_model: str, prompt: str, config: Any, image: Any | None,
 ) -> Any:
     """Run the blocking SDK call. Returns the Operation."""
-    client = get_vertex_client()
+    client = _get_client(api_key)
     kwargs: dict[str, Any] = {"model": vertex_model, "prompt": prompt, "config": config}
     if image is not None:
         kwargs["image"] = image
@@ -98,7 +110,7 @@ def _submit_sync(
     try:
         return client.models.generate_videos(**kwargs)
     except Exception as exc:
-        raise VertexVideoGenError(f"Vertex submit failed: {exc}") from exc
+        raise VertexVideoGenError(f"Veo submit failed: {exc}") from exc
 
 
 async def submit_text_to_video(
@@ -109,7 +121,9 @@ async def submit_text_to_video(
     """Submit a T2V request. `api_key` is ignored (Vertex uses GCP creds)."""
     info = get_model_info(model_id)
     config = _build_config(aspect_ratio, duration, quality)
-    op = await asyncio.to_thread(_submit_sync, info["vertex_model"], prompt, config, None)
+    op = await asyncio.to_thread(
+        _submit_sync, api_key, info["vertex_model"], prompt, config, None,
+    )
     return {"request_id": op.name, "status": "pending"}
 
 
@@ -169,7 +183,7 @@ async def submit_with_refs(
     )
 
     op = await asyncio.to_thread(
-        _submit_sync, info["vertex_model"], prompt, config, image,
+        _submit_sync, api_key, info["vertex_model"], prompt, config, image,
     )
     return {"request_id": op.name, "status": "pending"}
 
@@ -195,12 +209,12 @@ def _save_video_sync(client: Any, video: Any, request_id: str) -> str:
     return f"/media/{filename}"
 
 
-def _get_result_sync(request_id: str) -> dict[str, Any]:
-    client = get_vertex_client()
+def _get_result_sync(api_key: str, request_id: str) -> dict[str, Any]:
+    client = _get_client(api_key)
     try:
         op = client.operations.get(request_id)
     except Exception as exc:
-        raise VertexVideoGenError(f"Vertex operation lookup failed: {exc}") from exc
+        raise VertexVideoGenError(f"Veo operation lookup failed: {exc}") from exc
 
     if not op.done:
         return {"request_id": request_id, "status": "processing", "url": "", "error": ""}
@@ -212,15 +226,15 @@ def _get_result_sync(request_id: str) -> dict[str, Any]:
     response = getattr(op, "response", None)
     videos = getattr(response, "generated_videos", None) if response else None
     if not videos:
-        raise VertexVideoGenError("Vertex operation done but no video returned")
+        raise VertexVideoGenError("Veo operation done but no video returned")
 
     url = _save_video_sync(client, videos[0].video, request_id)
     return {"request_id": request_id, "status": "completed", "url": url, "error": ""}
 
 
 async def get_result(api_key: str, request_id: str) -> dict[str, Any]:
-    """Poll a Vertex operation. On completion, saves bytes locally and returns URL."""
-    return await asyncio.to_thread(_get_result_sync, request_id)
+    """Poll a Veo operation. On completion, saves bytes locally and returns URL."""
+    return await asyncio.to_thread(_get_result_sync, api_key, request_id)
 
 
 async def wait_for_completion(

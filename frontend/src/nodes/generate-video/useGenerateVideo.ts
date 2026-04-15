@@ -98,7 +98,7 @@ const POLL_INTERVAL_MS = 5000
 export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
-  const { piApiKey, falApiKey, atlasApiKey } = useSettings()
+  const { apiKey, piApiKey, falApiKey, atlasApiKey } = useSettings()
 
   // -- UI state ---------------------------------------------------------------
 
@@ -143,7 +143,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const isFal = modelInfo.provider === 'fal'
   const isAtlas = modelInfo.provider === 'atlas'
   const isVertex = modelInfo.provider === 'vertex'
-  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : isVertex ? '' : piApiKey
+  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : isVertex ? apiKey : piApiKey
   const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : isVertex ? 'vertex' : 'piapi'
 
   // -- Dynamic image slots (same pattern as Generate Image) -------------------
@@ -326,9 +326,10 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const run = useCallback(async () => {
     const prompt = (pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt).trim()
     if (!prompt) { setError('Write a prompt'); return }
-    if (!isVertex && !activeApiKey) {
+    if (!activeApiKey) {
       setError(isFal ? 'Set fal.ai key in Settings'
              : isAtlas ? 'Set Atlas Cloud key in Settings'
+             : isVertex ? 'Set Gemini key in Settings'
              : 'Set PiAPI key in Settings')
       return
     }

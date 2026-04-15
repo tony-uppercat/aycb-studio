@@ -18,6 +18,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
   const PROVIDERS = [
     { id: 'fal', label: 'fal.ai' },
     { id: 'atlas', label: 'Atlas' },
+    { id: 'vertex', label: 'Veo' },
     { id: 'piapi', label: 'PiAPI' },
   ]
   const [activeProvider, setActiveProvider] = useState(
@@ -36,7 +37,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     modelInfo,
     imageSlots,
     hasPromptEdge,
-    activePrompt, mode,
+    activePrompt, mode, setMode,
     run,
     activeApiKey,
     lastCost,
@@ -129,12 +130,18 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
         {/* Mode indicator */}
         <div className={nodeStyles.controlsRow}>
           <div className={nodeStyles.modeToggle}>
-            <span className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}>
-              Text{'\u2192'}Video
-            </span>
-            <span className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}>
+            <button className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}
+              onClick={() => setMode('t2v')}>
+              T2V
+            </button>
+            <button className={`${nodeStyles.modeBtn} ${mode === 'i2v' ? nodeStyles.modeBtnActive : ''}`}
+              onClick={() => setMode('i2v')}>
+              I2V
+            </button>
+            <button className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}
+              onClick={() => setMode('multi-ref')}>
               Multi-Ref
-            </span>
+            </button>
           </div>
         </div>
 

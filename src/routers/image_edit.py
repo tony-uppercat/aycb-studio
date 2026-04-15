@@ -10,7 +10,6 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from PIL import Image as PILImage
 
-from config.settings import settings
 from src.shared import (
     _log,
     _require_prompt,
@@ -18,41 +17,12 @@ from src.shared import (
     _read_upload,
     MAX_IMAGE_BYTES,
 )
+from src.vertex_client import (
+    get_vertex_client as _get_vertex_client,
+    reset_vertex_client as _reset_vertex_client,
+)
 
 router = APIRouter(prefix="/api/edit", tags=["edit"])
-
-# ── Vertex AI client cache ───────────────────────────────────────────────────
-
-_vertex_client = None
-
-
-def _get_vertex_client():
-    """Return a cached Vertex AI genai client. Raises ValueError if GCP project is unset."""
-    global _vertex_client
-    if _vertex_client is not None:
-        return _vertex_client
-    if not settings.gcp_project:
-        raise ValueError(
-            "GCP project is not configured. Set it in Settings > GCP or AYCB_GCP_PROJECT env var."
-        )
-    try:
-        from google import genai
-        _vertex_client = genai.Client(
-            vertexai=True,
-            project=settings.gcp_project,
-            location=settings.gcp_location,
-        )
-        _log(f"Vertex AI client created — project={settings.gcp_project}, location={settings.gcp_location}")
-    except Exception as exc:
-        _log(f"Vertex AI client creation FAILED — {exc}")
-        raise
-    return _vertex_client
-
-
-def _reset_vertex_client() -> None:
-    """Reset cached client (used in tests)."""
-    global _vertex_client
-    _vertex_client = None
 
 
 # ── Edit mode configuration ──────────────────────────────────────────────────

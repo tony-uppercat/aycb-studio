@@ -251,7 +251,13 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
         {!videoUrl && !loading && !status && (
           <div className={styles.previewArea}>
             <span className={styles.dropHint}>
-              {!activeApiKey ? 'Set PiAPI key in Settings' : 'Write a prompt and click Run'}
+              {modelInfo.provider === 'vertex'
+                ? 'Write a prompt and click Run'
+                : !activeApiKey
+                  ? modelInfo.provider === 'fal' ? 'Set fal.ai key in Settings'
+                    : modelInfo.provider === 'atlas' ? 'Set Atlas Cloud key in Settings'
+                    : 'Set PiAPI key in Settings'
+                  : 'Write a prompt and click Run'}
             </span>
           </div>
         )}

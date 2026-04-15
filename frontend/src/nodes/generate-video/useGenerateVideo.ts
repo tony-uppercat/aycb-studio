@@ -77,6 +77,19 @@ export const VIDEO_MODELS: VideoModelDef[] = [
     cost: 0.10, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
     qualities: ['standard'], minDuration: 4, maxDuration: 15,
   },
+  // Vertex AI — Google Veo 3.1
+  {
+    id: 'vertex-veo-3.1', name: 'Veo 3.1', provider: 'vertex',
+    tooltip: 'Google Vertex — Veo 3.1, native audio, up to 3 refs, 4-8s', price: '$0.40/s',
+    cost: 0.40, ratios: ['16:9', '9:16'],
+    qualities: ['720p', '1080p'], minDuration: 4, maxDuration: 8,
+  },
+  {
+    id: 'vertex-veo-3.1-fast', name: 'Veo 3.1 Fast', provider: 'vertex',
+    tooltip: 'Google Vertex — Veo 3.1 Fast, 4-8s', price: '$0.15/s',
+    cost: 0.15, ratios: ['16:9', '9:16'],
+    qualities: ['720p'], minDuration: 4, maxDuration: 8,
+  },
 ]
 
 const MAX_REFS = 12
@@ -94,6 +107,10 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const [aspectRatio, setAspectRatio] = useState(data.aspectRatio ?? '21:9')
   const [duration, setDuration] = useState(data.duration ?? 5)
   const [quality, setQuality] = useState(data.quality ?? '720p')
+  const [modeOverride, setModeOverride] = useState<'t2v' | 'i2v' | 'multi-ref' | null>(() => {
+    const v = (data as Record<string, unknown>).modeOverride
+    return v === 't2v' || v === 'i2v' || v === 'multi-ref' ? v : null
+  })
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -112,11 +129,22 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const pollStartRef = useRef(0)
   const falEndpointRef = useRef('')  // stored from fal submit response for polling
 
+  // Refs for values used inside startPolling (avoid stale closures)
+  const historyIdsRef = useRef(historyIds)
+  useEffect(() => { historyIdsRef.current = historyIds }, [historyIds])
+  const historyUrlsRef = useRef(historyUrls)
+  useEffect(() => { historyUrlsRef.current = historyUrls }, [historyUrls])
+  const aspectRatioRef = useRef(aspectRatio)
+  useEffect(() => { aspectRatioRef.current = aspectRatio }, [aspectRatio])
+  const localPromptRef = useRef(localPrompt)
+  useEffect(() => { localPromptRef.current = localPrompt }, [localPrompt])
+
   const modelInfo = VIDEO_MODELS.find(m => m.id === selectedModel) ?? VIDEO_MODELS[0]
   const isFal = modelInfo.provider === 'fal'
   const isAtlas = modelInfo.provider === 'atlas'
-  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : piApiKey
-  const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : 'piapi'
+  const isVertex = modelInfo.provider === 'vertex'
+  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : isVertex ? '' : piApiKey
+  const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : isVertex ? 'vertex' : 'piapi'
 
   // -- Dynamic image slots (same pattern as Generate Image) -------------------
 
@@ -158,9 +186,14 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   // Cost estimate
   const estimatedCost = `~$${(modelInfo.cost * duration).toFixed(2)}`
 
-  // Detect mode
+  // Detect mode — user override takes precedence over auto-detection
   const hasRefs = connectedImageCount > 0 || hasVideoRef || hasAudioRef
-  const mode = hasRefs ? 'multi-ref' : 't2v'
+  const autoMode = !hasRefs ? 't2v'
+    : (connectedImageCount <= 2 && !hasVideoRef && !hasAudioRef) ? 'i2v'
+    : 'multi-ref'
+  const mode = modeOverride ?? autoMode
+  const modeRef = useRef(mode)
+  useEffect(() => { modeRef.current = mode }, [mode])
 
   // -- Polling ----------------------------------------------------------------
 
@@ -203,18 +236,17 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
           })
 
           // Bridge video to shared/Media/ and add to history
-          const prompt = (data.prompt as string) ?? ''
           bridgeVideo(url, {
-            prompt,
+            prompt: localPromptRef.current ?? '',
             model: selectedModel,
             modelName: modelInfo.name,
-            aspectRatio,
+            aspectRatio: aspectRatioRef.current,
             duration,
             costUsd,
           }).then(stem => {
             if (stem) {
-              const newIds = [...historyIds, stem]
-              const newUrls = [...historyUrls, url]
+              const newIds = [...historyIdsRef.current, stem]
+              const newUrls = [...historyUrlsRef.current, url]
               setHistoryIds(newIds)
               setHistoryUrls(newUrls)
               setHistoryIndex(newIds.length - 1)
@@ -294,7 +326,12 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const run = useCallback(async () => {
     const prompt = (pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt).trim()
     if (!prompt) { setError('Write a prompt'); return }
-    if (!activeApiKey) { setError(isFal ? 'Set fal.ai key in Settings' : 'Set PiAPI key in Settings'); return }
+    if (!isVertex && !activeApiKey) {
+      setError(isFal ? 'Set fal.ai key in Settings'
+             : isAtlas ? 'Set Atlas Cloud key in Settings'
+             : 'Set PiAPI key in Settings')
+      return
+    }
 
     setLoading(true)
     setError('')
@@ -302,19 +339,23 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     setVideoUrl('')
 
     try {
-      // Collect reference images
-      const refImages = await pullAllMedia(id, 'image-', getNodes, getEdges)
+      // Collect references based on mode
+      const curMode = modeRef.current
+      let refImages: File[] = []
+      if (curMode === 'i2v') {
+        refImages = (await pullAllMedia(id, 'image-', getNodes, getEdges)).slice(0, 2)
+      } else if (curMode === 'multi-ref') {
+        refImages = await pullAllMedia(id, 'image-', getNodes, getEdges)
+      }
 
-      // Collect reference video
       let refVideo: File | undefined
-      if (hasVideoRef) {
+      if (hasVideoRef && curMode === 'multi-ref') {
         const { file } = await pullMedia(id, 'video-ref', getNodes, getEdges)
         if (file) refVideo = file
       }
 
-      // Collect audio URL from text connection
       let audioUrl = ''
-      if (hasAudioRef) {
+      if (hasAudioRef && curMode === 'multi-ref') {
         audioUrl = pullText(id, 'audio-ref', getNodes, getEdges) || ''
       }
 
@@ -342,8 +383,13 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
       setLoading(false)
       reportNodeError(id, msg)
     }
-  }, [id, activePrompt, activeApiKey, isFal, isAtlas, activeProvider, selectedModel, aspectRatio, duration, quality,
+  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, activeProvider, selectedModel, aspectRatio, duration, quality,
       hasVideoRef, hasAudioRef, getNodes, getEdges, updateNodeData, startPolling])
+
+  const setMode = useCallback((m: 't2v' | 'i2v' | 'multi-ref') => {
+    setModeOverride(m)
+    updateNodeData(id, { modeOverride: m })
+  }, [id, updateNodeData])
 
   const navigateHistory = useCallback((delta: number) => {
     const newIdx = Math.max(0, Math.min(historyIds.length - 1, historyIndex + delta))
@@ -363,7 +409,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     imageSlots,
     connectedImageCount,
     hasPromptEdge, hasVideoRef, hasAudioRef,
-    activePrompt, mode,
+    activePrompt, mode, setMode,
     run,
     activeApiKey,
     lastCost,

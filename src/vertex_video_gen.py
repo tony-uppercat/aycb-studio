@@ -74,21 +74,39 @@ def _build_image(image_bytes: bytes, filename: str) -> Any:
     return types.Image(image_bytes=image_bytes, mime_type=mime)
 
 
+_ALLOWED_DURATIONS = (4, 6, 8)
+
+
+def _snap_duration(duration: int, has_refs: bool) -> int:
+    """Gemini API only accepts 4, 6, or 8 seconds; refs/interpolation require 8."""
+    if has_refs:
+        return 8
+    return min(_ALLOWED_DURATIONS, key=lambda d: abs(d - duration))
+
+
 def _build_config(
     aspect_ratio: str, duration: int, quality: str,
     last_frame: Any | None = None,
     reference_images: list[Any] | None = None,
+    has_image: bool = False,
 ) -> Any:
     from google.genai import types
-    return types.GenerateVideosConfig(
-        aspect_ratio=aspect_ratio,
-        duration_seconds=duration,
-        resolution=quality if quality in ("720p", "1080p") else "720p",
-        number_of_videos=1,
-        person_generation="allow_adult",
-        last_frame=last_frame,
-        reference_images=reference_images or [],
-    )
+    has_refs = has_image or last_frame is not None or bool(reference_images)
+    # T2V requires "allow_all"; I2V / interpolation / reference_images require "allow_adult".
+    person = "allow_adult" if has_refs else "allow_all"
+    snapped = _snap_duration(duration, has_refs)
+    kwargs: dict[str, Any] = {
+        "aspect_ratio": aspect_ratio,
+        "duration_seconds": snapped,
+        "resolution": quality if quality in ("720p", "1080p") else "720p",
+        "number_of_videos": 1,
+        "person_generation": person,
+    }
+    if last_frame is not None:
+        kwargs["last_frame"] = last_frame
+    if reference_images:
+        kwargs["reference_images"] = reference_images
+    return types.GenerateVideosConfig(**kwargs)
 
 
 def _get_client(api_key: str) -> Any:
@@ -179,6 +197,7 @@ async def submit_with_refs(
         aspect_ratio, duration, quality,
         last_frame=last_frame,
         reference_images=reference_images,
+        has_image=True,
     )
 
     op = await asyncio.to_thread(

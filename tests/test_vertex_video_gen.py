@@ -73,7 +73,43 @@ class TestSubmitTextToVideo:
         assert cfg.duration_seconds == 8
         assert cfg.resolution == "720p"
         assert cfg.number_of_videos == 1
-        assert cfg.person_generation == "allow_adult"
+        # T2V on Gemini API requires "allow_all"
+        assert cfg.person_generation == "allow_all"
+
+    def test_snaps_invalid_duration_to_nearest_allowed(self):
+        """Gemini API only accepts 4/6/8s; 5s must snap to 4 or 6."""
+        from src.vertex_video_gen import submit_text_to_video
+
+        op = _fake_operation()
+        client = MagicMock()
+        client.models.generate_videos.return_value = op
+
+        with patch("src.vertex_video_gen._get_client", return_value=client):
+            asyncio.run(submit_text_to_video(
+                api_key="", model_id="vertex-veo-3.1",
+                prompt="x", aspect_ratio="16:9", duration=5, quality="720p",
+            ))
+
+        cfg = client.models.generate_videos.call_args.kwargs["config"]
+        assert cfg.duration_seconds in (4, 6)
+
+    def test_t2v_omits_reference_images_field(self):
+        """Empty reference_images must be omitted, not sent as []."""
+        from src.vertex_video_gen import submit_text_to_video
+
+        op = _fake_operation()
+        client = MagicMock()
+        client.models.generate_videos.return_value = op
+
+        with patch("src.vertex_video_gen._get_client", return_value=client):
+            asyncio.run(submit_text_to_video(
+                api_key="", model_id="vertex-veo-3.1",
+                prompt="x", aspect_ratio="16:9", duration=8, quality="720p",
+            ))
+
+        cfg = client.models.generate_videos.call_args.kwargs["config"]
+        assert not cfg.reference_images
+        assert cfg.last_frame is None
 
 
 class TestSubmitWithRefs:
@@ -98,6 +134,9 @@ class TestSubmitWithRefs:
         cfg = kwargs["config"]
         assert cfg.last_frame is None
         assert not cfg.reference_images
+        # I2V requires "allow_adult" and 8s duration on Gemini API
+        assert cfg.person_generation == "allow_adult"
+        assert cfg.duration_seconds == 8
 
     def test_two_images_sets_image_and_last_frame(self):
         from src.vertex_video_gen import submit_with_refs

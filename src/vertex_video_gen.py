@@ -85,7 +85,6 @@ def _build_config(
         duration_seconds=duration,
         resolution=quality if quality in ("720p", "1080p") else "720p",
         number_of_videos=1,
-        generate_audio=True,
         person_generation="allow_adult",
         last_frame=last_frame,
         reference_images=reference_images or [],

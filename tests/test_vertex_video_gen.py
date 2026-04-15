@@ -73,7 +73,6 @@ class TestSubmitTextToVideo:
         assert cfg.duration_seconds == 8
         assert cfg.resolution == "720p"
         assert cfg.number_of_videos == 1
-        assert cfg.generate_audio is True
         assert cfg.person_generation == "allow_adult"
 
 

@@ -73,8 +73,8 @@ class TestSubmitTextToVideo:
         assert cfg.duration_seconds == 8
         assert cfg.resolution == "720p"
         assert cfg.number_of_videos == 1
-        # T2V on Gemini API requires "allow_all"
-        assert cfg.person_generation == "allow_all"
+        # Use "allow_adult" always — works in every region including EU
+        assert cfg.person_generation == "allow_adult"
 
     def test_snaps_invalid_duration_to_nearest_allowed(self):
         """Gemini API only accepts 4/6/8s; 5s must snap to 4 or 6."""

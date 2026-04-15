@@ -90,17 +90,22 @@ def _build_config(
     reference_images: list[Any] | None = None,
     has_image: bool = False,
 ) -> Any:
+    """Assemble a GenerateVideosConfig for Gemini API.
+
+    person_generation note: docs list "allow_all" for T2V and "allow_adult"
+    for image/interp/refs, but EU/UK/CH/MENA force "allow_adult" across the
+    board. We default to "allow_adult" which is accepted in every region
+    and for every mode.
+    """
     from google.genai import types
     has_refs = has_image or last_frame is not None or bool(reference_images)
-    # T2V requires "allow_all"; I2V / interpolation / reference_images require "allow_adult".
-    person = "allow_adult" if has_refs else "allow_all"
     snapped = _snap_duration(duration, has_refs)
     kwargs: dict[str, Any] = {
         "aspect_ratio": aspect_ratio,
         "duration_seconds": snapped,
         "resolution": quality if quality in ("720p", "1080p") else "720p",
         "number_of_videos": 1,
-        "person_generation": person,
+        "person_generation": "allow_adult",
     }
     if last_frame is not None:
         kwargs["last_frame"] = last_frame

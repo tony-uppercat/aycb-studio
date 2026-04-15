@@ -172,3 +172,73 @@ async def submit_with_refs(
         _submit_sync, info["vertex_model"], prompt, config, image,
     )
     return {"request_id": op.name, "status": "pending"}
+
+
+# ── Poll / Save ─────────────────────────────────────────────────────────────
+
+def _safe_filename_from_id(request_id: str) -> str:
+    """Operation names contain slashes. Flatten to a safe filename stem."""
+    return request_id.replace("/", "_").replace("\\", "_")
+
+
+def _save_video_sync(client: Any, video: Any, request_id: str) -> str:
+    """Download bytes (if needed) and save to shared/Media. Returns relative URL."""
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"veo_{_safe_filename_from_id(request_id)}.mp4"
+    out_path = settings.media_dir / filename
+    try:
+        client.files.download(file=video)
+        video.save(str(out_path))
+    except Exception as exc:
+        raise VertexVideoGenError(f"Failed to save Veo video: {exc}") from exc
+    logger.info("Veo video saved -> %s", out_path)
+    return f"/media/{filename}"
+
+
+def _get_result_sync(request_id: str) -> dict[str, Any]:
+    client = get_vertex_client()
+    try:
+        op = client.operations.get(request_id)
+    except Exception as exc:
+        raise VertexVideoGenError(f"Vertex operation lookup failed: {exc}") from exc
+
+    if not op.done:
+        return {"request_id": request_id, "status": "processing", "url": "", "error": ""}
+
+    if getattr(op, "error", None):
+        return {"request_id": request_id, "status": "failed",
+                "url": "", "error": str(op.error)}
+
+    response = getattr(op, "response", None)
+    videos = getattr(response, "generated_videos", None) if response else None
+    if not videos:
+        raise VertexVideoGenError("Vertex operation done but no video returned")
+
+    url = _save_video_sync(client, videos[0].video, request_id)
+    return {"request_id": request_id, "status": "completed", "url": url, "error": ""}
+
+
+async def get_result(api_key: str, request_id: str) -> dict[str, Any]:
+    """Poll a Vertex operation. On completion, saves bytes locally and returns URL."""
+    return await asyncio.to_thread(_get_result_sync, request_id)
+
+
+async def wait_for_completion(
+    api_key: str, request_id: str,
+    poll_interval: float = POLL_INTERVAL, timeout: float = POLL_TIMEOUT,
+) -> dict[str, Any]:
+    """Poll until done or timeout. Matches the shape of other providers."""
+    start = time.monotonic()
+    while True:
+        result = await get_result(api_key, request_id)
+        if result["status"] == "completed":
+            return result
+        if result["status"] == "failed":
+            raise VertexVideoGenError(
+                f"Veo generation failed: {result.get('error', 'Unknown')}"
+            )
+        if time.monotonic() - start > timeout:
+            raise VertexVideoGenError(
+                f"Veo generation timed out after {timeout}s (status: {result['status']})"
+            )
+        await asyncio.sleep(poll_interval)

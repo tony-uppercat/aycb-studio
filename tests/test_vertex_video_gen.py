@@ -197,3 +197,104 @@ class TestSubmitWithRefs:
 
         kwargs = client.models.generate_videos.call_args.kwargs
         assert "image" not in kwargs or kwargs["image"] is None
+
+
+# ── Poll / Save ─────────────────────────────────────────────────────────────
+
+from pathlib import Path
+
+
+class TestGetResult:
+    def test_still_running(self):
+        from src.vertex_video_gen import get_result
+
+        op = MagicMock()
+        op.done = False
+        op.error = None
+        client = MagicMock()
+        client.operations.get.return_value = op
+
+        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+            result = asyncio.run(get_result(
+                api_key="", request_id="projects/p/locations/us/operations/abc",
+            ))
+
+        assert result == {
+            "request_id": "projects/p/locations/us/operations/abc",
+            "status": "processing",
+            "url": "",
+            "error": "",
+        }
+
+    def test_done_with_error(self):
+        from src.vertex_video_gen import get_result
+
+        op = MagicMock()
+        op.done = True
+        op.error = "RESOURCE_EXHAUSTED: quota"
+        client = MagicMock()
+        client.operations.get.return_value = op
+
+        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+            result = asyncio.run(get_result(api_key="", request_id="rid"))
+
+        assert result["status"] == "failed"
+        assert "quota" in result["error"]
+        assert result["url"] == ""
+
+    def test_done_saves_bytes_and_returns_url(self, tmp_path, monkeypatch):
+        from src import vertex_video_gen
+        from config.settings import settings
+
+        monkeypatch.setattr(settings, "shared_root", tmp_path)
+
+        saved: dict = {}
+
+        def fake_save(path):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_bytes(b"mp4data")
+            saved["path"] = Path(path)
+
+        video = MagicMock()
+        video.save.side_effect = fake_save
+        generated = MagicMock()
+        generated.video = video
+        response = MagicMock()
+        response.generated_videos = [generated]
+        op = MagicMock()
+        op.done = True
+        op.error = None
+        op.response = response
+
+        client = MagicMock()
+        client.operations.get.return_value = op
+
+        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+            result = asyncio.run(vertex_video_gen.get_result(
+                api_key="",
+                request_id="projects/p/locations/us/operations/ABC-XYZ",
+            ))
+
+        assert result["status"] == "completed"
+        assert result["url"] == "/media/veo_projects_p_locations_us_operations_ABC-XYZ.mp4"
+        assert result["error"] == ""
+        assert saved["path"].name == "veo_projects_p_locations_us_operations_ABC-XYZ.mp4"
+        assert saved["path"].read_bytes() == b"mp4data"
+        client.files.download.assert_called_once_with(file=video)
+
+    def test_done_without_generated_videos(self):
+        from src.vertex_video_gen import get_result, VertexVideoGenError
+
+        response = MagicMock()
+        response.generated_videos = []
+        op = MagicMock()
+        op.done = True
+        op.error = None
+        op.response = response
+
+        client = MagicMock()
+        client.operations.get.return_value = op
+
+        with patch("src.vertex_video_gen.get_vertex_client", return_value=client):
+            with pytest.raises(VertexVideoGenError, match="no video"):
+                asyncio.run(get_result(api_key="", request_id="rid"))

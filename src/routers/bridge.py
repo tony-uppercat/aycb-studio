@@ -13,6 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image as PILImage
 from config.settings import settings
+from src.review_hub.db import _DB_PATH
 from src.shared import _log, _save_to_bridge, _save_video_to_bridge
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
@@ -44,7 +45,7 @@ def _get_review_from_db(stem: str) -> dict | None:
     """Query Review Hub DB for review status by filename stem."""
     import sqlite3
 
-    db_path = settings.db_path
+    db_path = _DB_PATH
     if not db_path.exists():
         return None
     uri = db_path.as_uri() + "?mode=ro"
@@ -154,16 +155,41 @@ def _ext_to_mime(ext: str) -> str:
     }.get(ext, "application/octet-stream")
 
 
+def _load_filename_to_thumb() -> dict[str, str]:
+    """Batch-load filename→thumbnail URL from Review Hub DB."""
+    import sqlite3
+
+    db_path = _DB_PATH
+    if not db_path.exists():
+        return {}
+    thumb_dir = settings.thumbnails_dir
+    uri = db_path.as_uri() + "?mode=ro"
+    try:
+        con = sqlite3.connect(uri, uri=True)
+        rows = con.execute("SELECT id, filename FROM media").fetchall()
+        con.close()
+        mapping: dict[str, str] = {}
+        for media_id, filename in rows:
+            thumb_path = thumb_dir / f"{media_id}.jpg"
+            if thumb_path.exists():
+                mapping[filename] = f"/thumbnails/{media_id}.jpg"
+        return mapping
+    except Exception as e:
+        _log(f"Batch thumbnail lookup error: {e}")
+        return {}
+
+
 def _scan_media_list() -> list[dict]:
     """Walk shared/Media/ recursively and return a list of media entry dicts."""
     base = settings.media_dir
     if not base.exists():
         return []
+    # Batch-load thumbnail URLs from Review Hub DB
+    thumb_map = _load_filename_to_thumb()
     entries: list[dict] = []
     for f in sorted(base.rglob("*")):
         if not f.is_file():
             continue
-        # Skip .thumbs directories
         rel = f.relative_to(base)
         if ".thumbs" in rel.parts:
             continue
@@ -174,14 +200,8 @@ def _scan_media_list() -> list[dict]:
             continue
         stat = f.stat()
         stem = f.stem
-        # relative path from base to the file's parent
         rel_dir = str(rel.parent).replace("\\", "/")
-        thumb_path = f.parent / ".thumbs" / f"{stem}.jpg"
-        thumb_url = (
-            f"/api/bridge/media/thumb/{rel_dir}/{stem}.jpg"
-            if thumb_path.exists()
-            else None
-        )
+        thumb_url = thumb_map.get(f.name)
         modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
@@ -208,7 +228,7 @@ def _lookup_media_id(stem: str) -> int | None:
     if not stem:
         return None
 
-    db_path = settings.db_path
+    db_path = _DB_PATH
     if not db_path.exists():
         return None
     uri = db_path.as_uri() + "?mode=ro"
@@ -226,7 +246,7 @@ def _lookup_media_id(stem: str) -> int | None:
 
 
 def _get_references_db_path() -> Path:
-    return settings.db_path
+    return _DB_PATH
 
 
 def _get_references_base_path() -> Path:
@@ -555,7 +575,8 @@ async def get_reference_thumbnail(ref_id: int):
     if not thumbnail_rel:
         raise HTTPException(status_code=404, detail="Reference not found")
 
-    abs_path = _get_references_base_path() / thumbnail_rel
+    tp = Path(thumbnail_rel)
+    abs_path = tp if tp.is_absolute() else _get_references_base_path() / thumbnail_rel
     if not abs_path.exists():
         raise HTTPException(status_code=404, detail="Thumbnail file not found on disk")
 
@@ -601,15 +622,22 @@ async def get_reference_image(ref_id: int):
     base = _get_references_base_path()
     chosen: Path | None = None
 
+    def _resolve_ref_path(raw: str | None) -> Path | None:
+        if not raw:
+            return None
+        p = Path(raw)
+        # If stored as absolute path and exists, use directly
+        if p.is_absolute() and p.exists():
+            return p
+        # Otherwise treat as relative to references base dir
+        candidate = base / raw
+        return candidate if candidate.exists() else None
+
     if processed_rel:
-        candidate = base / processed_rel
-        if candidate.exists():
-            chosen = candidate
+        chosen = _resolve_ref_path(processed_rel)
 
     if chosen is None and original_rel:
-        candidate = base / original_rel
-        if candidate.exists():
-            chosen = candidate
+        chosen = _resolve_ref_path(original_rel)
 
     if chosen is None:
         raise HTTPException(status_code=404, detail="Image file not found on disk")

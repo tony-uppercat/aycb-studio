@@ -62,7 +62,7 @@ export function MediaBrowser({ open, onClose }: Props) {
     return sortedFiltered.filter(e => ids.has(e.id))
   }, [sortedFiltered, projectFilter, projectMediaMap])
 
-  const { handleDragStart, handleDragStartMulti, handleRefDragStart, handleDragEnd } = useMediaDrag({
+  const { handleDragStart, handleDragStartMulti, handleRefDragStart, handleDragEnd, closePanelAfterDrag } = useMediaDrag({
     thumbs, selected, entries, onClose,
   })
   const handleFavoriteToggle = useFavoriteToggle(setReviewStatuses)
@@ -101,6 +101,7 @@ export function MediaBrowser({ open, onClose }: Props) {
             const d = node.data as Record<string, unknown>
             if (typeof d.mediaId === 'string') ids.add(d.mediaId)
             if (Array.isArray(d.historyIds)) for (const h of d.historyIds) if (typeof h === 'string') ids.add(h)
+            if (Array.isArray(d.frameIds)) for (const f of d.frameIds) if (typeof f === 'string') ids.add(f)
           }
           if (ids.size > 0) pMap.set(proj.name, ids)
         }
@@ -420,6 +421,7 @@ export function MediaBrowser({ open, onClose }: Props) {
         {activeTab === 'assets' && (
           <AssetsTab
             open={open && activeTab === 'assets'}
+            onDragStart={closePanelAfterDrag}
             onDragEnd={handleDragEnd}
           />
         )}

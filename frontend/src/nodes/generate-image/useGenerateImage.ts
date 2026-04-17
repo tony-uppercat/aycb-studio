@@ -8,6 +8,7 @@ import { useMediaPreview } from '../../components/media/MediaPreview'
 import { saveMediaForProject, generateMediaId, loadMedia } from '../../mediaStore'
 import { pullText, pullAllMedia } from '../../hooks/useDataPropagation'
 import { useGenerateImageHistory } from '../../hooks/useGenerateImageHistory'
+import { useStateRef } from '../../hooks/useStateRef'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
@@ -78,26 +79,25 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const [selectedModel, setSelectedModel] = useState(
     typeof data.selectedModel === 'string' ? data.selectedModel : 'gemini-3.1-flash-image-preview'
   )
-  const [aspectRatio, setAspectRatio] = useState((data as Record<string, unknown>).aspectRatio as string || '21:9')
-  const [resolution, setResolution] = useState((data as Record<string, unknown>).resolution as string || '2K')
-  // Refs so runSingle always reads the latest values regardless of closure staleness
-  const aspectRatioRef = useRef(aspectRatio)
-  const resolutionRef = useRef(resolution)
-  useEffect(() => { aspectRatioRef.current = aspectRatio }, [aspectRatio])
-  useEffect(() => { resolutionRef.current = resolution }, [resolution])
-  const [useGrounding, setUseGrounding] = useState(Boolean((data as Record<string, unknown>).useGrounding))
-  const groundingRef = useRef(useGrounding)
-  useEffect(() => { groundingRef.current = useGrounding }, [useGrounding])
-  const [editMode, setEditMode] = useState(Boolean((data as Record<string, unknown>).editMode))
-  const editModeRef = useRef(editMode)
-  useEffect(() => { editModeRef.current = editMode }, [editMode])
+  // These seven refs back the values runSingle reads — runSingle is a
+  // long-lived callback that outlives any single render, so reading the
+  // state directly would see stale values. `useStateRef` fuses the
+  // useState / useRef / syncing-useEffect triplet into one line each.
+  const [aspectRatio, setAspectRatio, aspectRatioRef] = useStateRef(
+    (data as Record<string, unknown>).aspectRatio as string || '21:9'
+  )
+  const [resolution, setResolution, resolutionRef] = useStateRef(
+    (data as Record<string, unknown>).resolution as string || '2K'
+  )
+  const [useGrounding, setUseGrounding, groundingRef] = useStateRef(
+    Boolean((data as Record<string, unknown>).useGrounding)
+  )
+  const [editMode, setEditMode, editModeRef] = useStateRef(
+    Boolean((data as Record<string, unknown>).editMode)
+  )
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
-  const [imageB64, setImageB64] = useState<string | null>(null)
-  const imageB64Ref = useRef(imageB64)
-  useEffect(() => { imageB64Ref.current = imageB64 }, [imageB64])
-  const [compareSourceUrl, setCompareSourceUrl] = useState<string | null>(null)
-  const compareSourceUrlRef = useRef(compareSourceUrl)
-  useEffect(() => { compareSourceUrlRef.current = compareSourceUrl }, [compareSourceUrl])
+  const [imageB64, setImageB64, imageB64Ref] = useStateRef<string | null>(null)
+  const [compareSourceUrl, setCompareSourceUrl, compareSourceUrlRef] = useStateRef<string | null>(null)
   // True while we're waiting for historyPreview to load after a generation, so we can clear imageB64
   const waitingForPreviewRef = useRef(false)
   const [loading, setLoading] = useState(false)
@@ -188,7 +188,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // Current media ID — activeMediaId (set with imageB64) > data.mediaId > historyIds fallback
   const currentMediaId = activeMediaId ?? (data.mediaId as string | undefined) ?? historyIds[historyIndex] ?? null
   const currentMediaIdRef = useRef(currentMediaId)
-  useEffect(() => { currentMediaIdRef.current = currentMediaId }, [currentMediaId])
+  currentMediaIdRef.current = currentMediaId
 
   const handleFavoriteToggle = useCallback(async (mid: string, e: React.MouseEvent) => {
     e.stopPropagation()

@@ -5,6 +5,7 @@ Shared helpers live in src/shared.py.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
@@ -19,6 +20,30 @@ from src.shared import _log
 
 import importlib
 import pkgutil
+
+
+# ── Quiet routes — polled per-media, spam both our middleware and uvicorn ──
+# These endpoints are hit once per gallery item on every gallery load and
+# once per history entry on every generate-node render. A 50-item gallery
+# produces 50 log lines; suppressing them keeps the console readable while
+# leaving genuine errors (4xx/5xx) visible via the uvicorn error logger.
+_QUIET_PATHS = (
+    "/api/logs",
+    "/api/health",
+    "/api/bridge/review/",
+    "/api/bridge/meta/",
+    "/api/rh/media/",
+)
+
+
+class _AccessLogFilter(logging.Filter):
+    """Drop uvicorn access-log records for quiet paths."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p in msg for p in _QUIET_PATHS)
+
+
+logging.getLogger("uvicorn.access").addFilter(_AccessLogFilter())
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────────
@@ -54,8 +79,10 @@ async def log_requests(request, call_next):
     t0 = time.time()
     response = await call_next(request)
     dt = time.time() - t0
-    skip = ("/api/logs", "/api/health")
-    if not any(request.url.path.startswith(p) for p in skip):
+    # 5xx responses are always worth logging even for quiet paths.
+    if response.status_code >= 500 or not any(
+        request.url.path.startswith(p) for p in _QUIET_PATHS
+    ):
         _log(f"{request.method} {request.url.path} -> {response.status_code} ({dt:.1f}s)")
     return response
 

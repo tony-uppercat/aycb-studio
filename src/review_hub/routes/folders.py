@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries import media as q
-from src.shared import _sanitize_filename
+from src.shared import _sanitize_filename, _log
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -67,7 +67,13 @@ async def create_folder(body: CreateFolderBody):
 
 @router.post("/folders/{name}/rename")
 async def rename_folder(name: str, body: RenameFolderBody):
-    """Rename a top-level project folder and update all DB records inside it."""
+    """Rename a top-level project folder and update all DB records inside it.
+
+    Transactional pattern: apply all DB UPDATEs first (uncommitted), then
+    rename on disk. If either step fails, DB changes are discarded by
+    not calling commit; if the disk rename succeeds but commit fails,
+    the disk rename is reverted so the observed state stays consistent.
+    """
     safe_old = _safe_name(name)
     safe_new = _safe_name(body.new_name)
     if not safe_old or not safe_new:
@@ -78,11 +84,11 @@ async def rename_folder(name: str, body: RenameFolderBody):
         raise HTTPException(status_code=404, detail="Folder not found")
     if dst.exists():
         raise HTTPException(status_code=409, detail="Target name already exists")
-    src.rename(dst)
 
-    # Update DB: directory and filepath for all media that lived under old name
     db = await get_db()
+    disk_renamed = False
     try:
+        # 1. Stage all DB updates (not committed yet).
         old_prefix = safe_old + "/"
         cursor = await db.execute(
             "SELECT id, filepath, directory FROM media"
@@ -97,8 +103,21 @@ async def rename_folder(name: str, body: RenameFolderBody):
                 "UPDATE media SET directory=?, filepath=?, updated_at=datetime('now') WHERE id=?",
                 (new_dir, new_fp, row["id"]),
             )
-        if rows:
-            await db.commit()
+
+        # 2. Rename on disk. If this fails, no commit happens and the
+        #    implicit transaction is discarded on close.
+        src.rename(dst)
+        disk_renamed = True
+
+        # 3. Commit DB now that both halves succeeded.
+        await db.commit()
+    except Exception:
+        if disk_renamed and dst.exists() and not src.exists():
+            try:
+                dst.rename(src)
+            except OSError as revert_exc:
+                _log(f"rename_folder revert FAILED {dst} -> {src}: {revert_exc}")
+        raise
     finally:
         await db.close()
 
@@ -121,7 +140,16 @@ async def delete_folder(name: str):
 
 @router.post("/folders/move")
 async def move_media(body: MoveBody):
+    """Move a media file to a different directory — DB row first, then disk.
+
+    Same transactional pattern as rename_folder: stage the UPDATE, do the
+    filesystem move, commit only if both succeed. On commit failure the
+    file is moved back so observable state remains consistent.
+    """
     db = await get_db()
+    moved = False
+    src: Path | None = None
+    dest: Path | None = None
     try:
         item = await q.get_media(db, body.media_id)
         if item is None:
@@ -135,14 +163,27 @@ async def move_media(body: MoveBody):
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / item["filename"]
 
-        shutil.move(str(src), str(dest))
-
+        # 1. Stage DB update (not committed yet).
         await db.execute(
             "UPDATE media SET filepath=?, directory=?, updated_at=datetime('now') WHERE id=?",
             (str(dest), body.target_dir, body.media_id),
         )
-        await db.commit()
 
+        # 2. Move on disk.
+        shutil.move(str(src), str(dest))
+        moved = True
+
+        # 3. Commit.
+        await db.commit()
         return {"ok": True, "new_path": str(dest)}
+    except HTTPException:
+        raise
+    except Exception:
+        if moved and src is not None and dest is not None and dest.exists() and not src.exists():
+            try:
+                shutil.move(str(dest), str(src))
+            except OSError as revert_exc:
+                _log(f"move_media revert FAILED {dest} -> {src}: {revert_exc}")
+        raise
     finally:
         await db.close()

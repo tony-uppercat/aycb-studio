@@ -11,8 +11,25 @@ from pydantic import BaseModel
 from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries import media as q
+from src.shared import _log
 
 _logger = logging.getLogger(__name__)
+
+
+def _safe_unlink(path: Path, context: str) -> None:
+    """Unlink a file, logging any OSError without raising.
+
+    Used for secondary disk cleanup (thumbnails) during delete flows:
+    the primary DB delete is already committed, so a failure here
+    produces an orphan file the scanner will not clean (thumbs live
+    in a separate directory) but does not corrupt DB state.
+    """
+    if not path.is_file():
+        return
+    try:
+        path.unlink()
+    except OSError as exc:
+        _log(f"{context}: unlink failed for {path}: {exc}")
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -120,7 +137,18 @@ async def delete_media(
     media_id: int,
     x_admin_pin: str | None = Header(default=None),
 ):
-    """Delete a media item. Requires X-Admin-Pin header."""
+    """Delete a media item. Requires X-Admin-Pin header.
+
+    Order is source-unlink → thumb-unlink → DB delete. The scanner
+    heals the DB↔disk invariant: if unlink succeeds but the DB delete
+    fails, the scanner detects the missing file on its next pass (5s)
+    and removes the row. Reversing the order would be worse because
+    the scanner re-indexes orphan files found on disk — it cannot tell
+    a failed-cleanup orphan from a newly-dropped file.
+
+    Source unlink failure raises so the caller can retry; thumb unlink
+    failure is logged and swallowed (separate directory, not scanned).
+    """
     if x_admin_pin != ADMIN_PIN:
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -130,19 +158,19 @@ async def delete_media(
         if item is None:
             raise HTTPException(status_code=404, detail="Media not found")
 
-        # Remove source file from disk
+        # 1. Source unlink — failure propagates, DB untouched, user retries.
         if item.get("filepath"):
             source = Path(item["filepath"])
             if source.is_file():
                 source.unlink()
 
-        # Remove thumbnail file if it exists
+        # 2. Thumbnail unlink — best effort, never fatal.
         if item.get("thumbnail_path"):
-            thumb = Path(item["thumbnail_path"])
-            if thumb.is_file():
-                thumb.unlink()
+            _safe_unlink(Path(item["thumbnail_path"]), "delete_media thumb")
 
+        # 3. DB delete. If this fails, scanner cleans up stale row in 5s.
         await q.delete_media(db, media_id)
+
         return {"ok": True}
     finally:
         await db.close()
@@ -153,7 +181,12 @@ async def bulk_delete_media(
     body: BulkDeleteBody,
     x_admin_pin: str | None = Header(default=None),
 ):
-    """Delete multiple media items. Requires X-Admin-Pin header."""
+    """Delete multiple media items. Requires X-Admin-Pin header.
+
+    Same ordering as delete_media: unlink, then DB delete per row. A
+    failure on item N reports the partial `deleted` list so the caller
+    knows which items succeeded.
+    """
     if x_admin_pin != ADMIN_PIN:
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -164,15 +197,16 @@ async def bulk_delete_media(
             item = await q.get_media(db, mid)
             if item is None:
                 continue
-            # Remove source file from disk
             if item.get("filepath"):
                 source = Path(item["filepath"])
                 if source.is_file():
-                    source.unlink()
+                    try:
+                        source.unlink()
+                    except OSError as exc:
+                        _log(f"bulk_delete_media: source unlink failed for {source}: {exc}")
+                        continue
             if item.get("thumbnail_path"):
-                thumb = Path(item["thumbnail_path"])
-                if thumb.is_file():
-                    thumb.unlink()
+                _safe_unlink(Path(item["thumbnail_path"]), "bulk_delete_media thumb")
             await q.delete_media(db, mid)
             deleted.append(mid)
         return {"ok": True, "deleted": deleted}

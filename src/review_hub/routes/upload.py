@@ -72,6 +72,10 @@ async def upload_reference(
     except Exception as exc:
         _log.warning("Failed to read dimensions for %s: %s", dest.name, exc)
 
+    # Single DB connection for both the INSERT and the thumbnail UPDATE —
+    # previously these ran on two separate connections, so a crash between
+    # them could leave the reference row in the DB with no thumbnail
+    # pointer and no record of the intended thumbnail path.
     db = await get_db()
     try:
         new_id = await rq.add_reference(
@@ -82,21 +86,16 @@ async def upload_reference(
             width=width,
             height=height,
         )
-    finally:
-        await db.close()
-
-    try:
-        thumbnail_path = generate_reference_thumbnail(dest, new_id)
-        db2 = await get_db()
         try:
-            await db2.execute(
+            thumbnail_path = generate_reference_thumbnail(dest, new_id)
+            await db.execute(
                 "UPDATE [references] SET thumbnail_path=? WHERE id=?",
                 (thumbnail_path, new_id),
             )
-            await db2.commit()
-        finally:
-            await db2.close()
-    except Exception as exc:
-        _log.warning("Failed to generate reference thumbnail for %s: %s", dest.name, exc)
+        except Exception as exc:
+            _log.warning("Failed to generate reference thumbnail for %s: %s", dest.name, exc)
+        await db.commit()
+    finally:
+        await db.close()
 
     return {"filename": stored_filename, "id": new_id}

@@ -4,10 +4,7 @@ from __future__ import annotations
 import aiosqlite
 
 
-def _row_to_dict(row) -> dict | None:
-    if row is None:
-        return None
-    return dict(row)
+from ._helpers import _row_to_dict
 
 
 async def get_drawing(

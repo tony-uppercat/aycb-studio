@@ -12,6 +12,7 @@ from src.review_hub.db import get_db
 from src.review_hub.queries import media as mq
 from src.review_hub.queries import references as rq
 from src.review_hub.thumbnails import generate_reference_thumbnail, get_image_dimensions
+from src.shared import _sanitize_filename
 
 _log = logging.getLogger("aycb.upload")
 
@@ -21,17 +22,18 @@ router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 @router.post("/upload/media")
 async def upload_media(file: UploadFile = File(...)):
     settings.media_dir.mkdir(parents=True, exist_ok=True)
-    dest = settings.media_dir / file.filename
+    safe_name = _sanitize_filename(file.filename)
+    dest = settings.media_dir / safe_name
     content = await file.read()
     dest.write_bytes(content)
 
-    mime = file.content_type or mimetypes.guess_type(file.filename)[0]
+    mime = file.content_type or mimetypes.guess_type(safe_name)[0]
 
     db = await get_db()
     try:
         await mq.insert_media(
             db,
-            filename=file.filename,
+            filename=safe_name,
             filepath=str(dest),
             directory=None,
             file_size=len(content),
@@ -40,7 +42,7 @@ async def upload_media(file: UploadFile = File(...)):
     finally:
         await db.close()
 
-    return {"filename": file.filename, "path": str(dest)}
+    return {"filename": safe_name, "path": str(dest)}
 
 
 @router.post("/upload/reference")
@@ -55,11 +57,12 @@ async def upload_reference(
 
     save_dir = settings.references_dir / safe_dir if safe_dir else settings.references_dir
     save_dir.mkdir(parents=True, exist_ok=True)
-    dest = save_dir / file.filename
+    safe_name = _sanitize_filename(file.filename)
+    dest = save_dir / safe_name
     content = await file.read()
     dest.write_bytes(content)
 
-    stored_filename = f"{safe_dir}/{file.filename}" if safe_dir else file.filename
+    stored_filename = f"{safe_dir}/{safe_name}" if safe_dir else safe_name
 
     # Capture dimensions and generate thumbnail
     width, height = None, None

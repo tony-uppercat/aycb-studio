@@ -79,11 +79,18 @@ _ALLOWED_DURATIONS = (4, 6, 8)
 
 def _snap_duration(duration: int, has_refs: bool, quality: str = "720p") -> int:
     """Gemini API only accepts 4, 6, or 8 seconds.
-    Refs/interpolation and 1080p/4k require 8s per official docs.
+    Refs/interpolation and 1080p/4k force 8s per official docs; in those
+    modes we override the caller value because the API demands it.
+    In pure T2V at 720p, refuse an invalid value loudly so the UI can
+    surface the constraint instead of silently rounding.
     """
     if has_refs or quality in ("1080p", "4k"):
         return 8
-    return min(_ALLOWED_DURATIONS, key=lambda d: abs(d - duration))
+    if duration not in _ALLOWED_DURATIONS:
+        raise VertexVideoGenError(
+            f"Veo duration must be one of {_ALLOWED_DURATIONS}; got {duration}s"
+        )
+    return duration
 
 
 def _build_config(

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from config.settings import settings
 from src.review_hub.db import get_db
 from src.review_hub.queries import media as q
+from src.shared import _sanitize_filename
 
 router = APIRouter(prefix="/api/rh", tags=["review-hub"])
 
@@ -28,12 +29,12 @@ class RenameFolderBody(BaseModel):
 
 
 def _safe_name(name: str) -> str:
-    """Strip path traversal and illegal characters from a folder name."""
-    import re
-    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name.strip())
-    # Prevent path traversal
-    cleaned = cleaned.replace("..", "_")
-    return cleaned[:100]
+    """Thin wrapper — folder names get the same sanitation as filenames.
+
+    Kept so call sites read naturally (``_safe_name(project)``) while all
+    sanitation logic lives in ``src.shared._sanitize_filename``.
+    """
+    return _sanitize_filename(name.strip())
 
 
 @router.get("/folders")

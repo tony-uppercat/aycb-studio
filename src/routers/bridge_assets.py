@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import re
 import sqlite3
 import time
 from pathlib import Path
@@ -12,7 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from config.settings import settings
 from src.review_hub.db import _DB_PATH
-from src.shared import _log
+from src.shared import _log, _sanitize_filename
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
 
@@ -154,13 +153,13 @@ async def save_bridge_asset(
             return {"status": "error", "detail": "No image provided"}
 
         # Resolve target directory
-        folder = re.sub(r'[<>:"/\\|?*]', '_', directory.strip())[:80] if directory.strip() else ""
+        folder = _sanitize_filename(directory.strip())[:80] if directory.strip() else ""
         target_dir = settings.assets_dir / folder if folder else settings.assets_dir
         target_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine filename
         if filename.strip():
-            safe_name = re.sub(r'[<>:"/\\|?*]', '_', filename.strip())[:120]
+            safe_name = _sanitize_filename(filename.strip())[:120]
             if not safe_name.lower().endswith('.png'):
                 safe_name += '.png'
         else:

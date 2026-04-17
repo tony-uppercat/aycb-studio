@@ -8,14 +8,7 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 
 
-def _row_to_dict(row) -> dict | None:
-    if row is None:
-        return None
-    return dict(row)
-
-
-def _rows_to_list(rows) -> list[dict]:
-    return [dict(r) for r in rows]
+from ._helpers import _row_to_dict, _rows_to_list
 
 
 async def create_link(

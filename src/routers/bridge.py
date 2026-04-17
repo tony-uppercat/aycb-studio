@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from PIL import Image as PILImage
 from config.settings import settings
 from src.review_hub.db import _DB_PATH
-from src.shared import _log, _save_to_bridge, _save_video_to_bridge
+from src.shared import _log, _save_to_bridge, _save_video_to_bridge, _sanitize_stem
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
 
@@ -98,7 +98,7 @@ def _get_review_from_db(stem: str) -> dict | None:
 
 def _find_png_meta(stem: str) -> dict | None:
     """Read metadata from PNG tEXt chunks for a given stem in shared/Media/."""
-    safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
+    safe_id = _sanitize_stem(stem)
     if not safe_id:
         return None
     pattern = str(settings.media_dir / "**" / f"{safe_id}.png")
@@ -127,7 +127,7 @@ def _find_png_meta(stem: str) -> dict | None:
 def _find_json_meta(stem: str) -> dict | None:
     """Read metadata from .meta.json sidecar for a video file."""
     import json as _json
-    safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
+    safe_id = _sanitize_stem(stem)
     if not safe_id:
         return None
     pattern = str(settings.media_dir / "**" / f"{safe_id}.meta.json")
@@ -224,7 +224,7 @@ def _lookup_media_id(stem: str) -> int | None:
     import sqlite3
 
     # Sanitise: only allow alphanumeric, underscore, hyphen (same as other bridge endpoints)
-    stem = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
+    stem = _sanitize_stem(stem)
     if not stem:
         return None
 
@@ -378,7 +378,7 @@ async def delete_bridge_media(stem: str):
     stem is the filename without extension, e.g. 'generated_1774525338'.
     Searches recursively through project subdirectories.
     """
-    safe_stem = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
+    safe_stem = _sanitize_stem(stem)
     if not safe_stem:
         raise HTTPException(status_code=400, detail="Invalid stem")
     deleted_path = await asyncio.to_thread(_delete_bridge_media, safe_stem)
@@ -394,7 +394,7 @@ async def get_bridge_meta(stem: str):
     stem is the filename stem, e.g. 'generated_1774482284911' or 'video_1774482284911'.
     """
     try:
-        safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
+        safe_id = _sanitize_stem(stem)
         if not safe_id:
             return {}
         # Try PNG metadata first
@@ -413,7 +413,7 @@ async def get_bridge_meta(stem: str):
 async def get_review_status(image_id: str):
     """Read review status from Review Hub DB for a generated image."""
     try:
-        safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", image_id)
+        safe_id = _sanitize_stem(image_id)
         if not safe_id:
             return {"status": "not_reviewed"}
         data = await asyncio.to_thread(_get_review_from_db, safe_id)

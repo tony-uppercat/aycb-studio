@@ -70,13 +70,28 @@ def _safe_video_suffix(filename: str | None) -> str:
 
 
 def _sanitize_filename(name: str | None) -> str:
-    """Sanitize a filename for use in Content-Disposition headers."""
+    """Sanitize a filename for disk writes and Content-Disposition headers.
+
+    Replaces path separators, quotes, and control chars with underscore;
+    collapses '..' so no caller can escape its target directory.
+    """
     if not name:
         return "file"
-    # Remove path separators, quotes, control chars
     clean = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', '_', name)
-    # Limit length
+    clean = clean.replace("..", "_")
     return clean[:200] or "file"
+
+
+def _sanitize_stem(stem: str | None) -> str:
+    """Sanitize a stem for URL path parameters — alphanumeric + _ and - only.
+
+    Stricter than _sanitize_filename: used for `/api/bridge/*` endpoints
+    that accept a media stem from the client and must produce a value
+    safe for both filesystem globs and URL paths.
+    """
+    if not stem:
+        return ""
+    return re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
 
 
 # ── Model map ────────────────────────────────────────────────────────────────

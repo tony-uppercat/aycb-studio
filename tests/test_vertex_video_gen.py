@@ -76,22 +76,38 @@ class TestSubmitTextToVideo:
         # Use "allow_adult" always — works in every region including EU
         assert cfg.person_generation == "allow_adult"
 
-    def test_snaps_invalid_duration_to_nearest_allowed(self):
-        """Gemini API only accepts 4/6/8s; 5s must snap to 4 or 6."""
-        from src.vertex_video_gen import submit_text_to_video
+    def test_invalid_duration_raises_loudly(self):
+        """Gemini API only accepts 4/6/8s in T2V. Invalid values must raise
+        VertexVideoGenError so the frontend surfaces the constraint instead
+        of silently snapping (previous buggy behavior: 5s → 4s without the
+        UI ever learning)."""
+        from src.vertex_video_gen import submit_text_to_video, VertexVideoGenError
+
+        with pytest.raises(VertexVideoGenError, match="duration must be one of"):
+            asyncio.run(submit_text_to_video(
+                api_key="", model_id="vertex-veo-3.1",
+                prompt="x", aspect_ratio="16:9", duration=5, quality="720p",
+            ))
+
+    def test_refs_force_8s_regardless_of_duration(self):
+        """Image/interp/refs paths force 8s per API docs — this override is
+        intentional because the API itself refuses anything else in those
+        modes. Verify it still works after the _snap_duration rewrite."""
+        from src.vertex_video_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
         with patch("src.vertex_video_gen._get_client", return_value=client):
-            asyncio.run(submit_text_to_video(
-                api_key="", model_id="vertex-veo-3.1",
-                prompt="x", aspect_ratio="16:9", duration=5, quality="720p",
+            asyncio.run(submit_with_refs(
+                api_key="", model_id="vertex-veo-3.1", prompt="x",
+                ref_image_bytes=[("a.png", b"A")],
+                aspect_ratio="16:9", duration=4, quality="720p",
             ))
 
         cfg = client.models.generate_videos.call_args.kwargs["config"]
-        assert cfg.duration_seconds in (4, 6)
+        assert cfg.duration_seconds == 8
 
     def test_t2v_omits_reference_images_field(self):
         """Empty reference_images must be omitted, not sent as []."""
@@ -212,7 +228,7 @@ class TestSubmitWithRefs:
                 ref_image_bytes=None,
                 ref_video_bytes=("r.mp4", b"V"),
                 audio_url="https://a.mp3",
-                aspect_ratio="16:9", duration=5, quality="720p",
+                aspect_ratio="16:9", duration=8, quality="720p",
             ))
 
         text = " ".join(r.message for r in caplog.records)
@@ -230,7 +246,7 @@ class TestSubmitWithRefs:
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="x",
                 ref_image_bytes=None,
-                aspect_ratio="16:9", duration=5, quality="720p",
+                aspect_ratio="16:9", duration=8, quality="720p",
             ))
 
         kwargs = client.models.generate_videos.call_args.kwargs

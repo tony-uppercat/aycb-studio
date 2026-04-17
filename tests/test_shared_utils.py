@@ -16,6 +16,29 @@ def test_sanitize_filename_strips_path_separators():
     assert "\\" not in result
 
 
+def test_sanitize_filename_collapses_double_dot():
+    """Defense in depth: even after slash replacement, `..` is a
+    suspicious token in a filename. Collapse it so no caller can write
+    `Path(base) / sanitized` and walk upward via shell glob or exotic
+    filesystem semantics. Regression test for v2 audit finding C1."""
+    from src.shared import _sanitize_filename
+    assert ".." not in _sanitize_filename("..evil")
+    assert ".." not in _sanitize_filename("a..b..c")
+
+
+def test_sanitize_stem_alphanumeric_only():
+    from src.shared import _sanitize_stem
+    # Letters, digits, underscore, and hyphen survive; everything else
+    # (including the dot) is stripped, because bridge stems are used as
+    # glob patterns against filesystem extensions added separately.
+    assert _sanitize_stem("generated_1774482284911") == "generated_1774482284911"
+    assert _sanitize_stem("foo/bar-123") == "foobar-123"
+    assert _sanitize_stem("../../etc/passwd") == "etcpasswd"
+    assert _sanitize_stem("has dot.png") == "hasdotpng"
+    assert _sanitize_stem(None) == ""
+    assert _sanitize_stem("") == ""
+
+
 def test_sanitize_filename_strips_control_chars():
     from src.shared import _sanitize_filename
     result = _sanitize_filename("file\x00name\x1f.png")

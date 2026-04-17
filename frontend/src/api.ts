@@ -7,12 +7,9 @@ import './providers/ollamaProvider'
 import { getImageProvider, getLLMProvider } from './providers/index'
 import { registerBridgeStem } from './utils/reviewStatus'
 import { STORAGE_KEYS } from './storage/keys'
+import { isBackendAvailable } from './utils/runtime'
 
 const BASE = '/api'
-
-function isBackendAvailable(): boolean {
-  return location.port === '5100' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-}
 
 function recordRequest(method: string, path: string, status: number, duration: number) {
   try {

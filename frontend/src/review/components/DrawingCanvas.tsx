@@ -215,56 +215,6 @@ export function DrawingCanvas({ mediaId, imageWidth, imageHeight }: DrawingCanva
     return () => { ctrl.abort() }
   }, [mediaId])
 
-  // -- Expose save/export on window for toolbar -------------------------------
-  useEffect(() => {
-    const win = window as Record<string, unknown>
-    win.__drawingCanvasSave = async () => {
-      const all = useDrawingStore.getState().strokes
-      await rhApi.saveDrawing({
-        media_id: mediaId, author: user_name, strokes_json: JSON.stringify(all),
-      })
-    }
-    win.__drawingCanvasExportOverlay = () => {
-      const c = localRef.current
-      if (!c) return
-      const exp = document.createElement('canvas')
-      exp.width = c.width; exp.height = c.height
-      const ctx = exp.getContext('2d')!
-      const all = [...useDrawingStore.getState().remote_strokes, ...useDrawingStore.getState().strokes]
-      all.forEach((s) => renderStroke(ctx, s))
-      exp.toBlob((blob) => {
-        if (!blob) return
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `drawing-overlay-${mediaId}.png`
-        a.click()
-      }, 'image/png')
-    }
-    win.__drawingCanvasExportMerged = () => {
-      const wrap = localRef.current?.parentElement
-      const img = wrap?.closest('.rh-lightbox-image-wrap')?.querySelector('img')
-      if (!img) return
-      const exp = document.createElement('canvas')
-      exp.width = w; exp.height = h
-      const ctx = exp.getContext('2d')!
-      ctx.drawImage(img, 0, 0, w, h)
-      const all = [...useDrawingStore.getState().remote_strokes, ...useDrawingStore.getState().strokes]
-      all.forEach((s) => renderStroke(ctx, s))
-      exp.toBlob((blob) => {
-        if (!blob) return
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `drawing-merged-${mediaId}.png`
-        a.click()
-      }, 'image/png')
-    }
-    return () => {
-      delete win.__drawingCanvasSave
-      delete win.__drawingCanvasExportOverlay
-      delete win.__drawingCanvasExportMerged
-    }
-  }, [mediaId, user_name, w, h])
-
   // -- Cleanup on unmount -----------------------------------------------------
   useEffect(() => () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)

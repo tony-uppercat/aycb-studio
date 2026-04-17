@@ -167,7 +167,7 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
           <LightboxInfoPanel media={media} on_close={() => set_show_info(false)} />
         )}
       </div>
-      {is_drawing_mode && <DrawingToolbar />}
+      {is_drawing_mode && <DrawingToolbar mediaId={media.id} />}
       <div className="rh-lightbox-footer-bar">
         <LightboxFooter
           media={media}

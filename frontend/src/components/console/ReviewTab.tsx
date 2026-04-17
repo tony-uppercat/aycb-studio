@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './ReviewTab.module.css';
+import { isBackendAvailable } from '../../utils/runtime';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 
@@ -59,10 +60,6 @@ function saveLocal(items: ReviewItem[]) {
 }
 
 /* ── API helpers ───────────────────────────────────────────────────────────── */
-
-function isBackendAvailable(): boolean {
-  return location.port === '5100' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-}
 
 async function fetchItems(signal?: AbortSignal): Promise<ReviewItem[]> {
   if (!isBackendAvailable()) return loadLocal();

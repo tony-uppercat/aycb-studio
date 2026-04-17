@@ -1,5 +1,6 @@
 import { memo, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
+import { Lock, Dices } from 'lucide-react'
 import { NodeShell } from '../_shared/NodeShell'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { useGenerateVideo, VIDEO_MODELS } from './useGenerateVideo'
@@ -32,6 +33,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     aspectRatio, setAspectRatio,
     duration, setDuration,
     quality, setQuality,
+    seed, setSeed,
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,
@@ -198,6 +200,37 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
             }}
           />
           <span className={nodeStyles.sliderValue}>{duration}s</span>
+        </div>
+
+        {/* Seed */}
+        <div className={nodeStyles.seedRow}>
+          <span className={nodeStyles.controlLabel}>Seed</span>
+          <input
+            type="number"
+            className={`${nodeStyles.seedInput} nodrag nowheel nokey`}
+            placeholder="Random"
+            value={seed >= 0 ? seed : ''}
+            onChange={e => {
+              const raw = e.target.value.trim()
+              const v = raw === '' ? -1 : Math.max(0, Math.floor(Number(raw) || 0))
+              setSeed(v)
+              updateNodeData(id, { seed: v })
+            }}
+          />
+          <button
+            className={`${nodeStyles.seedBtn} ${seed >= 0 ? nodeStyles.seedBtnLocked : ''}`}
+            title={seed >= 0 ? 'Locked — click to unlock (random)' : 'Unlocked — click to lock current random seed'}
+            onClick={() => {
+              if (seed >= 0) {
+                setSeed(-1)
+                updateNodeData(id, { seed: -1 })
+              } else {
+                const v = Math.floor(Math.random() * 2147483647)
+                setSeed(v)
+                updateNodeData(id, { seed: v })
+              }
+            }}
+          >{seed >= 0 ? <Lock size={12} strokeWidth={1.5} /> : <Dices size={12} strokeWidth={1.5} />}</button>
         </div>
 
         {/* Status bar */}

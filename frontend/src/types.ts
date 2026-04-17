@@ -94,6 +94,7 @@ export interface GenerateVideoNodeData {
   aspectRatio?: string
   duration?: number
   quality?: string
+  seed?: number
   requestId?: string
   videoUrl?: string
   status?: string

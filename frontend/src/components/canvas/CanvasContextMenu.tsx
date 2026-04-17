@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { NODE_CATALOG, CATEGORY_LABELS, type NodeManifest } from '../../nodes/index'
 import { loadMedia } from '../../mediaStore'
+import { saveToAssets } from '../../api'
 import { serializeNodes } from '../../hooks/useCanvasPersistence'
 import { saveUserTemplate, findTemplateByName, deleteUserTemplate } from '../../presets'
 import { triggerDownload, downloadFile } from '../../utils/downloadManager'
@@ -279,6 +280,23 @@ export function CanvasContextMenu({
     }
   }
 
+  // ── Save to Assets ──
+  async function handleSaveToAssets() {
+    setBusy('assets')
+    try {
+      for (const mid of mediaIds) {
+        try {
+          const file = await loadMedia(mid)
+          if (!file) continue
+          await saveToAssets(file)
+        } catch { /* skip broken entries */ }
+      }
+    } finally {
+      setBusy(null)
+      onClose()
+    }
+  }
+
   // ── Download Nodes Full ──
   async function handleDownloadNodesFull() {
     setBusy('nodes-full')
@@ -465,6 +483,15 @@ export function CanvasContextMenu({
                 badge={mediaIds.length}
                 disabled={busy !== null}
                 onClick={handleDownloadMedia}
+              />
+            )}
+            {hasMedia && (
+              <Item
+                icon="📂"
+                label={busy === 'assets' ? 'Saving...' : 'Save to Assets'}
+                badge={mediaIds.length}
+                disabled={busy !== null}
+                onClick={handleSaveToAssets}
               />
             )}
             {canCollage && onOpenCollage && (

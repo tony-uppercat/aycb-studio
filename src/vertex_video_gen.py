@@ -77,9 +77,11 @@ def _build_image(image_bytes: bytes, filename: str) -> Any:
 _ALLOWED_DURATIONS = (4, 6, 8)
 
 
-def _snap_duration(duration: int, has_refs: bool) -> int:
-    """Gemini API only accepts 4, 6, or 8 seconds; refs/interpolation require 8."""
-    if has_refs:
+def _snap_duration(duration: int, has_refs: bool, quality: str = "720p") -> int:
+    """Gemini API only accepts 4, 6, or 8 seconds.
+    Refs/interpolation and 1080p/4k require 8s per official docs.
+    """
+    if has_refs or quality in ("1080p", "4k"):
         return 8
     return min(_ALLOWED_DURATIONS, key=lambda d: abs(d - duration))
 
@@ -89,6 +91,7 @@ def _build_config(
     last_frame: Any | None = None,
     reference_images: list[Any] | None = None,
     has_image: bool = False,
+    seed: int = -1,
 ) -> Any:
     """Assemble a GenerateVideosConfig for Gemini API.
 
@@ -99,7 +102,7 @@ def _build_config(
     """
     from google.genai import types
     has_refs = has_image or last_frame is not None or bool(reference_images)
-    snapped = _snap_duration(duration, has_refs)
+    snapped = _snap_duration(duration, has_refs, quality)
     kwargs: dict[str, Any] = {
         "aspect_ratio": aspect_ratio,
         "duration_seconds": snapped,
@@ -111,6 +114,8 @@ def _build_config(
         kwargs["last_frame"] = last_frame
     if reference_images:
         kwargs["reference_images"] = reference_images
+    if seed is not None and seed >= 0:
+        kwargs["seed"] = seed
     return types.GenerateVideosConfig(**kwargs)
 
 
@@ -138,11 +143,12 @@ def _submit_sync(
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
     aspect_ratio: str = "16:9", duration: int = 8, quality: str = "720p",
+    seed: int = -1,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit a T2V request. `api_key` is ignored (Vertex uses GCP creds)."""
     info = get_model_info(model_id)
-    config = _build_config(aspect_ratio, duration, quality)
+    config = _build_config(aspect_ratio, duration, quality, seed=seed)
     op = await asyncio.to_thread(
         _submit_sync, api_key, info["vertex_model"], prompt, config, None,
     )
@@ -155,6 +161,7 @@ async def submit_with_refs(
     ref_video_bytes: tuple[str, bytes] | None = None,
     audio_url: str = "",
     aspect_ratio: str = "16:9", duration: int = 8, quality: str = "720p",
+    seed: int = -1,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit an I2V / multi-ref request.
@@ -174,7 +181,7 @@ async def submit_with_refs(
 
     if not ref_image_bytes:
         return await submit_text_to_video(
-            api_key, model_id, prompt, aspect_ratio, duration, quality,
+            api_key, model_id, prompt, aspect_ratio, duration, quality, seed,
         )
 
     info = get_model_info(model_id)
@@ -203,6 +210,7 @@ async def submit_with_refs(
         last_frame=last_frame,
         reference_images=reference_images,
         has_image=True,
+        seed=seed,
     )
 
     op = await asyncio.to_thread(
@@ -233,9 +241,12 @@ def _save_video_sync(client: Any, video: Any, request_id: str) -> str:
 
 
 def _get_result_sync(api_key: str, request_id: str) -> dict[str, Any]:
+    from google.genai import types
     client = _get_client(api_key)
+    # SDK expects an Operation object, not a string. Rehydrate from the name.
+    op_stub = types.GenerateVideosOperation(name=request_id)
     try:
-        op = client.operations.get(request_id)
+        op = client.operations.get(op_stub)
     except Exception as exc:
         raise VertexVideoGenError(f"Veo operation lookup failed: {exc}") from exc
 

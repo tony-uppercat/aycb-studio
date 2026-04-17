@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import mimetypes
 import time
 from pathlib import Path
@@ -19,11 +20,39 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 ALL_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
+_META_KEYS = {"prompt", "model", "model_name", "aspect_ratio", "image_size", "cost_usd", "source", "duration"}
+
 _sio = None
 
 def set_sio(sio):
     global _sio
     _sio = sio
+
+
+def _read_media_meta(p: Path) -> str | None:
+    """Read metadata from PNG tEXt chunks or .meta.json sidecar. Returns JSON string or None."""
+    try:
+        if p.suffix.lower() in IMAGE_EXTS:
+            from PIL import Image as PILImage
+            img = PILImage.open(p)
+            info = img.info
+            img.close()
+            if not info or "source" not in info:
+                return None
+            meta = {k: v for k, v in info.items() if k in _META_KEYS}
+            if "cost_usd" in meta:
+                try:
+                    meta["cost_usd"] = float(meta["cost_usd"])
+                except (ValueError, TypeError):
+                    pass
+            return _json.dumps(meta) if meta else None
+        elif p.suffix.lower() in VIDEO_EXTS:
+            sidecar = p.with_suffix(".meta.json")
+            if sidecar.exists():
+                return sidecar.read_text(encoding="utf-8")
+    except Exception as e:
+        _log(f"Scanner: metadata read failed for {p.name}: {e}")
+    return None
 
 async def scan_once() -> int:
     """Scan directory, index new files, remove deleted. Returns change count."""
@@ -53,15 +82,17 @@ async def scan_once() -> int:
                     w, h = get_image_dimensions(p)
                 except Exception as e:
                     _log(f"Scanner: dimensions failed for {p.name}: {e}")
+            meta_json = _read_media_meta(p)
             media_id = await insert_media(
                 db,
                 filename=p.name,
                 filepath=filepath,
-                directory=str(p.parent.relative_to(settings.media_dir)) if p.is_relative_to(settings.media_dir) else str(p.parent),
+                directory=p.parent.relative_to(settings.media_dir).as_posix() if p.is_relative_to(settings.media_dir) else str(p.parent),
                 file_size=p.stat().st_size,
                 mime_type=mime,
                 width=w,
                 height=h,
+                metadata=meta_json,
             )
             if p.suffix.lower() in IMAGE_EXTS and media_id:
                 try:
@@ -111,7 +142,7 @@ async def scan_assets_once() -> int:
                     w, h = get_image_dimensions(p)
                 except Exception as e:
                     _log(f"Scanner: asset dimensions failed for {p.name}: {e}")
-            _rel = str(p.parent.relative_to(settings.assets_dir)) if p.is_relative_to(settings.assets_dir) else str(p.parent)
+            _rel = p.parent.relative_to(settings.assets_dir).as_posix() if p.is_relative_to(settings.assets_dir) else str(p.parent)
             asset_id = await insert_asset(
                 db,
                 filename=p.name,
@@ -143,8 +174,34 @@ async def scan_assets_once() -> int:
     return changes
 
 
+async def backfill_metadata() -> int:
+    """One-shot: populate metadata for existing media rows that have NULL metadata."""
+    db = await get_db()
+    count = 0
+    try:
+        cursor = await db.execute("SELECT id, filepath FROM media WHERE metadata IS NULL")
+        rows = await cursor.fetchall()
+        for row in rows:
+            p = Path(row["filepath"])
+            if not p.exists():
+                continue
+            meta_json = _read_media_meta(p)
+            if meta_json:
+                await db.execute("UPDATE media SET metadata=? WHERE id=?", (meta_json, row["id"]))
+                count += 1
+        if count:
+            await db.commit()
+            _log(f"Scanner: backfilled metadata for {count} media rows")
+    except Exception as e:
+        _log(f"Scanner: backfill error: {e}")
+    finally:
+        await db.close()
+    return count
+
+
 async def run_scanner():
     """Background loop."""
+    await backfill_metadata()
     while True:
         try:
             changes = await scan_once()

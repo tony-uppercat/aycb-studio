@@ -107,6 +107,10 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const [aspectRatio, setAspectRatio] = useState(data.aspectRatio ?? '21:9')
   const [duration, setDuration] = useState(data.duration ?? 5)
   const [quality, setQuality] = useState(data.quality ?? '720p')
+  const [seed, setSeed] = useState<number>(() => {
+    const v = (data as Record<string, unknown>).seed
+    return typeof v === 'number' ? v : -1
+  })
   const [modeOverride, setModeOverride] = useState<'t2v' | 'i2v' | 'multi-ref' | null>(() => {
     const v = (data as Record<string, unknown>).modeOverride
     return v === 't2v' || v === 'i2v' || v === 'multi-ref' ? v : null
@@ -272,6 +276,15 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
+        // Stale / not-found request_id — stop polling and clear state
+        if (/not found|404|invalid/i.test(msg)) {
+          stopPolling()
+          setError('Previous request expired. Click Run to start a new generation.')
+          setStatus('failed')
+          setLoading(false)
+          updateNodeData(id, { requestId: '', status: 'failed' })
+          return
+        }
         setStatus(`polling... (${msg})`)
       }
     }, POLL_INTERVAL_MS)
@@ -362,7 +375,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
 
       const result = await api.generateVideo(
         prompt, activeApiKey,
-        { model: selectedModel, aspectRatio, duration, quality, audioUrl },
+        { model: selectedModel, aspectRatio, duration, quality, audioUrl, seed },
         refImages.length > 0 ? refImages : undefined,
         refVideo,
       )
@@ -384,7 +397,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
       setLoading(false)
       reportNodeError(id, msg)
     }
-  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, activeProvider, selectedModel, aspectRatio, duration, quality,
+  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, activeProvider, selectedModel, aspectRatio, duration, quality, seed,
       hasVideoRef, hasAudioRef, getNodes, getEdges, updateNodeData, startPolling])
 
   const setMode = useCallback((m: 't2v' | 'i2v' | 'multi-ref') => {
@@ -404,6 +417,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     aspectRatio, setAspectRatio,
     duration, setDuration,
     quality, setQuality,
+    seed, setSeed,
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,

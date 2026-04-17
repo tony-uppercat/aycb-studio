@@ -109,7 +109,8 @@ Shared data (outside repo, not in git):
 ├── src/                            Python backend
 │   ├── api.py                      FastAPI app + lifespan + router auto-discovery
 │   ├── routers/                    API routers (auto-discovered)
-│   ├── plugins/                    Plugin routers (auto-discovered, currently empty)
+│   ├── plugins/                    Plugin routers (auto-discovered)
+│   │   └── perf_log.py             POST /api/perf — browser perf/error log
 │   └── review_hub/                 Review Hub backend
 │       ├── app.py                  Socket.IO + mount + startup
 │       ├── db.py                   SQLite connection + schema init
@@ -237,7 +238,8 @@ Documents/shared/          ← settings.shared_root
 ├── References/            ← settings.references_dir
 └── data/
     ├── thumbnails/        ← settings.thumbnails_dir
-    └── review-hub.db      ← settings.db_path
+    ├── review-hub.db      ← settings.db_path
+    └── browser-perf.jsonl ← browser perf/error log (auto-rotates 1MB)
 ```
 
 Single source of truth: `config/settings.py` → `settings.shared_root`. All backend modules import from `config.settings`. Editable from UI: Settings > Paths. Persisted to `.env` as `AYCB_SHARED_ROOT`.
@@ -245,6 +247,23 @@ Single source of truth: `config/settings.py` → `settings.shared_root`. All bac
 **Never hardcode shared paths with `Path(__file__)`** — always use `settings.media_dir`, `settings.references_dir`, etc.
 
 **Known exception:** `src/review_hub/db.py` uses `_DB_PATH = Path(__file__)...` instead of `settings.db_path`. Tests monkeypatch `_DB_PATH` directly. This should be migrated to use `settings.db_path` when touched next.
+
+### Browser Performance Logger
+
+Frontend (`utils/perfLogger.ts`) captures errors, promise rejections, long tasks (>100ms), LCP, CLS. Batches every 10s to `POST /api/perf`. Backend (`src/plugins/perf_log.py`) writes to `shared/data/browser-perf.jsonl`.
+
+Guards: self-exclusion (logger errors ignored), dedup (same msg within 10s = skip), batch cap (50), file rotation (1MB).
+
+**Review cycle:** every 3 days, read the log and propose performance fixes.
+
+```bash
+# Read raw log
+cat ../shared/data/browser-perf.jsonl
+# Filter errors only
+cat ../shared/data/browser-perf.jsonl | jq 'select(.type=="error")'
+# Top long tasks
+cat ../shared/data/browser-perf.jsonl | jq 'select(.type=="long-task")' | jq -s 'sort_by(-.val) | .[0:10]'
+```
 
 ---
 

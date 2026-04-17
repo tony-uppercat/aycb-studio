@@ -209,3 +209,46 @@
   min-width: 20px;
   text-align: right;
 }
+
+.seedRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seedInput {
+  flex: 1;
+  background: #1c1c20;
+  border: 1px solid #2a2a2e;
+  border-radius: 3px;
+  color: #ccc;
+  font-size: 10px;
+  padding: 3px 6px;
+  outline: none;
+}
+
+.seedInput:focus {
+  border-color: #22c55e;
+}
+
+.seedBtn {
+  background: #1c1c20;
+  border: 1px solid #2a2a2e;
+  border-radius: 3px;
+  color: #888;
+  font-size: 10px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.seedBtn:hover {
+  color: #ccc;
+  border-color: #3a3a40;
+}
+
+.seedBtnLocked {
+  background: #F5277618;
+  color: #F52776;
+  border-color: #F5277644;
+}

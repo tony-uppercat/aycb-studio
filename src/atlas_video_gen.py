@@ -20,8 +20,7 @@ MODELS: dict[str, dict[str, Any]] = {
     "atlas-seedance-2.0-fast": {
         "name": "Seedance 2.0 Fast (Atlas)",
         "model_id": "bytedance/seedance-2.0-fast/text-to-video",
-        "model_id_i2v": "bytedance/seedance-2.0/image-to-video",
-        "model_id_ref": "bytedance/seedance-2.0/reference-to-video",
+        "model_id_i2v": "bytedance/seedance-2.0-fast/image-to-video",
         "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
         "qualities": ["720p"],
         "min_duration": 4,
@@ -33,7 +32,6 @@ MODELS: dict[str, dict[str, Any]] = {
         "name": "Seedance 2.0 (Atlas)",
         "model_id": "bytedance/seedance-2.0/text-to-video",
         "model_id_i2v": "bytedance/seedance-2.0/image-to-video",
-        "model_id_ref": "bytedance/seedance-2.0/reference-to-video",
         "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
         "qualities": ["720p"],
         "min_duration": 4,
@@ -79,7 +77,8 @@ def _to_data_uri(file_bytes: bytes, ext: str = ".png") -> str:
 
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit T2V request."""
     info = get_model_info(model_id)
@@ -91,6 +90,8 @@ async def submit_text_to_video(
         "ratio": aspect_ratio,
         "generate_audio": False,
     }
+    if seed is not None and seed >= 0:
+        payload["seed"] = seed
     return await _submit(api_key, info["name"], payload)
 
 
@@ -99,60 +100,36 @@ async def submit_with_refs(
     ref_image_bytes: list[tuple[str, bytes]] | None = None,
     ref_video_bytes: tuple[str, bytes] | None = None,
     audio_url: str = "",
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Submit with references. Uses I2V for single image, reference-to-video for multi."""
+    """Submit I2V request. Atlas only supports first image as start keyframe."""
     info = get_model_info(model_id)
-    n_images = len(ref_image_bytes) if ref_image_bytes else 0
-    has_video = ref_video_bytes is not None
-    has_audio = bool(audio_url)
 
-    if not ref_image_bytes and not has_video and not has_audio:
-        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration)
+    if not ref_image_bytes:
+        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration, seed)
 
-    # Single image → I2V, multi refs → reference-to-video
-    if n_images <= 1 and not has_video and not has_audio:
-        name, data = ref_image_bytes[0]
-        ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
-        payload: dict[str, Any] = {
-            "model": info["model_id_i2v"],
-            "prompt": prompt,
-            "image_url": _to_data_uri(data, ext),
-            "duration": duration,
-            "resolution": "720p",
-            "ratio": aspect_ratio,
-            "generate_audio": False,
-        }
-    else:
-        # Multi-ref mode
-        ref_images = []
-        if ref_image_bytes:
-            for name, data in ref_image_bytes[:9]:
-                ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
-                ref_images.append(_to_data_uri(data, ext))
+    if len(ref_image_bytes) > 1:
+        logger.warning("Atlas I2V uses only the first image as start keyframe; %d extra ignored",
+                        len(ref_image_bytes) - 1)
+    if ref_video_bytes:
+        logger.warning("Atlas Seedance does not support video references; ignored")
+    if audio_url:
+        logger.warning("Atlas Seedance does not support audio references; ignored")
 
-        ref_videos = []
-        if ref_video_bytes:
-            vname, vdata = ref_video_bytes
-            vext = "." + vname.rsplit(".", 1)[-1] if "." in vname else ".mp4"
-            ref_videos.append(_to_data_uri(vdata, vext))
-
-        payload = {
-            "model": info["model_id_ref"],
-            "prompt": prompt,
-            "duration": duration,
-            "resolution": "720p",
-            "ratio": aspect_ratio,
-            "generate_audio": False,
-        }
-        if ref_images:
-            payload["reference_images"] = ref_images
-        if ref_videos:
-            payload["reference_videos"] = ref_videos
-        # Audio URL passed directly (no conversion needed if already a URL)
-        if audio_url:
-            payload["reference_audio"] = [audio_url]
-
+    name, data = ref_image_bytes[0]
+    ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
+    payload: dict[str, Any] = {
+        "model": info["model_id_i2v"],
+        "prompt": prompt,
+        "image_url": _to_data_uri(data, ext),
+        "duration": duration,
+        "resolution": "720p",
+        "ratio": aspect_ratio,
+        "generate_audio": False,
+    }
+    if seed is not None and seed >= 0:
+        payload["seed"] = seed
     return await _submit(api_key, info["name"], payload)
 
 

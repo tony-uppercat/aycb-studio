@@ -84,7 +84,7 @@ def _image_to_data_uri(file_bytes: bytes, ext: str = ".png") -> str:
 
 # ── Submit ──────────────────────────────────────────────────────────────────
 
-def _base_payload(model_id: str, prompt: str, duration: int, aspect_ratio: str) -> dict[str, Any]:
+def _base_payload(model_id: str, prompt: str, duration: int, aspect_ratio: str, seed: int = -1) -> dict[str, Any]:
     """Build common payload fields. Kling uses cfg_scale/negative_prompt, Seedance does not."""
     payload: dict[str, Any] = {
         "prompt": prompt,
@@ -95,35 +95,39 @@ def _base_payload(model_id: str, prompt: str, duration: int, aspect_ratio: str) 
     if model_id.startswith("fal-kling"):
         payload["negative_prompt"] = "blur, distort, and low quality"
         payload["cfg_scale"] = 0.5
+    if seed is not None and seed >= 0:
+        payload["seed"] = seed
     return payload
 
 
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit a T2V request. Returns {request_id, status_url, response_url}."""
     info = get_model_info(model_id)
-    payload = _base_payload(model_id, prompt, duration, aspect_ratio)
+    payload = _base_payload(model_id, prompt, duration, aspect_ratio, seed)
     return await _submit(api_key, info["endpoint_t2v"], info["name"], payload)
 
 
 async def submit_with_refs(
     api_key: str, model_id: str, prompt: str,
     ref_image_bytes: list[tuple[str, bytes]] | None = None,
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit I2V request. Images are sent as data URIs (no upload needed)."""
     info = get_model_info(model_id)
 
     if not ref_image_bytes:
-        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration)
+        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration, seed)
 
     start_name, start_data = ref_image_bytes[0]
     start_ext = "." + start_name.rsplit(".", 1)[-1] if "." in start_name else ".png"
     start_uri = _image_to_data_uri(start_data, start_ext)
 
-    payload = _base_payload(model_id, prompt, duration, aspect_ratio)
+    payload = _base_payload(model_id, prompt, duration, aspect_ratio, seed)
 
     # Kling uses start_image_url, Seedance uses image_url
     if model_id.startswith("fal-kling"):

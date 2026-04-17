@@ -97,5 +97,5 @@ export function useMediaDrag({ thumbs, selected, entries, onClose }: UseMediaDra
     closeOnDragRef.current = false
   }, [])
 
-  return { handleDragStart, handleDragStartMulti, handleRefDragStart, handleDragEnd }
+  return { handleDragStart, handleDragStartMulti, handleRefDragStart, handleDragEnd, closePanelAfterDrag }
 }

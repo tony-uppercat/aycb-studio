@@ -1,15 +1,17 @@
-import { Star, Check, X, MessageSquare, Pencil, Download, Trash2 } from 'lucide-react'
+import { Star, Check, X, MessageSquare, Pencil, Download, Trash2, Info } from 'lucide-react'
 
 interface LightboxToolbarProps {
   media: { id: number; filename: string; is_favorite?: boolean; status?: string }
   show_comments: boolean
   is_drawing: boolean
   is_admin: boolean
+  show_info?: boolean
   on_toggle_fav: () => void
   on_approve: () => void
   on_reject: () => void
   on_toggle_comments: () => void
   on_toggle_drawing: () => void
+  on_toggle_info?: () => void
   on_download: () => void
   on_delete: () => void
   on_close: () => void
@@ -20,11 +22,13 @@ export function LightboxToolbar({
   show_comments,
   is_drawing,
   is_admin,
+  show_info,
   on_toggle_fav,
   on_approve,
   on_reject,
   on_toggle_comments,
   on_toggle_drawing,
+  on_toggle_info,
   on_download,
   on_delete,
   on_close,
@@ -75,6 +79,15 @@ export function LightboxToolbar({
         >
           <Pencil size={16} strokeWidth={1.5} />
         </button>
+        {on_toggle_info && (
+          <button
+            className={`rh-lb-btn${show_info ? ' rh-lb-btn-accent' : ''}`}
+            onClick={on_toggle_info}
+            title="Info (I)"
+          >
+            <Info size={16} strokeWidth={1.5} />
+          </button>
+        )}
         <button
           className="rh-lb-btn"
           onClick={on_download}

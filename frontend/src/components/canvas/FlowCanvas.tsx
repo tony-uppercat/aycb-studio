@@ -60,6 +60,7 @@ function FlowCanvasInner() {
   const storagePanelOpen = useCanvasStore(s => s.storagePanelOpen)
   const fullscreenBrowserOpen = useCanvasStore(s => s.fullscreenBrowserOpen)
   const toggleFullscreenBrowser = useCanvasStore(s => s.toggleFullscreenBrowser)
+  const [privacy, setPrivacy] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: ContextMenuTarget; flowPos?: { x: number; y: number } } | null>(null)
   const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
@@ -514,6 +515,15 @@ function FlowCanvasInner() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="12" x2="12" y2="18"/><polyline points="9,15 12,12 15,15"/></svg>
           </button>
           {exportStatus && <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 2 }}>{exportStatus}</span>}
+          <button
+            className={styles.iconBtn}
+            onClick={() => { document.body.classList.toggle('prv'); setPrivacy(p => !p) }}
+            title="Privacy mode — hide sensitive info"
+            aria-label="Privacy mode"
+            style={privacy ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : undefined}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M1 1l22 22"/>{!privacy && <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg>
+          </button>
           <a
             href="/review"
             className={styles.iconBtn}

@@ -132,6 +132,30 @@ export async function bridgeMedia(
 }
 
 /**
+ * Save an image from the canvas to shared/Assets/ via backend bridge.
+ * The scanner will auto-index it into the Review Hub DB.
+ */
+export async function saveToAssets(
+  file: File,
+  directory?: string,
+  filename?: string,
+): Promise<boolean> {
+  if (!isBackendAvailable()) return false
+  try {
+    const fd = new FormData()
+    fd.append('image_file', file, file.name)
+    if (directory) fd.append('directory', directory)
+    if (filename) fd.append('filename', filename)
+    const resp = await fetch(`${BASE}/bridge/assets`, { method: 'POST', body: fd })
+    if (resp.ok) {
+      const data = await resp.json().catch(() => null)
+      return data?.status === 'ok'
+    }
+  } catch { /* silent */ }
+  return false
+}
+
+/**
  * Save a generated video to shared/Media/ via backend bridge.
  * Downloads from CDN URL, saves with metadata sidecar.
  */
@@ -285,7 +309,7 @@ export const api = {
   generateVideo(
     prompt: string,
     apiKey: string,
-    options: { model?: string; aspectRatio?: string; duration?: number; quality?: string; audioUrl?: string },
+    options: { model?: string; aspectRatio?: string; duration?: number; quality?: string; audioUrl?: string; seed?: number },
     refImages?: File[],
     refVideo?: File,
   ): Promise<import('./types').GenerateVideoResult> {
@@ -298,6 +322,7 @@ export const api = {
     fd.append('duration', String(options.duration ?? 5))
     fd.append('quality', options.quality ?? '720p')
     if (options.audioUrl) fd.append('audio_url', options.audioUrl)
+    fd.append('seed', String(options.seed ?? -1))
     refImages?.forEach(f => fd.append('ref_images', f))
     if (refVideo) fd.append('ref_video', refVideo)
     return post('/generate/video', fd)

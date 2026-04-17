@@ -66,7 +66,7 @@ async def create_folder(body: CreateFolderBody):
 
 @router.post("/folders/{name}/rename")
 async def rename_folder(name: str, body: RenameFolderBody):
-    """Rename a top-level project folder."""
+    """Rename a top-level project folder and update all DB records inside it."""
     safe_old = _safe_name(name)
     safe_new = _safe_name(body.new_name)
     if not safe_old or not safe_new:
@@ -78,6 +78,29 @@ async def rename_folder(name: str, body: RenameFolderBody):
     if dst.exists():
         raise HTTPException(status_code=409, detail="Target name already exists")
     src.rename(dst)
+
+    # Update DB: directory and filepath for all media that lived under old name
+    db = await get_db()
+    try:
+        old_prefix = safe_old + "/"
+        cursor = await db.execute(
+            "SELECT id, filepath, directory FROM media"
+            " WHERE directory = ? OR directory LIKE ?",
+            (safe_old, old_prefix + "%"),
+        )
+        rows = [dict(r) for r in await cursor.fetchall()]
+        for row in rows:
+            new_dir = safe_new if row["directory"] == safe_old else safe_new + row["directory"][len(safe_old):]
+            new_fp = str(dst / Path(row["filepath"]).relative_to(src)) if row.get("filepath") else row.get("filepath")
+            await db.execute(
+                "UPDATE media SET directory=?, filepath=?, updated_at=datetime('now') WHERE id=?",
+                (new_dir, new_fp, row["id"]),
+            )
+        if rows:
+            await db.commit()
+    finally:
+        await db.close()
+
     return {"ok": True, "name": safe_new}
 
 

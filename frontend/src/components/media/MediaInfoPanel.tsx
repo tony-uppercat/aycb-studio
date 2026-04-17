@@ -146,7 +146,7 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
           <h3 className={s.sectionTitle}>File</h3>
           <dl className={s.dl}>
             <DL l="Name" v={entry.filename} />
-            <DL l="Project" v={entry.project} />
+            <dt>Project</dt>{entry.project && <dd data-s>{entry.project}</dd>}
             <DL l="Size" v={formatSize(entry.size)} />
             <DL l="Type" v={entry.type} />
             {currentDim && <DL l="Resolution" v={`${currentDim.w} × ${currentDim.h}`} />}
@@ -162,7 +162,7 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
               <DL l="Model" v={meta.model_name ?? meta.model} />
               <DL l="Aspect" v={meta.aspect_ratio} />
               <DL l="Size" v={meta.image_size} />
-              {meta.cost_usd != null && <DL l="Cost" v={fmtCost(meta.cost_usd)} />}
+              {meta.cost_usd != null && <><dt>Cost</dt><dd data-s>{fmtCost(meta.cost_usd)}</dd></>}
               {meta.prompt && (
                 <div className={s.promptWrap}>
                   <div className={s.promptLabel}>Prompt</div>

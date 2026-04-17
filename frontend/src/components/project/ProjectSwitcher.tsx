@@ -220,7 +220,7 @@ export function ProjectSwitcher({ project, onExport, onImport, onBackup, onOpenF
         </>
       )}
       <button className={styles.trigger} onClick={handleToggle} title="Switch project">
-        <span className={styles.triggerName}>{projectName}</span>
+        <span className={styles.triggerName} data-s>{projectName}</span>
         <svg
           className={`${styles.triggerIcon} ${open ? styles.triggerIconOpen : ''}`}
           width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
@@ -279,6 +279,7 @@ export function ProjectSwitcher({ project, onExport, onImport, onBackup, onOpenF
                             className={styles.itemName}
                             onDoubleClick={e => handleStartRename(p.id, p.name, e)}
                             title="Double-click to rename"
+                            data-s
                           >
                             {p.name}
                           </span>

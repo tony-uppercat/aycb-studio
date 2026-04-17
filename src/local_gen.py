@@ -133,16 +133,9 @@ def generate(
         result = pipe(**kwargs)
     image: PILImage.Image = result.images[0]
 
-    # Save as 16-bit PNG via cv2 for maximum quality
-    import numpy as np
-    import cv2
-    arr = np.array(image)
-    if arr.dtype == np.uint8:
-        arr = arr.astype(np.uint16) * 257  # scale 0-255 → 0-65535
-    if arr.ndim == 3 and arr.shape[2] >= 3:
-        arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-    _, encoded = cv2.imencode('.png', arr)
-    return base64.b64encode(encoded.tobytes()).decode()
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def unload(model_id: str | None = None) -> list[str]:

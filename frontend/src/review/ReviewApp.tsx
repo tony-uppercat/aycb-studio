@@ -15,6 +15,7 @@ export default function ReviewApp() {
   const [console_open, setConsoleOpen] = useState(false)
   const [show_name_modal, setShowNameModal] = useState(false)
   const [restarting, setRestarting] = useState(false)
+  const [privacy, setPrivacy] = useState(() => document.body.classList.contains('prv'))
 
   const handleRestart = useCallback(async () => {
     setRestarting(true)
@@ -168,6 +169,13 @@ export default function ReviewApp() {
             title="Toggle console (`)"
           >
             Console
+          </button>
+          <button
+            className={`rh-console-toggle${privacy ? ' rh-console-toggle--active' : ''}`}
+            onClick={() => { document.body.classList.toggle('prv'); setPrivacy(p => !p) }}
+            title="Privacy mode"
+          >
+            Privacy
           </button>
           <ConnectionStatus />
           <button

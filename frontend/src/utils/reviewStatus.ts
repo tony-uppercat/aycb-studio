@@ -129,7 +129,7 @@ export async function fetchReviewStatus(mediaId: string): Promise<ReviewStatus |
     }
     consecutiveFailures = 0
     const data = await r.json()
-    if (!data.status || data.status === 'not_reviewed') {
+    if (data.status === 'not_reviewed') {
       cacheSet(mediaId, null)
       return null
     }

@@ -335,7 +335,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                 <span className={styles.badge}>{errCount}</span>
               )}
               {tab === 'costs' && costCount > 0 && (
-                <span className={styles.costBadgeTab}>${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}</span>
+                <span className={styles.costBadgeTab} data-s>${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}</span>
               )}
             </button>
           ))}
@@ -488,8 +488,8 @@ export function ConsolePanel({ open, onToggle }: Props) {
                             <span className={styles.costTime}>{shortTime(entry.timestamp)}</span>
                             <span className={styles.costNode}>{entry.nodeName}</span>
                             <span className={styles.costModel}>{entry.model}</span>
-                            <span className={styles.costTokens}>{entry.inputTokens}+{entry.outputTokens}</span>
-                            <span className={styles.costUsd}>${entry.costUsd < 0.01 ? entry.costUsd.toFixed(4) : entry.costUsd.toFixed(3)}</span>
+                            <span className={styles.costTokens} data-s>{entry.inputTokens}+{entry.outputTokens}</span>
+                            <span className={styles.costUsd} data-s>${entry.costUsd < 0.01 ? entry.costUsd.toFixed(4) : entry.costUsd.toFixed(3)}</span>
                           </>
                       }
                     </div>
@@ -500,7 +500,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                     <button className={styles.fbExportBtn} onClick={() => {
                       downloadJSON(storeCosts, `costs_${new Date().toISOString().slice(0, 10)}.json`);
                     }} title="Export costs JSON">Export</button>
-                    <span className={styles.costTotal}>
+                    <span className={styles.costTotal} data-s>
                       Total: ${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}
                     </span>
                   </div>

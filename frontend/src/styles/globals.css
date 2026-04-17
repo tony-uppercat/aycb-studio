@@ -71,3 +71,11 @@ textarea, input, select {
   font-family: var(--font-body);
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
+
+/* Privacy mode — blur sensitive data for preview */
+body.prv [data-s] {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+  transition: filter 0.2s;
+}

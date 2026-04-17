@@ -613,11 +613,9 @@ describe('reviewStatus cache', () => {
 describe('estimateCost resolution-aware pricing', () => {
   it('returns correct cost per resolution for Nano Banana 2', async () => {
     const { estimateCost } = await import('../utils/costEstimate')
-    const r512 = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '512')
     const r1k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '1K')
     const r2k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '2K')
     const r4k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '4K')
-    expect(r512.costUsd).toBeCloseTo(0.045, 3)
     expect(r1k.costUsd).toBeCloseTo(0.067, 3)
     expect(r2k.costUsd).toBeCloseTo(0.101, 3)
     expect(r4k.costUsd).toBeCloseTo(0.151, 3)

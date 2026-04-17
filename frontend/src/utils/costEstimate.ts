@@ -100,7 +100,7 @@ export function estimateCost(
   // so we expose resolution-aware maps and let the caller pass the right imageCount for input refs.
   if (operation === 'generate_image') {
     const FIXED_IMAGE_COST: Record<string, Record<string, number>> = {
-      'gemini-3.1-flash-image-preview': { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
+      'gemini-3.1-flash-image-preview': { '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
       'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
     }
     const resMap = FIXED_IMAGE_COST[pricingModelId]

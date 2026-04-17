@@ -99,11 +99,21 @@ async def upload_ephemeral(api_key: str, filename: str, file_bytes: bytes) -> st
 
 def _build_kling_input(
     prompt: str, quality: str, duration: int, aspect_ratio: str,
-    image_urls: list[str] | None = None,
+    image_urls: list[str] | None = None, seed: int = -1,
 ) -> dict[str, Any]:
-    """Build input dict for Kling 3.0 Omni."""
+    """Build input dict for Kling 3.0 Omni.
+
+    When 1-2 images are provided, appends @image_N directives so Kling
+    uses them as start/end frames instead of generic references.
+    """
+    final_prompt = prompt
+    if image_urls and len(image_urls) == 1:
+        final_prompt = f"{prompt} Use @image_1 as first frame"
+    elif image_urls and len(image_urls) == 2:
+        final_prompt = f"{prompt} Use @image_1 as first frame, @image_2 as end frame"
+
     inp: dict[str, Any] = {
-        "prompt": prompt,
+        "prompt": final_prompt,
         "version": "3.0",
         "resolution": quality if quality in ("720p", "1080p") else "720p",
         "duration": duration,
@@ -112,6 +122,8 @@ def _build_kling_input(
     }
     if image_urls:
         inp["images"] = image_urls
+    if seed is not None and seed >= 0:
+        inp["seed"] = seed
     return inp
 
 
@@ -120,49 +132,59 @@ def _build_seedance_input(
     image_urls: list[str] | None = None,
     video_urls: list[str] | None = None,
     audio_urls: list[str] | None = None,
+    seed: int = -1,
 ) -> dict[str, Any]:
-    """Build input dict for Seedance 2.0. Auto-detects mode from refs."""
-    has_images = bool(image_urls)
+    """Build input dict for Seedance 2.0. Auto-detects mode from refs.
+
+    Mode selection:
+    - No refs → text_to_video
+    - 1-2 images only (no video/audio) → first_last_frames (start/end frame)
+    - 3+ images, or any video/audio → omni_reference (flexible multi-ref)
+    """
+    n_images = len(image_urls) if image_urls else 0
     has_video = bool(video_urls)
     has_audio = bool(audio_urls)
 
-    # Mode detection:
-    # - No refs → text_to_video
-    # - Any refs → omni_reference (more flexible, no aspect ratio constraint)
-    # Note: first_last_frames is NOT used because it requires matching aspect ratios
-    # between frames, which breaks multi-ref with mixed source images.
-    if has_images or has_video or has_audio:
-        mode = "omni_reference"
-    else:
+    if n_images == 0 and not has_video and not has_audio:
         mode = "text_to_video"
+    elif n_images <= 2 and not has_video and not has_audio:
+        mode = "first_last_frames"
+    else:
+        mode = "omni_reference"
 
     inp: dict[str, Any] = {
         "prompt": prompt,
         "mode": mode,
         "duration": duration,
-        "aspect_ratio": aspect_ratio,
+        "aspect_ratio": "auto" if mode == "first_last_frames" else aspect_ratio,
     }
 
-    if image_urls:
+    if mode == "first_last_frames" and image_urls:
         inp["image_urls"] = image_urls
-    if video_urls:
-        inp["video_urls"] = video_urls
-    if audio_urls:
-        inp["audio_urls"] = audio_urls
+    else:
+        if image_urls:
+            inp["image_urls"] = image_urls
+        if video_urls:
+            inp["video_urls"] = video_urls
+        if audio_urls:
+            inp["audio_urls"] = audio_urls
 
+    if seed is not None and seed >= 0:
+        inp["seed"] = seed
     return inp
 
 
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
     aspect_ratio: str = "16:9", duration: int = 5, quality: str = "720p",
+    seed: int = -1,
 ) -> dict[str, Any]:
     """Submit a T2V request (no references)."""
     info = get_model_info(model_id)
     if model_id.startswith("kling"):
-        inp = _build_kling_input(prompt, quality, duration, aspect_ratio)
+        inp = _build_kling_input(prompt, quality, duration, aspect_ratio, seed=seed)
     else:
-        inp = _build_seedance_input(prompt, duration, aspect_ratio)
+        inp = _build_seedance_input(prompt, duration, aspect_ratio, seed=seed)
     return await _submit(api_key, info, inp)
 
 
@@ -172,6 +194,7 @@ async def submit_with_refs(
     ref_video_bytes: tuple[str, bytes] | None = None,
     audio_url: str = "",
     aspect_ratio: str = "16:9", duration: int = 5, quality: str = "720p",
+    seed: int = -1,
 ) -> dict[str, Any]:
     """Upload reference files to PiAPI ephemeral storage, then submit task."""
     info = get_model_info(model_id)
@@ -193,11 +216,12 @@ async def submit_with_refs(
     audio_urls: list[str] = [audio_url] if audio_url else []
 
     if model_id.startswith("kling"):
-        inp = _build_kling_input(prompt, quality, duration, aspect_ratio, image_urls or None)
+        inp = _build_kling_input(prompt, quality, duration, aspect_ratio, image_urls or None, seed=seed)
     else:
         inp = _build_seedance_input(
             prompt, duration, aspect_ratio,
             image_urls or None, video_urls or None, audio_urls or None,
+            seed=seed,
         )
     return await _submit(api_key, info, inp)
 

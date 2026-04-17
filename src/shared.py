@@ -125,25 +125,11 @@ def _estimate_cost(model_id: str, usage: dict | None) -> dict | None:
     }
 
 
-def _pil_to_b64(pil: PILImage.Image, depth16: bool = True) -> str:
-    """Convert PIL image to base64 PNG. If depth16=True, save as 16-bit per channel."""
-    import cv2
-    import numpy as np
+def _pil_to_b64(pil: PILImage.Image) -> str:
+    """Convert PIL image to base64 PNG (8-bit)."""
     buf = io.BytesIO()
-    if depth16:
-        arr = np.array(pil)
-        if arr.dtype == np.uint8:
-            arr16 = arr.astype(np.uint16) * 257  # scale 0-255 → 0-65535
-        else:
-            arr16 = arr.astype(np.uint16)
-        # Use cv2 to write 16-bit PNG since PIL doesn't support it natively
-        if arr16.ndim == 3 and arr16.shape[2] >= 3:
-            arr16 = cv2.cvtColor(arr16, cv2.COLOR_RGB2BGR)
-        _, encoded = cv2.imencode('.png', arr16)
-        return base64.b64encode(encoded.tobytes()).decode()
-    else:
-        pil.save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode()
+    pil.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def _require_key(api_key: str, provider: str) -> str:

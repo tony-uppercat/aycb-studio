@@ -35,5 +35,23 @@
       "enhancer"
     ],
     "created_at": "2026-04-12 00:13:30"
+  },
+  {
+    "id": "e5e90200-6e39-44fc-8e12-739f9bb83dc4",
+    "name": "Denoise_v1",
+    "text": "Ultra-high-resolution 4K enhancement based strictly on the provided reference image. Absolute \nf\nidelity toriginal facial anatomy, proportions, and identity. Preserve expression, gaze, pose, \ncamera angle, framing, and perspective with zero deviation. Clothing, hair, skin, and background \nelements must remain unchanged instructure, placement, and design.Recover fine-grain detail \nwith naturalelashes, abricines,lweave, seams, and material edges without introducing stylzation. \nMaintain original color science, white bal-weavesms elationshipsexacty as captured.Lighting \ndrection, ntensity, contrast, and shadow behaviormust match the source image precisely, with \nonly improved clarity and expanded dynamic range. No relight-ing, no reshaping. Remove any \ngrain.Apply controlled sharpening and high-frequency detail reconstruction. Remove \ncompression artifacts andnoise while retaining authentic texture. No smoothing, no plastic skin, \nno artificial gloss. Facial features mustremain consistent across the entire image with coherent \nanatomy and clean, stable edges.Negative constraints: no warping, no facial drift, no added or \nmissing anatomy, no altered hands, no distor-tions, no perspective shift, no text or graphics, no \nhallucinated detail, no stylized rendering. Output must readas a true-to-life, photorealistic \nupscale that matches the reference exactly, only clearer, sharper, and higherresoution. Generate at \nthe original scale",
+    "tags": [
+      "denoise"
+    ],
+    "created_at": "2026-04-13 07:30:46"
+  },
+  {
+    "id": "43d216cc-c9d8-434a-9b2c-df282f5fdc3b",
+    "name": "swap_single",
+    "text": "Replace the person with the one from the reference image. Match exact face and body. Keep everything else. Use the provided image as reference. Make sure the color, lighting, and setting match the original image.",
+    "tags": [
+      "swap"
+    ],
+    "created_at": "2026-04-13 08:01:33"
   }
 ]

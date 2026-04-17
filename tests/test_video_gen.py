@@ -53,11 +53,25 @@ class TestBuildKlingInput:
         assert inp["enable_audio"] is False
         assert "images" not in inp
 
-    def test_with_images(self):
+    def test_first_frame_1_image(self):
+        inp = _build_kling_input("animate this", "1080p", 10, "9:16",
+                                  image_urls=["https://a.png"])
+        assert inp["images"] == ["https://a.png"]
+        assert "@image_1 as first frame" in inp["prompt"]
+        assert "@image_2" not in inp["prompt"]
+
+    def test_first_last_frame_2_images(self):
         inp = _build_kling_input("animate this", "1080p", 10, "9:16",
                                   image_urls=["https://a.png", "https://b.png"])
         assert inp["images"] == ["https://a.png", "https://b.png"]
-        assert inp["resolution"] == "1080p"
+        assert "@image_1 as first frame" in inp["prompt"]
+        assert "@image_2 as end frame" in inp["prompt"]
+
+    def test_3_images_no_directive(self):
+        urls = ["https://a.png", "https://b.png", "https://c.png"]
+        inp = _build_kling_input("scene", "720p", 5, "16:9", image_urls=urls)
+        assert inp["images"] == urls
+        assert "@image_1" not in inp["prompt"]
 
     def test_invalid_quality_defaults_720p(self):
         inp = _build_kling_input("test", "invalid", 5, "16:9")
@@ -71,17 +85,19 @@ class TestBuildSeedanceInput:
         assert inp["aspect_ratio"] == "16:9"
         assert "image_urls" not in inp
 
-    def test_omni_reference_1_image(self):
+    def test_first_last_frames_1_image(self):
         inp = _build_seedance_input("animate", 5, "16:9",
                                      image_urls=["https://start.png"])
-        assert inp["mode"] == "omni_reference"
+        assert inp["mode"] == "first_last_frames"
         assert inp["image_urls"] == ["https://start.png"]
-        assert inp["aspect_ratio"] == "16:9"
+        assert inp["aspect_ratio"] == "auto"
 
-    def test_omni_reference_2_images(self):
+    def test_first_last_frames_2_images(self):
         inp = _build_seedance_input("morph", 5, "16:9",
                                      image_urls=["https://a.png", "https://b.png"])
-        assert inp["mode"] == "omni_reference"
+        assert inp["mode"] == "first_last_frames"
+        assert inp["image_urls"] == ["https://a.png", "https://b.png"]
+        assert inp["aspect_ratio"] == "auto"
 
     def test_omni_reference_3_images(self):
         urls = ["https://a.png", "https://b.png", "https://c.png"]

@@ -8,6 +8,7 @@ import { DrawingCanvas } from './DrawingCanvas'
 import DrawingToolbar from './DrawingToolbar'
 import { LightboxToolbar } from './LightboxToolbar'
 import { LightboxFooter } from './LightboxFooter'
+import { LightboxInfoPanel } from './LightboxInfoPanel'
 
 interface MediaItem {
   id: number
@@ -31,6 +32,7 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
   const { user_name, is_admin } = useUserStore()
   const { is_drawing_mode, toggleDrawingMode, resetForMedia } = useDrawingStore()
   const [show_comments, set_show_comments] = useState(false)
+  const [show_info, set_show_info] = useState(false)
 
   const current_index = items.findIndex((m) => m.id === media.id)
   const is_video = media.mime_type?.startsWith('video/') ?? false
@@ -78,12 +80,13 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
         case 'ArrowRight': go_next(); break
         case 'c': case 'C': set_show_comments((v) => !v); break
         case 'd': case 'D': toggleDrawingMode(); break
+        case 'i': case 'I': if (is_admin) set_show_info(v => !v); break
         case 'a': case 'A': handle_approve(); break
         case 'r': case 'R': handle_reject(); break
         case 's': case 'S': handle_download(); break
       }
     },
-    [on_close, go_prev, go_next, toggleDrawingMode, handle_approve, handle_reject, handle_download],
+    [on_close, go_prev, go_next, toggleDrawingMode, handle_approve, handle_reject, handle_download, is_admin],
   )
 
   useEffect(() => {
@@ -112,6 +115,8 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
           on_reject={handle_reject}
           on_toggle_comments={() => set_show_comments((v) => !v)}
           on_toggle_drawing={toggleDrawingMode}
+          on_toggle_info={is_admin ? () => set_show_info(v => !v) : undefined}
+          show_info={show_info}
           on_download={handle_download}
           on_delete={handle_delete}
           on_close={on_close}
@@ -157,6 +162,9 @@ export function Lightbox({ media, items, on_close, on_navigate, on_refresh }: Li
           <div className="rh-lightbox-comment-panel">
             <CommentThread mediaId={media.id} />
           </div>
+        )}
+        {show_info && is_admin && (
+          <LightboxInfoPanel media={media} on_close={() => set_show_info(false)} />
         )}
       </div>
       {is_drawing_mode && <DrawingToolbar />}

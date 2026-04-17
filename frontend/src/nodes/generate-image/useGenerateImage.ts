@@ -46,7 +46,6 @@ export const ASPECT_RATIOS = [
 
 export const RESOLUTIONS = [
   { value: '', label: 'Auto' },
-  { value: '512', label: '0.5K' },
   { value: '1K', label: '1K' },
   { value: '2K', label: '2K' },
   { value: '4K', label: '4K' },
@@ -80,17 +79,25 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     typeof data.selectedModel === 'string' ? data.selectedModel : 'gemini-3.1-flash-image-preview'
   )
   const [aspectRatio, setAspectRatio] = useState((data as Record<string, unknown>).aspectRatio as string || '21:9')
-  const [resolution, setResolution] = useState((data as Record<string, unknown>).resolution as string || '1K')
+  const [resolution, setResolution] = useState((data as Record<string, unknown>).resolution as string || '2K')
   // Refs so runSingle always reads the latest values regardless of closure staleness
   const aspectRatioRef = useRef(aspectRatio)
   const resolutionRef = useRef(resolution)
   useEffect(() => { aspectRatioRef.current = aspectRatio }, [aspectRatio])
   useEffect(() => { resolutionRef.current = resolution }, [resolution])
   const [useGrounding, setUseGrounding] = useState(Boolean((data as Record<string, unknown>).useGrounding))
+  const groundingRef = useRef(useGrounding)
+  useEffect(() => { groundingRef.current = useGrounding }, [useGrounding])
   const [editMode, setEditMode] = useState(Boolean((data as Record<string, unknown>).editMode))
+  const editModeRef = useRef(editMode)
+  useEffect(() => { editModeRef.current = editMode }, [editMode])
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64] = useState<string | null>(null)
+  const imageB64Ref = useRef(imageB64)
+  useEffect(() => { imageB64Ref.current = imageB64 }, [imageB64])
   const [compareSourceUrl, setCompareSourceUrl] = useState<string | null>(null)
+  const compareSourceUrlRef = useRef(compareSourceUrl)
+  useEffect(() => { compareSourceUrlRef.current = compareSourceUrl }, [compareSourceUrl])
   // True while we're waiting for historyPreview to load after a generation, so we can clear imageB64
   const waitingForPreviewRef = useRef(false)
   const [loading, setLoading] = useState(false)
@@ -180,6 +187,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
 
   // Current media ID — activeMediaId (set with imageB64) > data.mediaId > historyIds fallback
   const currentMediaId = activeMediaId ?? (data.mediaId as string | undefined) ?? historyIds[historyIndex] ?? null
+  const currentMediaIdRef = useRef(currentMediaId)
+  useEffect(() => { currentMediaIdRef.current = currentMediaId }, [currentMediaId])
 
   const handleFavoriteToggle = useCallback(async (mid: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -254,18 +263,20 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const prompt = rawPrompt.trim()
     const refs = await pullAllMedia(id, 'image-', getNodes, getEdges)
     // Edit mode: prepend the last generated image as reference for iterative editing
-    if (editMode && currentMediaId) {
-      const lastFile = await loadMedia(currentMediaId)
+    if (editModeRef.current && currentMediaIdRef.current) {
+      const lastFile = await loadMedia(currentMediaIdRef.current)
       if (lastFile) refs.unshift(lastFile)
     }
-    // Save compare source: ref image if connected, otherwise current output (previous gen)
-    if (compareSourceUrl) URL.revokeObjectURL(compareSourceUrl)
+    // Save compare source: ref image if connected, otherwise current output (previous gen or history)
+    if (compareSourceUrlRef.current) URL.revokeObjectURL(compareSourceUrlRef.current)
     if (refs.length > 0) {
       setCompareSourceUrl(URL.createObjectURL(refs[0]))
-    } else if (imageB64) {
-      // Save current output as compare source before it gets replaced
-      const resp = await fetch(`data:image/png;base64,${imageB64}`)
+    } else if (imageB64Ref.current) {
+      const resp = await fetch(`data:image/png;base64,${imageB64Ref.current}`)
       setCompareSourceUrl(URL.createObjectURL(await resp.blob()))
+    } else if (currentMediaIdRef.current) {
+      const prevFile = await loadMedia(currentMediaIdRef.current)
+      if (prevFile) setCompareSourceUrl(URL.createObjectURL(prevFile))
     }
     const providerKey = modelInfo.provider === 'flux-cloud' ? bflApiKey
                      : modelInfo.provider === 'local' ? localServerUrl
@@ -275,7 +286,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const imageOptions = {
       ...(currentAspectRatio ? { aspectRatio: currentAspectRatio } : {}),
       ...(currentResolution ? { imageSize: currentResolution } : {}),
-      ...(useGrounding ? { useGrounding: true } : {}),
+      ...(groundingRef.current ? { useGrounding: true } : {}),
     }
     const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, refs.length ? refs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }

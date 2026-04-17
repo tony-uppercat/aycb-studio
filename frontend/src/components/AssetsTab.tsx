@@ -13,10 +13,11 @@ export interface AssetItem {
 
 interface Props {
   open: boolean
+  onDragStart?: () => void
   onDragEnd: () => void
 }
 
-export function AssetsTab({ open, onDragEnd }: Props) {
+export function AssetsTab({ open, onDragStart, onDragEnd }: Props) {
   const [assets, setAssets] = useState<AssetItem[]>([])
   const [folders, setFolders] = useState<string[]>([])
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
@@ -70,7 +71,8 @@ export function AssetsTab({ open, onDragEnd }: Props) {
     }])
     e.dataTransfer.setData('application/x-aycb-media', payload)
     e.dataTransfer.effectAllowed = 'copy'
-  }, [])
+    onDragStart?.()
+  }, [onDragStart])
 
   const loading = open && !fetched
   const displayAssets = activeFolder

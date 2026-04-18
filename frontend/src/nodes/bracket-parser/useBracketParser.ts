@@ -55,24 +55,24 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
 
   // State
   const [outputMode, setOutputMode] = useState<OutputMode>(
-    (data.output_mode as OutputMode) ?? 'template'
+    (data.outputMode as OutputMode) ?? 'template'
   )
   const [excludedKeys, setExcludedKeys] = useState<Set<string>>(
-    new Set(data.excluded_keys ?? [])
+    new Set(data.excludedKeys ?? [])
   )
   const [outputLimit, setOutputLimit] = useState<number>(
-    typeof data.output_limit === 'number' ? data.output_limit : 0
+    typeof data.outputLimit === 'number' ? data.outputLimit : 0
   )
   const [overrides, setOverrides] = useState<Record<string, string>>(
     (data.overrides as Record<string, string>) ?? {}
   )
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const escapedRef = useRef(false)
-  const [pinsCollapsed, setPinsCollapsed] = useState(data.pins_collapsed === true)
-  const [previewCollapsed, setPreviewCollapsed] = useState(data.preview_collapsed === true)
-  const [textCollapsed, setTextCollapsed] = useState(data.text_collapsed === true)
+  const [pinsCollapsed, setPinsCollapsed] = useState(data.pinsCollapsed === true)
+  const [previewCollapsed, setPreviewCollapsed] = useState(data.previewCollapsed === true)
+  const [textCollapsed, setTextCollapsed] = useState(data.textCollapsed === true)
   const [outputOverride, setOutputOverride] = useState<string | null>(
-    typeof data.output_override === 'string' ? data.output_override : null
+    typeof data.outputOverride === 'string' ? data.outputOverride : null
   )
   const [editingOutput, setEditingOutput] = useState(false)
   const outputTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -193,10 +193,10 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     prevOutputRef.current = effectiveOutput
     prevPinsRef.current = pinsJson
     updateNodeData(id, {
-      outputText: effectiveOutput, outputPins, output_mode: outputMode, overrides,
-      excluded_keys: [...excludedKeys], output_limit: outputLimit,
-      output_override: outputOverride, pins_collapsed: pinsCollapsed,
-      preview_collapsed: previewCollapsed, text_collapsed: textCollapsed,
+      outputText: effectiveOutput, outputPins, outputMode, overrides,
+      excludedKeys: [...excludedKeys], outputLimit,
+      outputOverride, pinsCollapsed,
+      previewCollapsed, textCollapsed,
     })
   }, [effectiveOutput, outputMode, overrides, excludedKeys, outputLimit, outputPins, id, updateNodeData, outputOverride, pinsCollapsed, previewCollapsed, textCollapsed])
 

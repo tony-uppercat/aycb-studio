@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import type { Edge } from '@xyflow/react'
+import type { Edge, Node } from '@xyflow/react'
 
 import {
   type ProjectRecord,
@@ -31,6 +31,43 @@ function migrateEdges(edges: Edge[]): Edge[] {
   return edges.map(e => {
     const migrated = e.sourceHandle === 'prompt-out' ? { ...e, sourceHandle: 'text-out' } : e
     return applyEdgeColor(migrated)
+  })
+}
+
+/**
+ * Rename BracketParser node data fields from snake_case (legacy) to
+ * camelCase. Runs on canvas load so previously-saved canvases keep
+ * working after the audit's m9 rename. Safe to re-run: each migration
+ * checks the old key exists and the new key is absent.
+ */
+const _BRACKET_PARSER_MIGRATIONS: ReadonlyArray<readonly [string, string]> = [
+  ['output_mode', 'outputMode'],
+  ['excluded_keys', 'excludedKeys'],
+  ['output_limit', 'outputLimit'],
+  ['output_override', 'outputOverride'],
+  ['pins_collapsed', 'pinsCollapsed'],
+  ['preview_collapsed', 'previewCollapsed'],
+  ['text_collapsed', 'textCollapsed'],
+]
+
+export function migrateNodes(nodes: Node[]): Node[] {
+  return nodes.map(n => {
+    if (n.type !== 'bracketParser' || !n.data) return n
+    const data = { ...n.data } as Record<string, unknown>
+    let touched = false
+    for (const [oldKey, newKey] of _BRACKET_PARSER_MIGRATIONS) {
+      if (oldKey in data) {
+        // Only copy if the new key is absent — a partial migration could
+        // otherwise overwrite a fresh value with a stale one. Always drop
+        // the old key so we don't keep dual entries.
+        if (!(newKey in data)) {
+          data[newKey] = data[oldKey]
+        }
+        delete data[oldKey]
+        touched = true
+      }
+    }
+    return touched ? { ...n, data } : n
   })
 }
 
@@ -97,7 +134,7 @@ export function useActiveProject(): UseActiveProject {
   // ── Load a project's canvas into React Flow ──
 
   const loadProjectCanvas = useCallback((canvas: ProjectRecord['canvas']) => {
-    const nodes = canvas.nodes ?? []
+    const nodes = migrateNodes(canvas.nodes ?? [])
     const edges = migrateEdges(canvas.edges ?? [])
     setNodes(nodes)
     setEdges(edges)

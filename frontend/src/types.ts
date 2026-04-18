@@ -171,14 +171,14 @@ export interface JsonParserNodeData extends Record<string, unknown> {
 export interface BracketParserNodeData extends Record<string, unknown> {
   text?: string
   outputText?: string
-  output_mode?: 'items' | 'template'
-  excluded_keys?: string[]
-  output_limit?: number
+  outputMode?: 'items' | 'template'
+  excludedKeys?: string[]
+  outputLimit?: number
   overrides?: Record<string, string>
-  output_override?: string | null
-  pins_collapsed?: boolean
-  preview_collapsed?: boolean
-  text_collapsed?: boolean
+  outputOverride?: string | null
+  pinsCollapsed?: boolean
+  previewCollapsed?: boolean
+  textCollapsed?: boolean
 }
 
 export interface JsonParserBlendNodeData extends Record<string, unknown> {

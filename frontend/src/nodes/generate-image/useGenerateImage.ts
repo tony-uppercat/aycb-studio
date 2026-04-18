@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
 import { useSettings } from '../../components/SettingsContext'
@@ -9,12 +9,26 @@ import { saveMediaForProject, generateMediaId, loadMedia } from '../../mediaStor
 import { pullText, pullAllMedia } from '../../hooks/useDataPropagation'
 import { useGenerateImageHistory } from '../../hooks/useGenerateImageHistory'
 import { useStateRef } from '../../hooks/useStateRef'
+import { useModelRegistry, type RegistryModel } from '../../hooks/useModelRegistry'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
 import { fetchReviewStatus, registerBridgeStem, saveMediaMeta, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
 
-export const IMAGE_MODELS = [
+export interface ImageModelDef {
+  id: string
+  name: string
+  provider: string
+  tooltip: string
+  price: string
+  cost: number
+  deprecated: boolean
+}
+
+// Hardcoded fallback — see useGenerateVideo.ts for the same pattern.
+// Registry-derived values override this once /api/registry/models
+// resolves; cloud mode (no backend) keeps using these values.
+const IMAGE_MODELS_FALLBACK: ImageModelDef[] = [
   // Google Gemini — text-to-image & image-to-image (pass ref images for editing)
   { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false },
   { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false },
@@ -24,7 +38,38 @@ export const IMAGE_MODELS = [
   // Flux (Local GPU)
   { id: 'local/flux-2-klein-4b', name: 'Flux 2 Klein 4B (Local)', provider: 'local', tooltip: 'Run on your GPU', price: 'Free', cost: 0, deprecated: false },
   { id: 'local/flux-2-klein-9b', name: 'Flux 2 Klein 9B (Local)', provider: 'local', tooltip: 'Run on your GPU (24GB+ VRAM)', price: 'Free', cost: 0, deprecated: false },
-] as const
+]
+
+export const IMAGE_MODELS: ImageModelDef[] = IMAGE_MODELS_FALLBACK
+
+function registryToImageModelDef(m: RegistryModel): ImageModelDef {
+  // The BFL image provider registers itself as 'flux-cloud' in the
+  // frontend ImageProvider map; the backend registry uses the simpler
+  // 'flux'. Rename on the way out so runSingle's provider switch still
+  // finds the right API key.
+  const provider = m.provider === 'flux' ? 'flux-cloud' : m.provider
+  const cost = m.cost_per_call ?? 0
+  const price = cost === 0 ? 'Free'
+    : m.provider === 'flux' ? `~$${cost}`
+    : `$${cost}`
+  return {
+    id: m.id,
+    name: m.name,
+    provider,
+    tooltip: m.tooltip ?? '',
+    price,
+    cost,
+    deprecated: m.deprecated,
+  }
+}
+
+export function useImageModels(): ImageModelDef[] {
+  const registry = useModelRegistry('image')
+  return useMemo(() => {
+    if (registry.length === 0) return IMAGE_MODELS_FALLBACK
+    return registry.map(registryToImageModelDef)
+  }, [registry])
+}
 
 
 export const ASPECT_RATIOS = [
@@ -226,7 +271,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     return String(d.outputText ?? d.text ?? d.prompt ?? localPrompt)
   })
 
-  const modelInfo = IMAGE_MODELS.find(m => m.id === selectedModel) ?? IMAGE_MODELS[0]
+  const imageModels = useImageModels()
+  const modelInfo = imageModels.find(m => m.id === selectedModel) ?? imageModels[0] ?? IMAGE_MODELS_FALLBACK[0]
 
   function swapRefs() {
     setEdges(eds => {

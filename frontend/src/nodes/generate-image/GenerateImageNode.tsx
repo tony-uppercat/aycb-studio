@@ -4,7 +4,7 @@ import { NodeShell } from '../_shared/NodeShell'
 import { CompareSlider } from '../_shared/CompareSlider'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { useGenerateImage, IMAGE_MODELS, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
+import { useGenerateImage, useImageModels, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
 import { priceTier } from '../_shared/types'
 import styles from '../_shared/Node.module.css'
 
@@ -13,6 +13,7 @@ type GenerateImageNodeType = Node<GenerateImageNodeData, 'generateImage'>
 export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImageNodeType>) {
   const { openPreview } = useMediaPreview()
   const h = useGenerateImage(id, data, selected)
+  const imageModels = useImageModels()
   const [compareMode, setCompareMode] = useState(false)
   const outputUrl = h.imageB64 ? `data:image/png;base64,${h.imageB64}` : h.historyPreview
   const canCompare = !!h.compareSourceUrl && !!outputUrl
@@ -45,7 +46,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
             { label: 'Local GPU', filter: 'local' },
           ].map(g => {
-            const items = IMAGE_MODELS.filter(m => m.provider === g.filter)
+            const items = imageModels.filter(m => m.provider === g.filter)
             return items.length > 0 ? (
               <optgroup key={g.label} label={g.label}>
                 {items.map(m => (

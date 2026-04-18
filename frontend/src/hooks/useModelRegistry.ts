@@ -29,6 +29,7 @@ export interface RegistryModel {
   qualities: string[]
   max_ref_images: number
   deprecated: boolean
+  tooltip: string | null
   endpoint_t2v: string | null
   endpoint_i2v: string | null
   provider_model_id: string | null

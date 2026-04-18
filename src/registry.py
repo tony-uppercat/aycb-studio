@@ -55,6 +55,10 @@ class Model:
     qualities: tuple[str, ...] = ()
     max_ref_images: int = 0
     deprecated: bool = False
+    # Display copy consumed by the frontend dropdowns. Kept here so the
+    # backend registry truly is the single source of truth for model
+    # metadata, not just the pricing / capabilities subset.
+    tooltip: str | None = None
     # Provider-specific endpoint hints — opaque to callers outside the
     # matching provider module. Kept in the registry so the provider
     # module can look up its own URL without needing a parallel dict.
@@ -140,6 +144,7 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4",
                        "16:9", "9:16", "21:9", "4:1", "1:4", "8:1", "1:8"),
         qualities=("1K", "2K", "4K"),
+        tooltip="Gemini 3.1 Flash — fast T\u2192I / I\u2192I, 0.5K-4K, extended aspect ratios",
     ),
     Model(
         id="gemini-3-pro-image-preview",
@@ -149,6 +154,7 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         cost_per_call=0.134,
         aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16", "21:9"),
         qualities=("1K", "2K", "4K"),
+        tooltip="Gemini 3 Pro — best quality, text rendering, 1K-4K",
     ),
     Model(
         id="flux-2-klein-4b",
@@ -156,6 +162,7 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         provider="flux",
         capability="image",
         cost_per_call=0.014,
+        tooltip="Black Forest Labs 4B via BFL API",
     ),
     Model(
         id="flux-2-klein-9b",
@@ -163,18 +170,21 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         provider="flux",
         capability="image",
         cost_per_call=0.015,
+        tooltip="Black Forest Labs 9B via BFL API",
     ),
     Model(
         id="local/flux-2-klein-4b",
         name="Flux 2 Klein 4B (Local)",
         provider="local",
         capability="image",
+        tooltip="Run on your GPU",
     ),
     Model(
         id="local/flux-2-klein-9b",
         name="Flux 2 Klein 9B (Local)",
         provider="local",
         capability="image",
+        tooltip="Run on your GPU (24GB+ VRAM)",
     ),
 )
 
@@ -205,6 +215,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("16:9", "9:16", "1:1"),
         qualities=("720p", "1080p"),
         allowed_durations=tuple(range(3, 16)),
+        tooltip="PiAPI — Kling 3.0 Omni, 720p/1080p",
         provider_model_id="kling",
         task_type="omni_video_generation",
     ),
@@ -217,6 +228,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
         qualities=("standard",),
         allowed_durations=tuple(range(4, 16)),
+        tooltip="PiAPI — T2V/multi-ref, 4-15s",
         provider_model_id="seedance",
         task_type="seedance-2",
     ),
@@ -229,6 +241,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
         qualities=("standard",),
         allowed_durations=tuple(range(4, 16)),
+        tooltip="PiAPI — fast, lower cost",
         provider_model_id="seedance",
         task_type="seedance-2-fast",
     ),
@@ -242,6 +255,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("16:9", "9:16", "1:1"),
         qualities=("720p",),
         allowed_durations=tuple(range(3, 16)),
+        tooltip="fal.ai — Kling 3.0 Omni Standard, 3-15s, fast",
         endpoint_t2v="fal-ai/kling-video/v3/standard/text-to-video",
         endpoint_i2v="fal-ai/kling-video/v3/standard/image-to-video",
     ),
@@ -254,6 +268,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("16:9", "9:16", "1:1"),
         qualities=("1080p",),
         allowed_durations=tuple(range(3, 16)),
+        tooltip="fal.ai — Kling 3.0 Omni Pro, 3-15s, best quality",
         endpoint_t2v="fal-ai/kling-video/v3/pro/text-to-video",
         endpoint_i2v="fal-ai/kling-video/v3/pro/image-to-video",
     ),
@@ -266,6 +281,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
         qualities=("720p",),
         allowed_durations=tuple(range(4, 16)),
+        tooltip="fal.ai — Seedance 2.0, 4-15s, I2V",
         endpoint_t2v="bytedance/seedance-2.0/text-to-video",
         endpoint_i2v="bytedance/seedance-2.0/image-to-video",
     ),
@@ -279,6 +295,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
         qualities=("720p",),
         allowed_durations=tuple(range(4, 16)),
+        tooltip="Atlas Cloud — Seedance 2.0 Fast",
         endpoint_t2v="bytedance/seedance-2.0-fast/text-to-video",
         endpoint_i2v="bytedance/seedance-2.0-fast/image-to-video",
     ),
@@ -291,6 +308,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
         qualities=("720p",),
         allowed_durations=tuple(range(4, 16)),
+        tooltip="Atlas Cloud — full quality Seedance 2.0",
         endpoint_t2v="bytedance/seedance-2.0/text-to-video",
         endpoint_i2v="bytedance/seedance-2.0/image-to-video",
     ),
@@ -306,6 +324,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         allowed_durations=(4, 6, 8),
         default_duration=8,
         max_ref_images=3,
+        tooltip="Google Vertex — Veo 3.1, native audio, up to 3 refs, 4-8s",
         provider_model_id="veo-3.1-generate-preview",
     ),
     Model(
@@ -319,6 +338,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         allowed_durations=(4, 6, 8),
         default_duration=8,
         max_ref_images=3,
+        tooltip="Google Vertex — Veo 3.1 Fast, 4-8s",
         provider_model_id="veo-3.1-fast-generate-preview",
     ),
 )

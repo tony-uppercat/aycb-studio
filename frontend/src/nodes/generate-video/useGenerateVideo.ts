@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
 import { useSettings } from '../../components/SettingsContext'
@@ -6,6 +6,7 @@ import { api, bridgeVideo } from '../../api'
 import { pullText, pullAllMedia, pullMedia } from '../../hooks/useDataPropagation'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
+import { useModelRegistry, type RegistryModel } from '../../hooks/useModelRegistry'
 import { priceTier } from '../_shared/types'
 import type { GenerateVideoNodeData } from '../../types'
 
@@ -24,7 +25,12 @@ export interface VideoModelDef {
   maxDuration: number
 }
 
-export const VIDEO_MODELS: VideoModelDef[] = [
+// Hardcoded fallback — used before /api/registry/models resolves on
+// first load, and in cloud mode where the backend isn't available to
+// serve the registry. Mirrors src/registry.py; a drift test in the
+// backend test suite guards against divergence. Consumers should call
+// useVideoModels() for fresh data at runtime.
+const VIDEO_MODELS_FALLBACK: VideoModelDef[] = [
   // fal.ai — Kling v3
   {
     id: 'fal-kling-v3-std', name: 'Kling 3.0 Omni Std', provider: 'fal',
@@ -92,6 +98,44 @@ export const VIDEO_MODELS: VideoModelDef[] = [
   },
 ]
 
+// Back-compat export — prefer useVideoModels() at call sites that can
+// accept a re-render on registry arrival. This const never mutates, so
+// it stays safe for useState initializers that need a stable reference.
+export const VIDEO_MODELS: VideoModelDef[] = VIDEO_MODELS_FALLBACK
+
+function registryToVideoModelDef(m: RegistryModel): VideoModelDef {
+  const costs = Object.values(m.cost_per_sec ?? {})
+  const priceStr =
+    costs.length === 0 ? 'Free' :
+    costs.length === 1 ? `$${costs[0]}/s` :
+    `$${Math.min(...costs)}-${Math.max(...costs)}/s`
+  return {
+    id: m.id,
+    name: m.name,
+    provider: m.provider,
+    tooltip: m.tooltip ?? '',
+    price: priceStr,
+    cost: costs.length ? Math.min(...costs) : 0,
+    ratios: m.aspect_ratios,
+    qualities: m.qualities,
+    minDuration: m.allowed_durations.length ? Math.min(...m.allowed_durations) : 4,
+    maxDuration: m.allowed_durations.length ? Math.max(...m.allowed_durations) : 15,
+  }
+}
+
+/**
+ * Returns video-capability models — registry-sourced when the backend
+ * is available, otherwise the hardcoded fallback. Re-renders once when
+ * /api/registry/models resolves.
+ */
+export function useVideoModels(): VideoModelDef[] {
+  const registry = useModelRegistry('video')
+  return useMemo(() => {
+    if (registry.length === 0) return VIDEO_MODELS_FALLBACK
+    return registry.map(registryToVideoModelDef)
+  }, [registry])
+}
+
 const MAX_REFS = 12
 const POLL_INTERVAL_MS = 5000
 
@@ -143,7 +187,8 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const localPromptRef = useRef(localPrompt)
   useEffect(() => { localPromptRef.current = localPrompt }, [localPrompt])
 
-  const modelInfo = VIDEO_MODELS.find(m => m.id === selectedModel) ?? VIDEO_MODELS[0]
+  const videoModels = useVideoModels()
+  const modelInfo = videoModels.find(m => m.id === selectedModel) ?? videoModels[0] ?? VIDEO_MODELS_FALLBACK[0]
   const isFal = modelInfo.provider === 'fal'
   const isAtlas = modelInfo.provider === 'atlas'
   const isVertex = modelInfo.provider === 'vertex'
@@ -314,7 +359,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   // -- Sync quality/ratio when model changes ----------------------------------
 
   useEffect(() => {
-    const info = VIDEO_MODELS.find(m => m.id === selectedModel)
+    const info = videoModels.find(m => m.id === selectedModel)
     if (!info) return
     if (!info.qualities.includes(quality)) {
       setQuality(info.qualities[0])

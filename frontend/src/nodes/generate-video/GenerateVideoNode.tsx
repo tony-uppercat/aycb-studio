@@ -3,7 +3,7 @@ import { useReactFlow, type NodeProps } from '@xyflow/react'
 import { Lock, Dices } from 'lucide-react'
 import { NodeShell } from '../_shared/NodeShell'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { useGenerateVideo, VIDEO_MODELS } from './useGenerateVideo'
+import { useGenerateVideo, VIDEO_MODELS, useVideoModels } from './useGenerateVideo'
 import { priceTier } from '../_shared/types'
 import type { GenerateVideoNodeData } from '../../types'
 import styles from '../_shared/Node.module.css'
@@ -22,10 +22,13 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     { id: 'vertex', label: 'Veo' },
     { id: 'piapi', label: 'PiAPI' },
   ]
+  // Initial provider derived from the fallback const — stable across
+  // first render; the dropdown itself populates from the live registry.
   const [activeProvider, setActiveProvider] = useState(
     () => VIDEO_MODELS.find(m => m.id === (d.selectedModel ?? 'atlas-seedance-2.0'))?.provider ?? 'atlas'
   )
-  const filteredModels = VIDEO_MODELS.filter(m => m.provider === activeProvider)
+  const videoModels = useVideoModels()
+  const filteredModels = videoModels.filter(m => m.provider === activeProvider)
 
   const {
     localPrompt, setLocalPrompt,
@@ -82,7 +85,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
               className={`${nodeStyles.providerBtn} ${activeProvider === p.id ? nodeStyles.providerBtnActive : ''}`}
               onClick={() => {
                 setActiveProvider(p.id)
-                const first = VIDEO_MODELS.find(m => m.provider === p.id)
+                const first = videoModels.find(m => m.provider === p.id)
                 if (first && modelInfo.provider !== p.id) {
                   setSelectedModel(first.id)
                   updateNodeData(id, { selectedModel: first.id })

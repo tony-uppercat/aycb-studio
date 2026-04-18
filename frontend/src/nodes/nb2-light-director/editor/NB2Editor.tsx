@@ -9,6 +9,7 @@ import { ViewportOverlay } from './ViewportOverlay'
 import { LightPanel, Slider } from './LightPanel'
 import { CameraPanel, LensPanel, ModelPanel } from './CameraPanel'
 import { Diagram } from './Diagram'
+import styles from './NB2Editor.module.css'
 
 interface NB2EditorProps {
   initialConfig?: string
@@ -128,40 +129,39 @@ export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile,
   }, [cam, lens, camBookmarks, onClose, captureViewport, resetCam, loadBookmark])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', background: '#18181b', color: '#e8e4df', fontFamily: "'IBM Plex Mono',monospace", overflow: 'hidden' }}>
+    <div className={styles.root}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', borderBottom: '1px solid #2c2c30', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <button onClick={onClose} style={{ background: 'none', border: '1px solid #222', color: '#888', fontSize: 9, padding: '2px 8px', borderRadius: 3, cursor: 'pointer' }}>BACK TO GRAPH</button>
-          <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: '0.08em' }}>NB2 LIGHT DIRECTOR</span>
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <button onClick={onClose} className={styles.backBtn}>BACK TO GRAPH</button>
+          <span className={styles.title}>NB2 LIGHT DIRECTOR</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        <div className={styles.headerRight}>
           {MODEL_PRESETS.map(m => (
-            <button key={m.id} title={m.name} onClick={() => setModel(m.id)} style={{
-              padding: '2px 6px', fontSize: 8, fontWeight: model === m.id ? 700 : 500,
-              background: model === m.id ? '#e8a84918' : 'transparent',
-              border: `1px solid ${model === m.id ? '#e8a84935' : '#333338'}`,
-              color: model === m.id ? '#e8a849' : '#444', borderRadius: 3, cursor: 'pointer',
-            }}>{m.name}</button>
+            <button
+              key={m.id}
+              title={m.name}
+              onClick={() => setModel(m.id)}
+              className={`${styles.modelBtn} ${model === m.id ? styles.modelBtnActive : ''}`}
+            >{m.name}</button>
           ))}
-          <button onClick={() => fileInputRef.current?.click()} style={{
-            padding: '2px 6px', fontSize: 9, fontWeight: model === 'custom' ? 700 : 500,
-            background: model === 'custom' ? '#e8a84918' : 'transparent',
-            border: `1px solid ${model === 'custom' ? '#e8a84935' : '#333338'}`,
-            color: model === 'custom' ? '#e8a849' : '#444', borderRadius: 3, cursor: 'pointer',
-          }}>GLB</button>
-          <input ref={fileInputRef} type="file" accept=".glb" style={{ display: 'none' }}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className={`${styles.glbBtn} ${model === 'custom' ? styles.glbBtnActive : ''}`}
+          >GLB</button>
+          <input ref={fileInputRef} type="file" accept=".glb" className={styles.glbInput}
             onChange={e => { const f = e.target.files?.[0]; if (f) { loadGLB(f); onGlbFile?.(f) } e.target.value = '' }} />
-          <button onClick={() => { setLights([...DEFAULT_LIGHTS]); setAmbient(12); setModel('bust'); setGlbName(null); setGlbRot({ ...DEFAULT_GLB_ROT }); setGlbOffset({ ...DEFAULT_GLB_OFFSET }); resetCam() }} style={{
-            background: 'none', border: '1px solid #333338', color: '#444', fontSize: 8, padding: '2px 8px', borderRadius: 3, cursor: 'pointer', marginLeft: 4,
-          }}>RESET</button>
+          <button
+            onClick={() => { setLights([...DEFAULT_LIGHTS]); setAmbient(12); setModel('bust'); setGlbName(null); setGlbRot({ ...DEFAULT_GLB_ROT }); setGlbOffset({ ...DEFAULT_GLB_OFFSET }); resetCam() }}
+            className={styles.resetBtn}
+          >RESET</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div className={styles.body}>
         {/* Viewport */}
-        <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
-          <div ref={mountRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
+        <div className={styles.viewport}>
+          <div ref={mountRef} className={styles.viewportMount} />
           <ViewportOverlay cam={cam} lens={lens} pinnedCam={pinnedCam} useRef3D={useRef3D} frameAR={frameAR}
             camBookmarks={camBookmarks} model={model} glbRot={glbRot} clayMode={clayMode}
             onCapture={captureViewport} onSaveBookmark={() => setCamBookmarks(p => [...p, { name: `CAM ${p.length + 1}`, cam: { ...cam }, lens: { ...lens } }])}
@@ -171,18 +171,21 @@ export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile,
         </div>
 
         {/* Sidebar */}
-        <div style={{ width: 255, flexShrink: 0, borderLeft: '1px solid #2c2c30', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '8px 8px 2px', borderBottom: '1px solid #2c2c30' }}><Diagram lights={lights} camTheta={cam.theta} /></div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '5px 6px' }}>
+        <div className={styles.sidebar}>
+          <div className={styles.diagramWrap}><Diagram lights={lights} camTheta={cam.theta} /></div>
+          <div className={styles.panels}>
             {model === 'custom' && <ModelPanel glbName={glbName} glbOffset={glbOffset} onOffsetChange={setGlbOffset} open={panels.model} onToggle={() => togglePanel('model')} />}
             {lights.map((l, i) => (
               <LightPanel key={i} light={l} index={i} onUpdate={upd} open={panels[l.name.toLowerCase() as keyof typeof panels] !== false} onToggle={() => togglePanel(l.name.toLowerCase())} />
             ))}
-            <div style={{ background: '#1f1f23', border: '1px solid #353539', borderRadius: 7, padding: '9px 11px', marginBottom: 5 }}>
-              <div onClick={() => togglePanel('ambient')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: panels.ambient ? 6 : 0, cursor: 'pointer' }}>
-                <span style={{ fontSize: 8, color: '#444' }}>{panels.ambient ? '\u25BE' : '\u25B8'}</span>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3a3a3a' }} />
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Ambient</span>
+            <div className={styles.ambientCard}>
+              <div
+                onClick={() => togglePanel('ambient')}
+                className={`${styles.ambientHeader} ${panels.ambient ? styles.ambientHeaderOpen : ''}`}
+              >
+                <span className={styles.ambientChevron}>{panels.ambient ? '\u25BE' : '\u25B8'}</span>
+                <div className={styles.ambientDot} />
+                <span className={styles.ambientTitle}>Ambient</span>
               </div>
               {panels.ambient && <Slider label="LEVEL" value={ambient} min={0} max={50} unit="%" onChange={setAmbient} color="#444" />}
             </div>
@@ -191,39 +194,42 @@ export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile,
           </div>
 
           {/* Prompt output */}
-          <div style={{ borderTop: '1px solid #2c2c30', padding: '7px 6px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: '#5a5752' }}>NB2</span>
-                <div style={{ display: 'flex', gap: 0 }}>
+          <div className={styles.promptBar}>
+            <div className={styles.promptBarHeader}>
+              <div className={styles.promptBarLeft}>
+                <span className={styles.promptBarLabel}>NB2</span>
+                <div className={styles.modeToggle}>
                   {(['TEXT', '3D REF'] as const).map(m => {
                     const active = m === 'TEXT' ? !useRef3D : useRef3D
-                    return (<button key={m} onClick={() => setUseRef3D(m === '3D REF')} style={{
-                      fontSize: 7, fontWeight: 700, padding: '2px 6px', cursor: 'pointer',
-                      background: active ? (m === '3D REF' ? '#39FF1418' : '#2e2e32') : 'transparent',
-                      color: active ? (m === '3D REF' ? '#39FF14' : '#ddd') : '#444',
-                      border: `1px solid ${active ? (m === '3D REF' ? '#39FF1440' : '#2a2a2c') : '#2e2e32'}`,
-                      borderRadius: m === 'TEXT' ? '3px 0 0 3px' : '0 3px 3px 0',
-                    }}>{m}</button>)
+                    const activeClass = active
+                      ? (m === '3D REF' ? styles.modeBtnActive3D : styles.modeBtnActiveText)
+                      : ''
+                    const sideClass = m === 'TEXT' ? styles.modeBtnLeft : styles.modeBtnRight
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => setUseRef3D(m === '3D REF')}
+                        className={`${styles.modeBtn} ${sideClass} ${activeClass}`}
+                      >{m}</button>
+                    )
                   })}
                 </div>
               </div>
-              <button onClick={copyPrompt} style={{
-                background: copied ? '#e8a84915' : '#242428', border: `1px solid ${copied ? '#e8a84935' : '#333338'}`,
-                color: copied ? '#e8a849' : '#666', fontSize: 8, fontWeight: 700, padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 3,
-              }}>{copied ? <><Check size={8} strokeWidth={2} /> COPIED</> : <><Copy size={8} strokeWidth={2} /> COPY</>}</button>
+              <button
+                onClick={copyPrompt}
+                className={`${styles.copyBtn} ${copied ? styles.copyBtnActive : ''}`}
+              >{copied ? <><Check size={8} strokeWidth={2} /> COPIED</> : <><Copy size={8} strokeWidth={2} /> COPY</>}</button>
             </div>
             {useRef3D && capturedImg && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, padding: '4px 6px', background: '#39FF1408', border: '1px solid #39FF1420', borderRadius: 4 }}>
-                <img src={capturedImg} style={{ width: 32, height: 32, borderRadius: 3, objectFit: 'cover', border: '1px solid #39FF1430' }} />
+              <div className={styles.dualHint}>
+                <img src={capturedImg} className={styles.dualThumb} />
                 <div>
-                  <div style={{ fontSize: 8, color: '#39FF14', fontWeight: 700 }}>DUAL INPUT MODE</div>
-                  <div style={{ fontSize: 7, color: '#555' }}>Input 1: subject photo / Input 2: 3D reference</div>
+                  <div className={styles.dualLabel}>DUAL INPUT MODE</div>
+                  <div className={styles.dualDesc}>Input 1: subject photo / Input 2: 3D reference</div>
                 </div>
               </div>
             )}
-            <div style={{ background: '#1a1a1d', border: '1px solid #2c2c30', borderRadius: 4, padding: 7, fontSize: 10, lineHeight: 1.6, color: '#b8a98a', maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>{prompt}</div>
+            <div className={styles.promptBox}>{prompt}</div>
           </div>
         </div>
       </div>

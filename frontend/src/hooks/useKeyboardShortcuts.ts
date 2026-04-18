@@ -110,6 +110,148 @@ function cloneNodesAndEdges(
   return { clones, clonedEdges, oldToNew }
 }
 
+/**
+ * Delete selected nodes + edges, removing bypass edges that referenced any
+ * deleted node. With `reconnect`, also bridge each deleted node's incoming
+ * edges to its outgoing edges (skip-through) — the Delete handler's
+ * non-group branch. Without it, plain drop — the Backspace / Shift+Delete
+ * semantic.
+ */
+interface DeleteSelectionResult {
+  nodes: Node[]
+  edges: Edge[]
+}
+function deleteSelection(
+  allNodes: Node[],
+  allEdges: Edge[],
+  selNodes: Node[],
+  selEdges: Edge[],
+  { reconnect }: { reconnect: boolean },
+): DeleteSelectionResult {
+  const delEdgeIds = new Set(selEdges.map(ed => ed.id))
+  const delNodeIds = new Set(selNodes.map(n => n.id))
+
+  // Drop the explicitly-selected edges + any bypass edges that pointed
+  // through a node that's about to go away. Keep edges TO/FROM deleted
+  // nodes for now so we can still compute reconnects in the next step.
+  const edgesAfterDirectDelete = allEdges.filter(ed =>
+    !delEdgeIds.has(ed.id) &&
+    !((ed.data as Record<string, unknown>)?._bypassOf &&
+      delNodeIds.has((ed.data as Record<string, unknown>)._bypassOf as string))
+  )
+
+  const postNodes = selNodes.length > 0
+    ? allNodes.filter(n => !delNodeIds.has(n.id))
+    : allNodes
+
+  let postEdges = edgesAfterDirectDelete.filter(ed =>
+    !delNodeIds.has(ed.source) && !delNodeIds.has(ed.target)
+  )
+
+  if (reconnect) {
+    const reconnects: Array<{
+      source: string; sourceHandle: string | null
+      target: string; targetHandle: string | null
+      style?: Record<string, unknown>
+    }> = []
+    for (const node of selNodes) {
+      const incoming = edgesAfterDirectDelete.filter(ed => ed.target === node.id)
+      const outgoing = edgesAfterDirectDelete.filter(ed => ed.source === node.id)
+      for (const inc of incoming) {
+        for (const out of outgoing) {
+          if (!delNodeIds.has(inc.source) && !delNodeIds.has(out.target)) {
+            reconnects.push({
+              source: inc.source,
+              sourceHandle: inc.sourceHandle ?? null,
+              target: out.target,
+              targetHandle: out.targetHandle ?? null,
+              style: edgeStyle(inc.sourceHandle),
+            })
+          }
+        }
+      }
+    }
+    for (const ne of reconnects) {
+      postEdges = enforceOneEdgePerInput(postEdges, ne.target, ne.targetHandle, postNodes)
+      postEdges = addEdge(ne, postEdges)
+    }
+  }
+
+  return { nodes: postNodes, edges: postEdges }
+}
+
+
+/**
+ * Expand a set of group nodes to also include every descendant (children,
+ * grandchildren, etc.). Used by Shift+Delete to delete a group AND its
+ * contents instead of ungrouping.
+ */
+function collectGroupDescendants(groups: Node[], allNodes: Node[]): Set<string> {
+  const ids = new Set<string>(groups.map(g => g.id))
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const n of allNodes) {
+      if (!ids.has(n.id) && n.parentId && ids.has(n.parentId)) {
+        ids.add(n.id)
+        changed = true
+      }
+    }
+  }
+  return ids
+}
+
+
+/**
+ * Toggle the bypass flag on each selected node. Bypassed = the node stays
+ * in the graph but its incoming edges route directly to its outgoing
+ * edges via synthesized dashed `_bypassOf`-tagged edges. Toggling off
+ * removes the synthesized edges.
+ */
+function applyBypass(
+  allNodes: Node[],
+  allEdges: Edge[],
+  selectedNodes: Node[],
+): { nodes: Node[]; edges: Edge[] } {
+  let postNodes = allNodes
+  let postEdges = allEdges
+  for (const node of selectedNodes) {
+    const isBypassed = !!(node.data as Record<string, unknown>)._bypassed
+    const newBypassed = !isBypassed
+    postNodes = postNodes.map(n =>
+      n.id === node.id
+        ? { ...n, data: { ...n.data, _bypassed: newBypassed } }
+        : n
+    )
+    if (newBypassed) {
+      const incoming = postEdges.filter(ed => ed.target === node.id)
+      const outgoing = postEdges.filter(ed => ed.source === node.id)
+      const skipEdges: Edge[] = []
+      for (const inc of incoming) {
+        for (const out of outgoing) {
+          skipEdges.push({
+            id: `bypass-${inc.source}-${out.target}-${Date.now()}`,
+            source: inc.source,
+            sourceHandle: inc.sourceHandle ?? null,
+            target: out.target,
+            targetHandle: out.targetHandle ?? null,
+            data: { _bypassOf: node.id },
+            style: { stroke: '#555', strokeWidth: 1, strokeDasharray: '4 3' },
+          })
+        }
+      }
+      postEdges = [...postEdges, ...skipEdges]
+    } else {
+      postEdges = postEdges.filter(ed =>
+        !(ed.data as Record<string, unknown>)?._bypassOf ||
+        (ed.data as Record<string, unknown>)?._bypassOf !== node.id
+      )
+    }
+  }
+  return { nodes: postNodes, edges: postEdges }
+}
+
+
 /** Delete associated media from IndexedDB for removed nodes. */
 function cleanupNodeMedia(deletedNodes: Node[]): void {
   for (const node of deletedNodes) {
@@ -327,35 +469,20 @@ export function useKeyboardShortcuts({
       if (e.shiftKey && e.key === 'Delete' && !inInput) {
         e.preventDefault()
         const allNodes = getNodes()
-        const allEdges = getEdges()
         const selGroups = allNodes.filter(n => n.selected && n.type === 'group')
-        if (selGroups.length > 0) {
-          // Collect group IDs and all descendant node IDs recursively
-          const toDelete = new Set<string>(selGroups.map(g => g.id))
-          let changed = true
-          while (changed) {
-            changed = false
-            for (const n of allNodes) {
-              if (!toDelete.has(n.id) && n.parentId && toDelete.has(n.parentId)) {
-                toDelete.add(n.id)
-                changed = true
-              }
-            }
-          }
-          const postNodes = allNodes.filter(n => !toDelete.has(n.id))
-          const postEdges = allEdges.filter(ed =>
-            !toDelete.has(ed.source) && !toDelete.has(ed.target) &&
-            !((ed.data as Record<string, unknown>)?._bypassOf && toDelete.has((ed.data as Record<string, unknown>)._bypassOf as string))
-          )
-          const deletedNodes = allNodes.filter(n => toDelete.has(n.id))
-          snapshot(postNodes, postEdges)
-          setEdges(postEdges)
-          setNodes(postNodes)
-          cleanupNodeMedia(deletedNodes)
-        } else {
-          // No group selected — fall back to ungroupSelected
+        if (selGroups.length === 0) {
           ungroupSelected()
+          return
         }
+        const toDelete = collectGroupDescendants(selGroups, allNodes)
+        const nodesToDelete = allNodes.filter(n => toDelete.has(n.id))
+        const { nodes, edges } = deleteSelection(
+          allNodes, getEdges(), nodesToDelete, [], { reconnect: false },
+        )
+        snapshot(nodes, edges)
+        setEdges(edges)
+        setNodes(nodes)
+        cleanupNodeMedia(nodesToDelete)
       }
       // O — toggle minimap
       if (e.key === 'o' && !e.ctrlKey && !e.metaKey && !e.altKey && !inInput) {
@@ -380,52 +507,10 @@ export function useKeyboardShortcuts({
         const sel = getNodes().filter(n => n.selected)
         if (sel.length > 0) {
           e.preventDefault()
-          const currentEdges = getEdges()
-
-          let postNodes = getNodes()
-          let postEdges = currentEdges
-
-          for (const node of sel) {
-            const isBypassed = !!(node.data as Record<string, unknown>)._bypassed
-            const newBypassed = !isBypassed
-
-            // Toggle bypass flag on node
-            postNodes = postNodes.map(n =>
-              n.id === node.id
-                ? { ...n, data: { ...n.data, _bypassed: newBypassed } }
-                : n
-            )
-
-            if (newBypassed) {
-              // Create skip edges: connect each incoming source → each outgoing target
-              const incoming = postEdges.filter(ed => ed.target === node.id)
-              const outgoing = postEdges.filter(ed => ed.source === node.id)
-              const skipEdges: typeof postEdges = []
-              for (const inc of incoming) {
-                for (const out of outgoing) {
-                  skipEdges.push({
-                    id: `bypass-${inc.source}-${out.target}-${Date.now()}`,
-                    source: inc.source,
-                    sourceHandle: inc.sourceHandle ?? null,
-                    target: out.target,
-                    targetHandle: out.targetHandle ?? null,
-                    data: { _bypassOf: node.id },
-                    style: { stroke: '#555', strokeWidth: 1, strokeDasharray: '4 3' },
-                  })
-                }
-              }
-              postEdges = [...postEdges, ...skipEdges]
-            } else {
-              // Remove skip edges created by this bypass
-              postEdges = postEdges.filter(ed =>
-                !(ed.data as Record<string, unknown>)?._bypassOf || (ed.data as Record<string, unknown>)?._bypassOf !== node.id
-              )
-            }
-          }
-
-          snapshot(postNodes, postEdges)
-          setNodes(postNodes)
-          setEdges(postEdges)
+          const { nodes, edges } = applyBypass(getNodes(), getEdges(), sel)
+          snapshot(nodes, edges)
+          setNodes(nodes)
+          setEdges(edges)
         }
       }
       // Ctrl+C — copy selected nodes + internal edges (including group children)
@@ -517,110 +602,44 @@ export function useKeyboardShortcuts({
       if (e.key === 'Backspace' && !inInput) {
         const selNodes = getNodes().filter(n => n.selected)
         const selEdges = getEdges().filter(ed => ed.selected)
-        if (selNodes.length > 0 || selEdges.length > 0) {
-          e.preventDefault()
-          const delNodeIds = new Set(selNodes.map(n => n.id))
-          const delEdgeIds = new Set(selEdges.map(ed => ed.id))
-          const postEdges = getEdges().filter(ed =>
-            !delEdgeIds.has(ed.id) &&
-            !delNodeIds.has(ed.source) &&
-            !delNodeIds.has(ed.target) &&
-            !((ed.data as Record<string, unknown>)?._bypassOf && delNodeIds.has((ed.data as Record<string, unknown>)._bypassOf as string))
-          )
-          const postNodes = selNodes.length > 0
-            ? getNodes().filter(n => !delNodeIds.has(n.id))
-            : getNodes()
-          snapshot(postNodes, postEdges)
-          setEdges(postEdges)
-          setNodes(postNodes)
-          if (selNodes.length > 0) cleanupNodeMedia(selNodes)
-        }
+        if (selNodes.length === 0 && selEdges.length === 0) return
+        e.preventDefault()
+        const { nodes, edges } = deleteSelection(
+          getNodes(), getEdges(), selNodes, selEdges, { reconnect: false },
+        )
+        snapshot(nodes, edges)
+        setEdges(edges)
+        setNodes(nodes)
+        if (selNodes.length > 0) cleanupNodeMedia(selNodes)
       }
       // Delete — ungroup selected group nodes; delete non-group nodes with edge reconnection
       if (e.key === 'Delete' && !e.shiftKey && !inInput) {
         const selNodes = getNodes().filter(n => n.selected)
         const selEdges = getEdges().filter(ed => ed.selected)
+        if (selNodes.length === 0 && selEdges.length === 0) return
+        e.preventDefault()
 
-        if (selNodes.length > 0 || selEdges.length > 0) {
-          e.preventDefault()
-
-          // Separate selected nodes into groups (to ungroup) and regular nodes (to delete)
-          const selGroups = selNodes.filter(n => n.type === 'group')
-          const selNonGroups = selNodes.filter(n => n.type !== 'group')
-
-          // Ungroup any selected group nodes first (keep their children)
-          if (selGroups.length > 0) {
-            const groupIds = new Set(selGroups.map(g => g.id))
-            const allNodesNow = getNodes()
-            const updatedForUngroup = allNodesNow
-              .filter(n => !groupIds.has(n.id))
-              .map(n => {
-                if (!n.parentId || !groupIds.has(n.parentId)) return n
-                const parent = selGroups.find(g => g.id === n.parentId)
-                if (!parent) return n
-                const parentAbs = getAbsolutePosition(parent, allNodesNow)
-                return {
-                  ...n,
-                  parentId: parent.parentId,
-                  extent: parent.parentId ? ('parent' as const) : undefined,
-                  position: {
-                    x: n.position.x + parentAbs.x - (parent.parentId ? getAbsolutePosition(allNodesNow.find(pp => pp.id === parent.parentId)!, allNodesNow).x : 0),
-                    y: n.position.y + parentAbs.y - (parent.parentId ? getAbsolutePosition(allNodesNow.find(pp => pp.id === parent.parentId)!, allNodesNow).y : 0),
-                  },
-                }
-              })
-            snapshot(updatedForUngroup, getEdges())
-            setNodes(updatedForUngroup)
-            // If there are also non-group nodes selected, deselect them to avoid stale state
-            if (selNonGroups.length > 0) {
-              setNodes(ns => ns.map(n => selNonGroups.some(sn => sn.id === n.id) ? { ...n, selected: false } : n))
-            }
-            return
+        // Any selected groups short-circuit to ungroup — keeps children,
+        // deselects non-groups so they're not left in stale state.
+        const selGroups = selNodes.filter(n => n.type === 'group')
+        const selNonGroups = selNodes.filter(n => n.type !== 'group')
+        if (selGroups.length > 0) {
+          ungroupSelected()
+          if (selNonGroups.length > 0) {
+            setNodes(ns => ns.map(n =>
+              selNonGroups.some(sn => sn.id === n.id) ? { ...n, selected: false } : n,
+            ))
           }
-
-          // No groups selected — delete non-group nodes with edge reconnection
-          const delEdgeIds = new Set(selEdges.map(ed => ed.id))
-          const delNodeIds = new Set(selNonGroups.map(n => n.id))
-          // Also remove any bypass edges associated with deleted nodes
-          const edgesAfterDirectDelete = getEdges().filter(ed =>
-            !delEdgeIds.has(ed.id) &&
-            !((ed.data as Record<string, unknown>)?._bypassOf && delNodeIds.has((ed.data as Record<string, unknown>)._bypassOf as string))
-          )
-          const reconnects: { source: string; sourceHandle: string | null; target: string; targetHandle: string | null; style?: Record<string, unknown> }[] = []
-          for (const node of selNonGroups) {
-            const incoming = edgesAfterDirectDelete.filter(ed => ed.target === node.id)
-            const outgoing = edgesAfterDirectDelete.filter(ed => ed.source === node.id)
-            for (const inc of incoming) {
-              for (const out of outgoing) {
-                if (!delNodeIds.has(inc.source) && !delNodeIds.has(out.target)) {
-                  reconnects.push({
-                    source: inc.source,
-                    sourceHandle: inc.sourceHandle ?? null,
-                    target: out.target,
-                    targetHandle: out.targetHandle ?? null,
-                    style: edgeStyle(inc.sourceHandle),
-                  })
-                }
-              }
-            }
-          }
-          const postNodes = selNonGroups.length > 0
-            ? getNodes().filter(n => !delNodeIds.has(n.id))
-            : getNodes()
-          let postEdges = edgesAfterDirectDelete.filter(ed =>
-            !delNodeIds.has(ed.source) &&
-            !delNodeIds.has(ed.target)
-          )
-          for (const ne of reconnects) {
-            postEdges = enforceOneEdgePerInput(postEdges, ne.target, ne.targetHandle, postNodes)
-            postEdges = addEdge(ne, postEdges)
-          }
-
-          snapshot(postNodes, postEdges)
-          setEdges(postEdges)
-          setNodes(postNodes)
-          if (selNonGroups.length > 0) cleanupNodeMedia(selNonGroups)
+          return
         }
+
+        const { nodes, edges } = deleteSelection(
+          getNodes(), getEdges(), selNonGroups, selEdges, { reconnect: true },
+        )
+        snapshot(nodes, edges)
+        setEdges(edges)
+        setNodes(nodes)
+        if (selNonGroups.length > 0) cleanupNodeMedia(selNonGroups)
       }
     }
     document.addEventListener('keydown', onKey, true)

@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image as PILImage
 from config.settings import settings
-from src.review_hub.db import _DB_PATH
+from src.review_hub.queries import bridge_ro
 from src.shared import _log, _save_to_bridge, _save_video_to_bridge, _sanitize_stem
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
@@ -42,58 +42,8 @@ def _delete_bridge_media(stem: str) -> str | None:
 
 
 def _get_review_from_db(stem: str) -> dict | None:
-    """Query Review Hub DB for review status by filename stem."""
-    import sqlite3
-
-    db_path = _DB_PATH
-    if not db_path.exists():
-        return None
-    uri = db_path.as_uri() + "?mode=ro"
-    try:
-        con = sqlite3.connect(uri, uri=True)
-        con.row_factory = sqlite3.Row
-        row = con.execute(
-            "SELECT id FROM media WHERE filename LIKE ? LIMIT 1",
-            (f"{stem}%",),
-        ).fetchone()
-        if not row:
-            con.close()
-            return None
-        media_id = row["id"]
-        favs = con.execute(
-            "SELECT status, user_name FROM favorites WHERE media_id=?",
-            (media_id,),
-        ).fetchall()
-        comment_count = con.execute(
-            "SELECT COUNT(*) FROM comments WHERE media_id=?",
-            (media_id,),
-        ).fetchone()[0]
-        drawing_count = con.execute(
-            "SELECT COUNT(*) FROM drawings WHERE media_id=?",
-            (media_id,),
-        ).fetchone()[0]
-        con.close()
-
-        status = None
-        reviewed_by = None
-        favorite = False
-        for f in favs:
-            if f["status"] in ("approved", "rejected"):
-                status = f["status"]
-                reviewed_by = f["user_name"]
-            if f["status"] == "favorite":
-                favorite = True
-
-        return {
-            "status": status,
-            "reviewed_by": reviewed_by,
-            "favorite": favorite,
-            "comments_count": comment_count,
-            "drawings_count": drawing_count,
-        }
-    except Exception as e:
-        _log(f"Review DB query error for '{stem}': {e}")
-        return None
+    """Thin router-side alias — schema knowledge lives in bridge_ro."""
+    return bridge_ro.get_review_info(stem)
 
 
 def _find_png_meta(stem: str) -> dict | None:
@@ -156,27 +106,19 @@ def _ext_to_mime(ext: str) -> str:
 
 
 def _load_filename_to_thumb() -> dict[str, str]:
-    """Batch-load filename→thumbnail URL from Review Hub DB."""
-    import sqlite3
+    """Build {filename: thumbnail_url} for items whose thumbnail exists on disk.
 
-    db_path = _DB_PATH
-    if not db_path.exists():
-        return {}
+    DB lookup is delegated to bridge_ro; the router adds the
+    existence check + URL prefix because those are concerns of the
+    HTTP layer, not the query layer.
+    """
     thumb_dir = settings.thumbnails_dir
-    uri = db_path.as_uri() + "?mode=ro"
-    try:
-        con = sqlite3.connect(uri, uri=True)
-        rows = con.execute("SELECT id, filename FROM media").fetchall()
-        con.close()
-        mapping: dict[str, str] = {}
-        for media_id, filename in rows:
-            thumb_path = thumb_dir / f"{media_id}.jpg"
-            if thumb_path.exists():
-                mapping[filename] = f"/thumbnails/{media_id}.jpg"
-        return mapping
-    except Exception as e:
-        _log(f"Batch thumbnail lookup error: {e}")
-        return {}
+    mapping = bridge_ro.filename_to_thumbnail_id()
+    result: dict[str, str] = {}
+    for filename, media_id in mapping.items():
+        if (thumb_dir / f"{media_id}.jpg").exists():
+            result[filename] = f"/thumbnails/{media_id}.jpg"
+    return result
 
 
 def _scan_media_list() -> list[dict]:
@@ -220,33 +162,11 @@ def _scan_media_list() -> list[dict]:
 
 
 def _lookup_media_id(stem: str) -> int | None:
-    """Look up Review Hub media_id by filename stem."""
-    import sqlite3
-
-    # Sanitise: only allow alphanumeric, underscore, hyphen (same as other bridge endpoints)
+    """Look up Review Hub media_id by filename stem, after sanitation."""
     stem = _sanitize_stem(stem)
     if not stem:
         return None
-
-    db_path = _DB_PATH
-    if not db_path.exists():
-        return None
-    uri = db_path.as_uri() + "?mode=ro"
-    try:
-        con = sqlite3.connect(uri, uri=True)
-        row = con.execute(
-            "SELECT id FROM media WHERE filename LIKE ? LIMIT 1",
-            (f"{stem}%",),
-        ).fetchone()
-        con.close()
-        return row[0] if row else None
-    except Exception as e:
-        _log(f"Media lookup error for '{stem}': {e}")
-        return None
-
-
-def _get_references_db_path() -> Path:
-    return _DB_PATH
+    return bridge_ro.find_media_id_by_stem(stem)
 
 
 def _get_references_base_path() -> Path:
@@ -254,45 +174,8 @@ def _get_references_base_path() -> Path:
 
 
 def _query_references(search: str = "", tag: str = "") -> list[dict]:
-    """Read references from Review Hub SQLite DB. Returns empty list if DB missing."""
-    import sqlite3
-
-    db_path = _get_references_db_path()
-    if not db_path.exists():
-        return []
-
-    uri = db_path.as_uri() + "?mode=ro"
-    try:
-        con = sqlite3.connect(uri, uri=True)
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-
-        params: list[str] = []
-        where_clauses: list[str] = []
-
-        if search:
-            like = f"%{search}%"
-            where_clauses.append(
-                "(filename LIKE ? OR tags LIKE ? OR notes LIKE ?)"
-            )
-            params.extend([like, like, like])
-
-        if tag:
-            where_clauses.append("tags LIKE ?")
-            params.append(f"%{tag}%")
-
-        sql = "SELECT * FROM [references]"
-        if where_clauses:
-            sql += " WHERE " + " AND ".join(where_clauses)
-        sql += " ORDER BY created_at DESC"
-
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        con.close()
-        return [dict(row) for row in rows]
-    except Exception as exc:
-        _log(f"References DB query error: {exc}")
-        return []
+    """Thin router-side alias — schema knowledge lives in bridge_ro."""
+    return bridge_ro.query_references(search, tag)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -552,26 +435,7 @@ async def list_references(search: str = "", tag: str = ""):
 @router.get("/references/{ref_id}/thumbnail")
 async def get_reference_thumbnail(ref_id: int):
     """Serve the thumbnail image for a reference entry."""
-    import sqlite3
-
-    def _fetch_thumbnail_path(rid: int) -> str | None:
-        db_path = _get_references_db_path()
-        if not db_path.exists():
-            return None
-        uri = db_path.as_uri() + "?mode=ro"
-        try:
-            con = sqlite3.connect(uri, uri=True)
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
-            cur.execute("SELECT thumbnail_path FROM [references] WHERE id = ?", (rid,))
-            row = cur.fetchone()
-            con.close()
-            return row["thumbnail_path"] if row else None
-        except Exception as exc:
-            _log(f"References thumbnail DB error: {exc}")
-            return None
-
-    thumbnail_rel = await asyncio.to_thread(_fetch_thumbnail_path, ref_id)
+    thumbnail_rel = await asyncio.to_thread(bridge_ro.get_reference_thumbnail_path, ref_id)
     if not thumbnail_rel:
         raise HTTPException(status_code=404, detail="Reference not found")
 
@@ -591,31 +455,9 @@ async def get_reference_image(ref_id: int):
 
     Falls back to original_path if processed_path does not exist on disk.
     """
-    import sqlite3
-
-    def _fetch_image_paths(rid: int) -> tuple[str | None, str | None]:
-        db_path = _get_references_db_path()
-        if not db_path.exists():
-            return None, None
-        uri = db_path.as_uri() + "?mode=ro"
-        try:
-            con = sqlite3.connect(uri, uri=True)
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
-            cur.execute(
-                "SELECT processed_path, original_path FROM [references] WHERE id = ?",
-                (rid,),
-            )
-            row = cur.fetchone()
-            con.close()
-            if row:
-                return row["processed_path"], row["original_path"]
-            return None, None
-        except Exception as exc:
-            _log(f"References image DB error: {exc}")
-            return None, None
-
-    processed_rel, original_rel = await asyncio.to_thread(_fetch_image_paths, ref_id)
+    processed_rel, original_rel = await asyncio.to_thread(
+        bridge_ro.get_reference_image_paths, ref_id,
+    )
     if processed_rel is None and original_rel is None:
         raise HTTPException(status_code=404, detail="Reference not found")
 

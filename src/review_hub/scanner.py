@@ -98,7 +98,11 @@ def _read_media_meta(p: Path) -> str | None:
             return _json.dumps(meta) if meta else None
         elif p.suffix.lower() in VIDEO_EXTS:
             sidecar = p.with_suffix(".meta.json")
-            if sidecar.exists():
+            # Cap sidecar size — a malformed or hostile .meta.json could
+            # otherwise OOM the scanner loop on a `read_text` of a huge
+            # file. 1 MB is orders of magnitude above any legitimate
+            # metadata blob.
+            if sidecar.exists() and sidecar.stat().st_size < 1_048_576:
                 return sidecar.read_text(encoding="utf-8")
     except Exception as e:
         _log(f"Scanner: metadata read failed for {p.name}: {e}")

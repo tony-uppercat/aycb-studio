@@ -30,19 +30,37 @@ function backendError(context: string): Error {
   return new Error(`${context}: backend not responding. Start the backend on port 5101`)
 }
 
-async function post<T>(path: string, body: FormData): Promise<T> {
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+
+/**
+ * Unified backend request — single place to apply:
+ *  - backend-availability gate (cloud mode falls through)
+ *  - request timing + network panel logging
+ *  - 502 mapping to the "backend down" error
+ *  - JSON content-type check (guards against Vite dev proxy HTML fallback)
+ *  - FastAPI error-detail extraction on !ok
+ *
+ * Previously this logic was inlined three times in post/get/put with
+ * small drift (GET/PUT threw r.statusText; POST parsed the JSON detail).
+ * Unifying means GET/PUT now also surface backend error details.
+ */
+async function request<T>(
+  path: string,
+  method: HttpMethod,
+  init?: RequestInit,
+): Promise<T> {
   if (!isBackendAvailable()) throw backendError(path)
-  const t0 = Date.now();
+  const t0 = Date.now()
   let r: Response
   try {
-    r = await fetch(`${BASE}${path}`, { method: 'POST', body })
+    r = await fetch(`${BASE}${path}`, { method, ...init })
   } catch {
     throw backendError(path)
   }
-  recordRequest('POST', path, r.status, Date.now() - t0);
+  recordRequest(method, path, r.status, Date.now() - t0)
   if (r.status === 502) throw backendError(path)
-  const contentType = r.headers.get('content-type') ?? ''
-  if (!contentType.includes('application/json')) throw backendError(path)
+  const ct = r.headers.get('content-type') ?? ''
+  if (!ct.includes('application/json')) throw backendError(path)
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }))
     throw new Error(err.detail ?? 'Request failed')
@@ -50,43 +68,17 @@ async function post<T>(path: string, body: FormData): Promise<T> {
   return r.json()
 }
 
-async function get<T>(path: string): Promise<T> {
-  if (!isBackendAvailable()) throw backendError(path)
-  const t0 = Date.now();
-  let r: Response
-  try {
-    r = await fetch(`${BASE}${path}`)
-  } catch {
-    throw backendError(path)
-  }
-  recordRequest('GET', path, r.status, Date.now() - t0);
-  if (r.status === 502) throw backendError(path)
-  const ct = r.headers.get('content-type') ?? ''
-  if (!ct.includes('application/json')) throw backendError(path)
-  if (!r.ok) throw new Error(r.statusText)
-  return r.json()
-}
+const post = <T>(path: string, body: FormData): Promise<T> =>
+  request<T>(path, 'POST', { body })
 
-async function put<T>(path: string, body: unknown): Promise<T> {
-  if (!isBackendAvailable()) throw backendError(path)
-  const t0 = Date.now();
-  let r: Response
-  try {
-    r = await fetch(`${BASE}${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  } catch {
-    throw backendError(path)
-  }
-  recordRequest('PUT', path, r.status, Date.now() - t0);
-  if (r.status === 502) throw backendError(path)
-  const ct = r.headers.get('content-type') ?? ''
-  if (!ct.includes('application/json')) throw backendError(path)
-  if (!r.ok) throw new Error(r.statusText)
-  return r.json()
-}
+const get = <T>(path: string): Promise<T> =>
+  request<T>(path, 'GET')
+
+const put = <T>(path: string, body: unknown): Promise<T> =>
+  request<T>(path, 'PUT', {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 
 /**
  * Send a generated image to Review Hub via backend bridge and register the

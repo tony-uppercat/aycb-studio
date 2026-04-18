@@ -5,6 +5,7 @@ to shared/data/browser-perf.jsonl. Auto-rotates at 1 MB.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -38,11 +39,13 @@ def _log_path() -> Path:
     return d / "browser-perf.jsonl"
 
 
-@router.post("/perf")
-async def receive_perf(batch: PerfBatch):
-    path = _log_path()
+def _write_perf_batch(path: Path, events: list[PerfEvent]) -> None:
+    """Blocking write — rotate on overflow, then append every event.
 
-    # Rotate: if file exceeds limit, keep last half
+    Pulled into its own function so the async endpoint can hand it to
+    a thread; before this refactor the whole body ran on the event
+    loop, which briefly blocked other requests during the 1 MB rotate.
+    """
     if path.exists() and path.stat().st_size > _MAX_FILE_SIZE:
         lines = path.read_text(encoding="utf-8").splitlines()
         half = lines[len(lines) // 2 :]
@@ -51,8 +54,8 @@ async def receive_perf(batch: PerfBatch):
 
     now = datetime.now().isoformat()
     with open(path, "a", encoding="utf-8", newline="\n") as f:
-        for ev in batch.events:
-            row = {"type": ev.type, "ts": ev.timestamp or now}
+        for ev in events:
+            row: dict = {"type": ev.type, "ts": ev.timestamp or now}
             if ev.message:
                 row["msg"] = ev.message
             if ev.value is not None:
@@ -61,4 +64,8 @@ async def receive_perf(batch: PerfBatch):
                 row["extra"] = ev.extra
             f.write(json.dumps(row) + "\n")
 
+
+@router.post("/perf")
+async def receive_perf(batch: PerfBatch):
+    await asyncio.to_thread(_write_perf_batch, _log_path(), batch.events)
     return {"ok": True, "count": len(batch.events)}

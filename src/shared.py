@@ -243,6 +243,24 @@ class SessionReportPayload(BaseModel):
 
 # ── Bridge helper ───────────────────────────────────────────────────────────
 
+def _resolve_bridge_target(project_name: str, stem_prefix: str) -> tuple[Path, str, str]:
+    """Return ``(target_dir, stem, generated_at_iso_z)`` for a bridge save.
+
+    Shared between `_save_to_bridge` (images) and `_save_video_to_bridge`
+    (videos) so the folder-sanitize + timestamp-stem + ISO conversion
+    logic lives in one place.
+    """
+    if project_name.strip():
+        folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
+    else:
+        folder = time.strftime("%Y-%m-%d")
+    target_dir = settings.media_dir / folder
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"{stem_prefix}_{int(time.time() * 1000)}"
+    generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return target_dir, stem, generated_at
+
+
 def _save_to_bridge(
     img_bytes: bytes | None = None,
     prompt: str = "",
@@ -256,16 +274,10 @@ def _save_to_bridge(
 ) -> dict | None:
     """Save image with embedded PNG tEXt metadata to shared/Media/ for Review Hub."""
     try:
-        if project_name.strip():
-            folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
-        else:
-            folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.media_dir / folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"generated_{int(time.time() * 1000)}"
+        target_dir, stem, generated_at = _resolve_bridge_target(project_name, "generated")
+        folder = target_dir.name
         img_path = target_dir / f"{stem}.png"
 
-        generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         meta = {
             "source": "aycb",
             "project": project_name.strip() or None,
@@ -311,18 +323,12 @@ def _save_video_to_bridge(
 ) -> dict | None:
     """Save video with sidecar .meta.json to shared/Media/ for Review Hub."""
     try:
-        if project_name.strip():
-            folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
-        else:
-            folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.media_dir / folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"video_{int(time.time() * 1000)}"
+        target_dir, stem, generated_at = _resolve_bridge_target(project_name, "video")
+        folder = target_dir.name
         video_path = target_dir / f"{stem}.mp4"
 
         video_path.write_bytes(video_bytes)
 
-        generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         meta = {
             "source": "aycb",
             "project": project_name.strip() or None,

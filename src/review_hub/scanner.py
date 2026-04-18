@@ -24,6 +24,56 @@ _META_KEYS = {"prompt", "model", "model_name", "aspect_ratio", "image_size", "co
 
 _sio = None
 
+
+# ── Fingerprint cache — skip the full-tree walk when nothing changed ───────
+# Every 5s we used to rglob the entire media_dir/assets_dir, stat every file,
+# then set-diff against the DB. At 5k files that ~100ms walk is pure overhead
+# when the tree is idle (which is most of the time). A 1-level fingerprint
+# (base mtime + each top-level subdir's mtime) catches any add/remove within
+# the tree, so we can reuse the prior scan's on-disk set when the fingerprint
+# matches. In-place file overwrites do not bump parent dir mtime, but the
+# scanner doesn't care: the filepath in the DB doesn't change.
+_scan_fp_cache: dict[str, tuple[tuple, set[str]]] = {}
+
+
+def _tree_fingerprint(base: Path) -> tuple:
+    """Tuple of (base mtime, sorted list of (subdir name, mtime)).
+
+    Changes in any top-level subdir (files added/removed) bump that
+    subdir's mtime → fingerprint changes → caller does a full walk.
+    """
+    fp: list = []
+    try:
+        fp.append(("", int(base.stat().st_mtime_ns)))
+    except OSError:
+        return ()
+    try:
+        for p in base.iterdir():
+            try:
+                if p.is_dir():
+                    fp.append((p.name, int(p.stat().st_mtime_ns)))
+            except OSError:
+                continue
+    except OSError:
+        return ()
+    return tuple(sorted(fp))
+
+
+def _walk_media_tree(base: Path, now: float) -> set[str]:
+    """Full tree walk with extension + SETTLE_TIME filter."""
+    on_disk: set[str] = set()
+    for f in base.rglob("*"):
+        if f.suffix.lower() not in ALL_EXTS:
+            continue
+        try:
+            if now - f.stat().st_mtime < SETTLE_TIME:
+                continue
+        except OSError:
+            continue
+        on_disk.add(str(f))
+    return on_disk
+
+
 def set_sio(sio):
     global _sio
     _sio = sio
@@ -65,13 +115,14 @@ async def scan_once() -> int:
         existing = await list_media(db)
         known = {row["filepath"] for row in existing}
 
-        on_disk = set()
-        for f in settings.media_dir.rglob("*"):
-            if f.suffix.lower() not in ALL_EXTS:
-                continue
-            if now - f.stat().st_mtime < SETTLE_TIME:
-                continue
-            on_disk.add(str(f))
+        base = settings.media_dir
+        fp = _tree_fingerprint(base)
+        cached = _scan_fp_cache.get(str(base))
+        if cached and cached[0] == fp:
+            on_disk = cached[1]
+        else:
+            on_disk = _walk_media_tree(base, now)
+            _scan_fp_cache[str(base)] = (fp, on_disk)
 
         for filepath in on_disk - known:
             p = Path(filepath)
@@ -125,13 +176,14 @@ async def scan_assets_once() -> int:
         existing = await list_assets(db)
         known = {row["filepath"] for row in existing}
 
-        on_disk = set()
-        for f in settings.assets_dir.rglob("*"):
-            if f.suffix.lower() not in ALL_EXTS:
-                continue
-            if now - f.stat().st_mtime < SETTLE_TIME:
-                continue
-            on_disk.add(str(f))
+        base = settings.assets_dir
+        fp = _tree_fingerprint(base)
+        cached = _scan_fp_cache.get(str(base))
+        if cached and cached[0] == fp:
+            on_disk = cached[1]
+        else:
+            on_disk = _walk_media_tree(base, now)
+            _scan_fp_cache[str(base)] = (fp, on_disk)
 
         for filepath in on_disk - known:
             p = Path(filepath)

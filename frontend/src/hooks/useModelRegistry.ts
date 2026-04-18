@@ -61,6 +61,19 @@ export function _resetRegistryCache() {
 }
 
 /**
+ * Return the cached registry synchronously, or null if no fetch has
+ * resolved yet. For call sites that can't reasonably block on a hook
+ * (e.g. provider cost calculations inside async generation flows, where
+ * React context is not available). The first render of any node that
+ * calls useModelRegistry warms the cache; by the time a user clicks
+ * Run, the cache is populated. If the cache is cold, fall back to
+ * provider-local hardcoded values.
+ */
+export function getCachedRegistry(): RegistryModel[] | null {
+  return _cache
+}
+
+/**
  * React hook returning the registry (filtered by capability if provided).
  * Returns an empty array until the first fetch resolves; components that
  * need a guaranteed non-empty list should render a skeleton / fallback.

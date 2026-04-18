@@ -10,11 +10,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { NODE_CATALOG, CATEGORY_LABELS, type NodeManifest } from '../../nodes/index'
-import { loadMedia } from '../../mediaStore'
-import { saveToAssets } from '../../api'
-import { serializeNodes } from '../../hooks/useCanvasPersistence'
 import { saveUserTemplate, findTemplateByName, deleteUserTemplate } from '../../presets'
-import { triggerDownload, downloadFile } from '../../utils/downloadManager'
+import { triggerDownload } from '../../utils/downloadManager'
+import {
+  downloadMediaFiles,
+  saveMediaToAssets,
+  downloadNodesFull,
+  collectCollageImages,
+} from '../../services/canvasExport'
 import type { CollageImage } from '../CollageEditor'
 import styles from './CanvasContextMenu.module.css'
 
@@ -50,17 +53,6 @@ export interface Props {
 }
 
 /* ── Helpers ── */
-
-function arrayBufferToBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
-  let binary = ''
-  const chunkSize = 8192
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-    binary += String.fromCharCode.apply(null, chunk as unknown as number[])
-  }
-  return btoa(binary)
-}
 
 function collectMediaIds(nodes: Node[]): string[] {
   const ids = new Set<string>()
@@ -266,70 +258,22 @@ export function CanvasContextMenu({
   // ── Download Media ──
   async function handleDownloadMedia() {
     setBusy('media')
-    try {
-      for (const mid of mediaIds) {
-        try {
-          const file = await loadMedia(mid)
-          if (!file) continue
-          downloadFile(file, { filename: file.name || `${mid}.png` })
-        } catch { /* skip broken entries */ }
-      }
-    } finally {
-      setBusy(null)
-      onClose()
-    }
+    try { await downloadMediaFiles(mediaIds) }
+    finally { setBusy(null); onClose() }
   }
 
   // ── Save to Assets ──
   async function handleSaveToAssets() {
     setBusy('assets')
-    try {
-      for (const mid of mediaIds) {
-        try {
-          const file = await loadMedia(mid)
-          if (!file) continue
-          await saveToAssets(file)
-        } catch { /* skip broken entries */ }
-      }
-    } finally {
-      setBusy(null)
-      onClose()
-    }
+    try { await saveMediaToAssets(mediaIds) }
+    finally { setBusy(null); onClose() }
   }
 
   // ── Download Nodes Full ──
   async function handleDownloadNodesFull() {
     setBusy('nodes-full')
-    try {
-      const internalEdges = getInternalEdges(selectedNodes, allEdges)
-      const serialized = serializeNodes(selectedNodes)
-      const mediaItems: Array<{ id: string; name: string; type: string; dataB64: string }> = []
-      for (const mid of mediaIds) {
-        try {
-          const file = await loadMedia(mid)
-          if (!file) continue
-          const buf = await file.arrayBuffer()
-          mediaItems.push({ id: mid, name: file.name, type: file.type, dataB64: arrayBufferToBase64(buf) })
-        } catch { /* skip */ }
-      }
-      const payload = {
-        version: 1,
-        timestamp: new Date().toISOString(),
-        canvas: {
-          nodes: serialized,
-          edges: internalEdges.map(e => ({
-            id: e.id, source: e.source, target: e.target,
-            sourceHandle: e.sourceHandle, targetHandle: e.targetHandle,
-          })),
-        },
-        settings: { model: 'Gemini 3 Flash', doEmbed: false },
-        media: mediaItems,
-      }
-      triggerDownload(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `nodes-${Date.now()}.geminishot.json`)
-    } finally {
-      setBusy(null)
-      onClose()
-    }
+    try { await downloadNodesFull(selectedNodes, allEdges, mediaIds) }
+    finally { setBusy(null); onClose() }
   }
 
   // ── Download Nodes Clean ──
@@ -417,17 +361,7 @@ export function CanvasContextMenu({
     if (!canCollage || !onOpenCollage) return
     setBusy('collage')
     try {
-      const collageImages: CollageImage[] = []
-      for (const node of imageNodes) {
-        const d = node.data as Record<string, unknown>
-        const mediaId = d.mediaId as string
-        try {
-          const file = await loadMedia(mediaId)
-          if (!file) continue
-          const url = URL.createObjectURL(file)
-          collageImages.push({ id: node.id, url, name: file.name || `image-${node.id}` })
-        } catch { /* skip */ }
-      }
+      const collageImages = await collectCollageImages(imageNodes)
       if (collageImages.length >= 2) onOpenCollage(collageImages)
     } finally {
       setBusy(null)

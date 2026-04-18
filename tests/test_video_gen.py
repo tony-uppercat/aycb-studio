@@ -17,7 +17,8 @@ class TestGetModelInfo:
         info = get_model_info("kling-3.0-omni")
         assert info["piapi_model"] == "kling"
         assert info["task_type"] == "omni_video_generation"
-        assert info["version"] == "3.0"
+        # `version` used to live here but was dead data (hardcoded in
+        # _build_kling_input); dropped when MODELS became registry-derived.
 
     def test_valid_seedance(self):
         info = get_model_info("seedance-2.0")

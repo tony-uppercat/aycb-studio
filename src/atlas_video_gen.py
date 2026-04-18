@@ -10,36 +10,38 @@ from typing import Any
 
 import httpx
 
+from src.registry import REGISTRY
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.atlascloud.ai/api/v1"
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry. Atlas stores its T2V / I2V endpoints under
+# registry fields endpoint_t2v / endpoint_i2v; this module's historical
+# keys are `model_id` / `model_id_i2v` so we rename at build time.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "atlas-seedance-2.0-fast": {
-        "name": "Seedance 2.0 Fast (Atlas)",
-        "model_id": "bytedance/seedance-2.0-fast/text-to-video",
-        "model_id_i2v": "bytedance/seedance-2.0-fast/image-to-video",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.18},
-    },
-    "atlas-seedance-2.0": {
-        "name": "Seedance 2.0 (Atlas)",
-        "model_id": "bytedance/seedance-2.0/text-to-video",
-        "model_id_i2v": "bytedance/seedance-2.0/image-to-video",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.25},
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "atlas":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "model_id": m.endpoint_t2v,
+            "model_id_i2v": m.endpoint_i2v,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 15,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 3
 POLL_TIMEOUT = 600

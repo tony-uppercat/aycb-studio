@@ -16,35 +16,35 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import settings
+from src.registry import REGISTRY
 
 logger = logging.getLogger(__name__)
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry. This module's historical key is `vertex_model`
+# (the Gemini API model id); the registry calls it `provider_model_id`.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "vertex-veo-3.1": {
-        "name": "Veo 3.1",
-        "vertex_model": "veo-3.1-generate-preview",
-        "aspect_ratios": ["16:9", "9:16"],
-        "qualities": ["720p", "1080p"],
-        "min_duration": 4,
-        "max_duration": 8,
-        "default_duration": 8,
-        "cost_per_sec": {"720p": 0.40, "1080p": 0.40},
-        "max_ref_images": 3,
-    },
-    "vertex-veo-3.1-fast": {
-        "name": "Veo 3.1 Fast",
-        "vertex_model": "veo-3.1-fast-generate-preview",
-        "aspect_ratios": ["16:9", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 8,
-        "default_duration": 8,
-        "cost_per_sec": {"720p": 0.15},
-        "max_ref_images": 3,
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "vertex":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "vertex_model": m.provider_model_id,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 8,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+            "max_ref_images": m.max_ref_images,
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 10
 POLL_TIMEOUT = 600

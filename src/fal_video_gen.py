@@ -10,47 +10,38 @@ from typing import Any
 
 import httpx
 
+from src.registry import REGISTRY
+
 logger = logging.getLogger(__name__)
 
 QUEUE_URL = "https://queue.fal.run"
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry.REGISTRY at import time so there is a single
+# source of truth. The dict shape matches what callers used before the
+# C3 migration so no consumer changes were needed.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "fal-kling-v3-std": {
-        "name": "Kling 3.0 Omni Std (fal)",
-        "endpoint_t2v": "fal-ai/kling-video/v3/standard/text-to-video",
-        "endpoint_i2v": "fal-ai/kling-video/v3/standard/image-to-video",
-        "aspect_ratios": ["16:9", "9:16", "1:1"],
-        "qualities": ["720p"],
-        "min_duration": 3,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.07},
-    },
-    "fal-kling-v3-pro": {
-        "name": "Kling 3.0 Omni Pro (fal)",
-        "endpoint_t2v": "fal-ai/kling-video/v3/pro/text-to-video",
-        "endpoint_i2v": "fal-ai/kling-video/v3/pro/image-to-video",
-        "aspect_ratios": ["16:9", "9:16", "1:1"],
-        "qualities": ["1080p"],
-        "min_duration": 3,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"1080p": 0.10},
-    },
-    "fal-seedance-2.0": {
-        "name": "Seedance 2.0 (fal)",
-        "endpoint_t2v": "bytedance/seedance-2.0/text-to-video",
-        "endpoint_i2v": "bytedance/seedance-2.0/image-to-video",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.30},
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "fal":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "endpoint_t2v": m.endpoint_t2v,
+            "endpoint_i2v": m.endpoint_i2v,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 15,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 5
 POLL_TIMEOUT = 600

@@ -10,49 +10,37 @@ from typing import Any
 
 import httpx
 
+from src.registry import REGISTRY
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.piapi.ai/api/v1"
 UPLOAD_URL = "https://upload.theapi.app/api/ephemeral_resource"
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "kling-3.0-omni": {
-        "name": "Kling 3.0 Omni",
-        "piapi_model": "kling",
-        "task_type": "omni_video_generation",
-        "version": "3.0",
-        "aspect_ratios": ["16:9", "9:16", "1:1"],
-        "qualities": ["720p", "1080p"],
-        "min_duration": 3,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.10, "1080p": 0.15},
-    },
-    "seedance-2.0": {
-        "name": "Seedance 2.0",
-        "piapi_model": "seedance",
-        "task_type": "seedance-2",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["standard"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"standard": 0.15},
-    },
-    "seedance-2.0-fast": {
-        "name": "Seedance 2.0 Fast",
-        "piapi_model": "seedance",
-        "task_type": "seedance-2-fast",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["standard"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"standard": 0.10},
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "piapi":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "piapi_model": m.provider_model_id,
+            "task_type": m.task_type,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 15,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 5
 POLL_TIMEOUT = 600

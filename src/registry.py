@@ -51,6 +51,7 @@ class Model:
     # Capabilities — empty tuple if unused for this model.
     aspect_ratios: tuple[str, ...] = ()
     allowed_durations: tuple[int, ...] = ()
+    default_duration: int = 5
     qualities: tuple[str, ...] = ()
     max_ref_images: int = 0
     deprecated: bool = False
@@ -293,7 +294,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         endpoint_t2v="bytedance/seedance-2.0/text-to-video",
         endpoint_i2v="bytedance/seedance-2.0/image-to-video",
     ),
-    # Vertex / Veo
+    # Vertex / Veo — default duration is 8 (API forces 8 for refs / HD anyway).
     Model(
         id="vertex-veo-3.1",
         name="Veo 3.1",
@@ -303,6 +304,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("16:9", "9:16"),
         qualities=("720p", "1080p"),
         allowed_durations=(4, 6, 8),
+        default_duration=8,
         max_ref_images=3,
         provider_model_id="veo-3.1-generate-preview",
     ),
@@ -315,6 +317,7 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         aspect_ratios=("16:9", "9:16"),
         qualities=("720p",),
         allowed_durations=(4, 6, 8),
+        default_duration=8,
         max_ref_images=3,
         provider_model_id="veo-3.1-fast-generate-preview",
     ),

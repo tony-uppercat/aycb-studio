@@ -43,9 +43,16 @@ export function useViewport({
   const mouseRef = useRef({ down: false, x: 0, y: 0, button: 0 })
   const frameRef = useRef(0)
   const gltfLoader = useRef<GLTFLoader | null>(null)
+  // Dirty flag — the RAF loop only calls renderer.render() when something
+  // actually changed. Every mutator (mouse handlers, light / ambient /
+  // focal / model / GLB-related useEffects, resize, loadGLB) flips this
+  // to true; the loop clears it after rendering one frame. Before this
+  // gate the loop rendered 60 fps unconditionally, burning ~50% CPU on
+  // the editor modal even when the scene was perfectly static.
+  const needsRenderRef = useRef(true)
 
   // Keep camRef in sync with external cam changes
-  useEffect(() => { camRef.current = { ...cam } }, [cam])
+  useEffect(() => { camRef.current = { ...cam }; needsRenderRef.current = true }, [cam])
 
   // ── Scene init ──
   useEffect(() => {
@@ -93,6 +100,7 @@ export function useViewport({
       const { theta, phi, dist, tx, ty, tz } = camRef.current
       camera.position.set(tx + dist * Math.sin(phi) * Math.sin(theta), ty + dist * Math.cos(phi), tz + dist * Math.sin(phi) * Math.cos(theta))
       camera.lookAt(tx, ty, tz)
+      needsRenderRef.current = true
     }
     updCam()
     const sync = () => onCamChange({ ...camRef.current })
@@ -127,13 +135,20 @@ export function useViewport({
     window.addEventListener('mouseup', onUp)
     mount.addEventListener('wheel', onWheel, { passive: true })
 
-    const animate = () => { frameRef.current = requestAnimationFrame(animate); renderer.render(scene, camera) }
+    const animate = () => {
+      frameRef.current = requestAnimationFrame(animate)
+      if (needsRenderRef.current) {
+        renderer.render(scene, camera)
+        needsRenderRef.current = false
+      }
+    }
     animate()
 
     const onResize = () => {
       if (!mount) return
       camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix()
       renderer.setSize(mount.clientWidth, mount.clientHeight)
+      needsRenderRef.current = true
     }
     window.addEventListener('resize', onResize)
 
@@ -166,6 +181,7 @@ export function useViewport({
         hlp.visible = true; pl.visible = true
       } else { pl.visible = false; hlp.visible = false }
     })
+    needsRenderRef.current = true
   }, [lights, sceneRef])
 
   // ── Update ambient ──
@@ -173,12 +189,14 @@ export function useViewport({
     const { scene } = sceneRef.current
     if (!scene) return
     scene.children.forEach(c => { if ((c as THREE.AmbientLight).isLight && c.type === 'AmbientLight') (c as THREE.AmbientLight).intensity = (ambient / 100) * 0.4 })
+    needsRenderRef.current = true
   }, [ambient, sceneRef])
 
   // ── Update focal length ──
   useEffect(() => {
     const { camera } = sceneRef.current
     if (camera) { camera.fov = focalToFov(lens.focal); camera.updateProjectionMatrix() }
+    needsRenderRef.current = true
   }, [lens.focal, sceneRef])
 
   // ── Swap built-in model ──
@@ -190,12 +208,14 @@ export function useViewport({
     const newGroup = buildModel(model)
     scene.add(newGroup)
     sceneRef.current.subjectGroup = newGroup
+    needsRenderRef.current = true
   }, [model, sceneRef])
 
   // ── GLB rotation ──
   useEffect(() => {
     if (model !== 'custom') return
     sceneRef.current.centerModel?.(glbRot)
+    needsRenderRef.current = true
   }, [glbRot, model, sceneRef])
 
   // ── Clay/texture toggle ──
@@ -207,6 +227,7 @@ export function useViewport({
       const m = child as THREE.Mesh
       if (m.isMesh && m.visible) m.material = clayMode ? clayMat : (originalMats.get(m.uuid) as THREE.Material) || clayMat
     })
+    needsRenderRef.current = true
   }, [clayMode, model, sceneRef])
 
   // ── GLB offset ──
@@ -216,6 +237,7 @@ export function useViewport({
     if (!subjectGroup || !basePos) return
     subjectGroup.position.set(basePos.x + glbOffset.x, basePos.y + glbOffset.y, basePos.z + glbOffset.z)
     subjectGroup.scale.setScalar((baseScale || 1) * glbOffset.s)
+    needsRenderRef.current = true
   }, [glbOffset, model, sceneRef])
 
   // ── Public: load GLB file ──
@@ -282,6 +304,7 @@ export function useViewport({
         sceneRef.current.originalMats = originalMats
         sceneRef.current.clayMat = clayMat
 
+        needsRenderRef.current = true
         onGlbLoaded(file.name.replace(/\.glb$/i, ''))
       }, (err: unknown) => console.error('GLB parse error:', err))
     }

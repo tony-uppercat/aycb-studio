@@ -245,7 +245,7 @@ async def _generate_video_vertex(
     ref_images: list[UploadFile] | None,
     seed: int = -1,
 ):
-    from src.vertex_video_gen import (
+    from src.veo_gen import (
         VertexVideoGenError,
         submit_text_to_video as vertex_t2v,
         submit_with_refs as vertex_refs,
@@ -289,7 +289,7 @@ async def video_generation_status(
 ):
     """Poll video generation status. Provider: 'piapi', 'fal', 'atlas', or 'vertex'."""
     if provider == "vertex":
-        from src.vertex_video_gen import VertexVideoGenError, get_result as vertex_get_result
+        from src.veo_gen import VertexVideoGenError, get_result as vertex_get_result
         key = _require_key(api_key, "gemini")
         try:
             return await vertex_get_result(key, request_id)

@@ -1,10 +1,10 @@
 """Video generation API client — Veo 3.1 via Google Gemini API.
 
-The file is named ``vertex_video_gen`` for historical reasons; the initial
-implementation used Vertex AI. Veo 3.1 is now invoked through the Gemini
-Developer API with a simple API key (``AYCB_GEMINI_KEY``) — no gcloud /
-ADC / GCP project required. See the companion ``src/vertex_client.py``
-which still powers Imagen edit via Vertex.
+Renamed from ``vertex_video_gen`` — the initial implementation used
+Vertex AI, but Veo 3.1 is now invoked through the Gemini Developer
+API with a plain ``AYCB_GEMINI_KEY`` (no gcloud / ADC / GCP project
+required). ``src/vertex_client.py`` still powers Imagen edit via
+Vertex and is unrelated.
 """
 
 from __future__ import annotations

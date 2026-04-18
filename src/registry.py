@@ -2,7 +2,7 @@
 
 Replaces the 13 duplicated registry sites flagged in v2 audit finding C3.
 Backend providers (video_gen, fal_video_gen, atlas_video_gen,
-vertex_video_gen, image_edit, shared) and the frontend (through the
+veo_gen, image_edit, shared) and the frontend (through the
 /api/registry endpoint) all read from this one place.
 
 Migration is incremental — during the rollover the provider modules keep

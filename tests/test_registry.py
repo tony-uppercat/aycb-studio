@@ -1,7 +1,7 @@
 """Tests for src/registry.py and /api/registry/* endpoints.
 
 The registry is a new single source of truth; the existing provider
-dicts (video_gen.MODELS, vertex_video_gen.MODELS, etc.) are kept
+dicts (video_gen.MODELS, veo_gen.MODELS, etc.) are kept
 during rollover. These tests guard against drift between the two
 during that window.
 """
@@ -23,9 +23,9 @@ def test_registry_covers_all_video_providers():
     """Every backend MODELS entry must have a registry counterpart with
     matching cost_per_sec / aspect_ratios. Drift = bug."""
     from src.registry import REGISTRY
-    from src import video_gen, fal_video_gen, atlas_video_gen, vertex_video_gen
+    from src import video_gen, fal_video_gen, atlas_video_gen, veo_gen
 
-    for source in (video_gen, fal_video_gen, atlas_video_gen, vertex_video_gen):
+    for source in (video_gen, fal_video_gen, atlas_video_gen, veo_gen):
         for model_id, info in source.MODELS.items():
             assert model_id in REGISTRY, f"{model_id} missing from registry"
             reg = REGISTRY[model_id]

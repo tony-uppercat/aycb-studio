@@ -131,6 +131,22 @@
   border: 1.5px solid #0a0a0b !important;
 }
 
+/* Pending handle — hollow ring with dashed border. Visually signals
+ * "drop here to add a new pin". Once connected, the SubnetNode
+ * materializes a committed pin and the pending slides down one row. */
+.inputHandlePending,
+.outputHandlePending {
+  width: 10px !important;
+  height: 10px !important;
+  background: transparent !important;
+  border: 1.5px dashed rgba(245, 39, 118, 0.55) !important;
+}
+
+.pinRowPending {
+  opacity: 0.45;
+  font-style: italic;
+}
+
 .empty {
   font-style: italic;
   opacity: 0.5;

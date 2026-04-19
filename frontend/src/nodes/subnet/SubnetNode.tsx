@@ -6,6 +6,13 @@ import styles from './SubnetNode.module.css'
 import { buildSubnetPins, type SubnetPin } from './subnetPins'
 import { useSubnetPathStore } from '../../stores/subnetPathStore'
 
+/** Sentinel handle ids used for the "drop here to add" slots at the
+ *  bottom of each direction. onConnect in FlowCanvas watches for these
+ *  and auto-commits: spawns a backing proxy inside sub_graph with the
+ *  slot_type inferred from the other end of the edge. */
+export const PENDING_IN_HANDLE_ID = '__pending_in__'
+export const PENDING_OUT_HANDLE_ID = '__pending_out__'
+
 export interface SubnetNodeData {
   name: string
   color: string | null
@@ -171,21 +178,29 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
           {child_count} {child_count === 1 ? 'node' : 'nodes'}
         </span>
         <div className={styles.pinList}>
-          {external_inputs.length === 0 && external_outputs.length === 0 && (
-            <span className={styles.empty}>No pins</span>
-          )}
           {external_inputs.map((pin) => (
             <div key={`in-${pin.handle_id}`} className={styles.pinRow}>
               <span className={styles.pinDot} />
               {pin.name}
             </div>
           ))}
+          {/* Pending input — always below the last committed input.
+              Becomes a committed pin the moment an edge connects. */}
+          <div className={`${styles.pinRow} ${styles.pinRowPending}`}>
+            <span className={styles.pinDot} style={{ background: 'transparent', border: '1.5px dashed rgba(245,39,118,0.55)' }} />
+            input...
+          </div>
           {external_outputs.map((pin) => (
             <div key={`out-${pin.handle_id}`} className={`${styles.pinRow} ${styles.pinRowOut}`}>
               {pin.name}
               <span className={styles.pinDot} />
             </div>
           ))}
+          {/* Pending output — same idea, mirrored. */}
+          <div className={`${styles.pinRow} ${styles.pinRowOut} ${styles.pinRowPending}`}>
+            output...
+            <span className={styles.pinDot} style={{ background: 'transparent', border: '1.5px dashed rgba(245,39,118,0.55)' }} />
+          </div>
         </div>
       </div>
 
@@ -199,6 +214,16 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
           style={{ top: 40 + i * 18 }}
         />
       ))}
+      {/* Pending input handle. ID is the sentinel PENDING_IN_HANDLE_ID
+          consumed by the auto-commit hook in FlowCanvas onConnect. */}
+      <Handle
+        key="pending-in"
+        type="target"
+        position={Position.Left}
+        id={PENDING_IN_HANDLE_ID}
+        className={styles.inputHandlePending}
+        style={{ top: 40 + external_inputs.length * 18 }}
+      />
       {external_outputs.map((pin, i) => (
         <Handle
           key={`handle-out-${pin.handle_id}`}
@@ -209,6 +234,14 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
           style={{ top: 40 + i * 18 }}
         />
       ))}
+      <Handle
+        key="pending-out"
+        type="source"
+        position={Position.Right}
+        id={PENDING_OUT_HANDLE_ID}
+        className={styles.outputHandlePending}
+        style={{ top: 40 + external_outputs.length * 18 }}
+      />
     </div>
   )
 }

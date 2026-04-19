@@ -220,20 +220,9 @@ function InnerFlow({
   return (
     <>
       <div className={styles.toolbar}>
-        <button
-          type="button"
-          className={styles.toolbarBtn}
-          onClick={() => addNode('subnet-input')}
-        >
-          <Plus size={12} strokeWidth={1.5} /> Input
-        </button>
-        <button
-          type="button"
-          className={styles.toolbarBtn}
-          onClick={() => addNode('subnet-output')}
-        >
-          <Plus size={12} strokeWidth={1.5} /> Output
-        </button>
+        {/* Add Input / Add Output buttons removed — pins are now created
+            implicitly by dropping an edge on the subnet's __pending_in__
+            or __pending_out__ handle from the outside. */}
         <button
           type="button"
           className={styles.toolbarBtn}

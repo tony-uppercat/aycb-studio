@@ -4,6 +4,7 @@ import { useCanvasStore } from '../stores/canvasStore'
 import { getNextNodeId } from './useCanvasDragDrop'
 import { getHandleType } from './useDataPropagation'
 import { NODE_CATALOG, type NodeManifest, type SlotType, areSlotsCompatible, findHandleForSlot } from '../nodes/index'
+import { commitPendingPin } from '../nodes/subnet/subnetPins'
 import { edgeStyle } from '../utils/edgeStyles'
 
 type PendingConnection = {
@@ -214,8 +215,45 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
   const onConnect = useCallback(
     (connection: Connection) => {
       connectionMadeRef.current = true
-      const currentNodes = getNodes()
+      let currentNodes = getNodes()
       const currentEdges = getEdges()
+
+      // ── Pending subnet pin auto-commit ──────────────────────────────────
+      // If the user dropped an edge onto a subnet's "__pending_in__" or
+      // "__pending_out__" sentinel handle, materialize a real proxy inside
+      // the subnet's sub_graph and rewrite the connection to use the new
+      // real handle_id. The pending pin then re-spawns one row below on
+      // the next render.
+      const PENDING_IN = '__pending_in__'
+      const PENDING_OUT = '__pending_out__'
+      if (connection.targetHandle === PENDING_IN && connection.target) {
+        const subnet = currentNodes.find(n => n.id === connection.target)
+        if (subnet?.type === 'subnet') {
+          const slot_type = (getHandleType(connection.sourceHandle) || 'text') as SlotType
+          const { updatedSubGraph, newHandleId } = commitPendingPin(subnet, 'in', slot_type)
+          setNodes(ns => ns.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n))
+          currentNodes = currentNodes.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n)
+          connection = { ...connection, targetHandle: newHandleId }
+        }
+      } else if (connection.sourceHandle === PENDING_OUT && connection.source) {
+        const subnet = currentNodes.find(n => n.id === connection.source)
+        if (subnet?.type === 'subnet') {
+          const slot_type = (getHandleType(connection.targetHandle) || 'text') as SlotType
+          const { updatedSubGraph, newHandleId } = commitPendingPin(subnet, 'out', slot_type)
+          setNodes(ns => ns.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n))
+          currentNodes = currentNodes.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n)
+          connection = { ...connection, sourceHandle: newHandleId }
+        }
+      }
+
       const targetNode = currentNodes.find(n => n.id === connection.target)
       const targetHandle = connection.targetHandle ?? ''
       const isMediaPin = targetHandle.startsWith('media-')
@@ -275,6 +313,14 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
 
       // Batch node accepts any input type and multiple edges
       if (targetType === 'batch') return true
+
+      // Subnet "pending" pins accept any type — slot_type is inferred
+      // from the other end of the connection at auto-commit time in
+      // onConnect above.
+      if (connection.targetHandle === '__pending_in__' ||
+          connection.sourceHandle === '__pending_out__') {
+        return true
+      }
 
       // We allow connections to occupied input pins so onConnect can replace the old edge.
       // Blocking here would prevent replacement (isValidConnection=false → onConnect never fires).

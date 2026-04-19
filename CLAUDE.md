@@ -297,8 +297,21 @@ Pin-based: `ADMIN_PIN` constant in `frontend/src/review/stores/userStore.ts` and
 
 - Work on `dev` branch. Never commit directly to `main`.
 - Commit on request or when a feature is complete (not micro-commits per task).
-- Prefixes: `[node]`, `[fix]`, `[feat]`, `[refactor]`, `[test]`, `[docs]`, `[styles]`
+- Prefixes: `[node]`, `[fix]`, `[feat]`, `[refactor]`, `[test]`, `[docs]`, `[styles]`, `[perf]`
 - Run tests before every commit.
+
+## CI
+
+GitHub Actions runs `.github/workflows/ci.yml` on every push + PR to
+`dev` / `main`:
+
+- **backend** job: `pip install -e ".[api,dev]"` + `python -m pytest`
+- **frontend** job: `npm ci` + `npx tsc --noEmit` + `npx vitest run`
+
+Collaborator PRs targeting `dev` or `main` must turn CI green before
+merge. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the workflow and
+[.github/pull_request_template.md](./.github/pull_request_template.md)
+for the PR checklist.
 
 ---
 

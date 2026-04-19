@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Node } from '@xyflow/react'
-import { buildSubnetPins } from './useSubnetPins'
+import { buildSubnetPins } from './subnetPins'
 
 function make_proxy(
   type: 'subnet-input' | 'subnet-output',

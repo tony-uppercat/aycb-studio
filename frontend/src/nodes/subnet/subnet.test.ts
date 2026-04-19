@@ -8,7 +8,7 @@ import {
   toggleCollapsed,
   type SubnetNodeData,
 } from './SubnetNode'
-import type { SubnetPin } from './useSubnetPins'
+import type { SubnetPin } from './subnetPins'
 
 function make_proxy(
   type: 'subnet-input' | 'subnet-output',

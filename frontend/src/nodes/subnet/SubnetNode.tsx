@@ -1,9 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import { Handle, Position, NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { ChevronDown, ChevronRight, Box } from 'lucide-react'
 import type { Node, Edge, Viewport } from '@xyflow/react'
 import styles from './SubnetNode.module.css'
-import { buildSubnetPins, type SubnetPin } from './useSubnetPins'
+import { buildSubnetPins, type SubnetPin } from './subnetPins'
 import { useSubnetPathStore } from '../../stores/subnetPathStore'
 
 export interface SubnetNodeData {
@@ -77,8 +77,8 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
 
   const sub_nodes = d.sub_graph?.nodes ?? []
   const child_count = sub_nodes.length
-  const external_inputs = useMemo(() => d.external_inputs ?? [], [d.external_inputs])
-  const external_outputs = useMemo(() => d.external_outputs ?? [], [d.external_outputs])
+  const external_inputs = d.external_inputs ?? []
+  const external_outputs = d.external_outputs ?? []
 
   // Refresh pins whenever the sub_graph's nodes change. The current pins are
   // read via a ref (updated every render) so the effect dep array stays
@@ -121,7 +121,9 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
     e.stopPropagation()
   }, [])
 
-  const borderColor = d.color ?? '#F52776'
+  // Falls back to the app-wide accent token so theme changes flow through
+  // automatically; only user-customized subnet colors are inlined verbatim.
+  const borderColor = d.color ?? 'var(--color-accent)'
 
   return (
     <div

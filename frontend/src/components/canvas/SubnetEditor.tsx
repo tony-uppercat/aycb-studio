@@ -42,6 +42,29 @@ export function applySubGraphUpdate(
 }
 
 /**
+ * Build the `data` blob for a new node added via the editor toolbar.
+ *
+ * For generic nodes: spread the manifest's defaultData unchanged.
+ * For subnet-input / subnet-output proxies: also assign a unique
+ * `handle_id` so two proxies of the same direction in one subnet don't
+ * collide (the manifest default is '' which would produce two React
+ * `<Handle id="">` elements and ambiguous edge routing — audit finding
+ * SC1). The id prefix (`in-` / `out-`) is cosmetic, the randomness is
+ * load-bearing.
+ */
+export function buildProxyNodeData(
+  type: string,
+  defaults: Record<string, unknown>,
+): Record<string, unknown> {
+  const data: Record<string, unknown> = { ...defaults }
+  if (type === 'subnet-input' || type === 'subnet-output') {
+    const prefix = type === 'subnet-input' ? 'in' : 'out'
+    data.handle_id = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  }
+  return data
+}
+
+/**
  * Top-level SubnetEditor — renders nothing unless the subnet path store has
  * a non-empty current_path. Reads the active subnet id from the last path
  * segment and hands off to `SubnetEditorContent`.
@@ -156,9 +179,16 @@ function InnerFlow({
 
   // Save back on every edit. Use a ref so onSave identity changes don't
   // re-trigger the effect and risk a render loop with the outer state.
+  // Skip the first render so opening the editor doesn't write a no-op
+  // sub_graph back to the outer state (audit finding SM3).
   const save_ref = useRef(onSave)
   save_ref.current = onSave
+  const did_mount_ref = useRef(false)
   useEffect(() => {
+    if (!did_mount_ref.current) {
+      did_mount_ref.current = true
+      return
+    }
     save_ref.current({ nodes, edges, viewport })
   }, [nodes, edges, viewport])
 
@@ -179,7 +209,7 @@ function InnerFlow({
         id,
         type,
         position: { x: 120, y: 120 },
-        data: { ...(manifest?.defaultData ?? {}) },
+        data: buildProxyNodeData(type, manifest?.defaultData ?? {}),
       }
       setNodes((ns) => [...ns, new_node])
       setAddMenuOpen(false)

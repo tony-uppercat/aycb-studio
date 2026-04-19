@@ -71,6 +71,124 @@ export function migrateNodes(nodes: Node[]): Node[] {
   })
 }
 
+
+/**
+ * Assign handle_id to subnet proxies that shipped before audit fix SC1.
+ * The manifest default was `''`, which collided the moment a subnet had
+ * two proxies of the same direction. This migration walks the subnet
+ * tree recursively, gives each empty-handle proxy a unique id, and
+ * remaps parent-level edges that were pointing to the empty handle
+ * (only safe when exactly one proxy per direction had the empty id —
+ * multi-collision cases lose their edges, caller should reconnect).
+ *
+ * Returns updated nodes and edges. Single pass, mutation-free.
+ */
+export function migrateSubnets(
+  nodes: Node[],
+  edges: Edge[],
+): { nodes: Node[]; edges: Edge[] } {
+  let updatedEdges = edges
+  const updatedNodes = nodes.map((n) => _migrateSubnetNode(n, (remapper) => {
+    updatedEdges = remapper(updatedEdges)
+  }))
+  return { nodes: updatedNodes, edges: updatedEdges }
+}
+
+
+function _randomHandleId(prefix: 'in' | 'out'): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+
+function _migrateSubnetNode(
+  node: Node,
+  remapParentEdges: (fn: (edges: Edge[]) => Edge[]) => void,
+): Node {
+  if (node.type !== 'subnet' || !node.data) return node
+  const d = node.data as Record<string, unknown>
+  const sub_graph = d.sub_graph as
+    | { nodes: Node[]; edges: Edge[]; viewport: unknown }
+    | undefined
+  if (!sub_graph) return node
+
+  // 1. Recurse first so nested subnets fix their own tree.
+  //    Nested remaps only touch edges INSIDE this subnet's sub_graph —
+  //    we pass a local updater that rewrites sub_graph.edges, not the
+  //    outer parent's edges.
+  let childEdges = sub_graph.edges
+  const migratedChildren = sub_graph.nodes.map((child) =>
+    _migrateSubnetNode(child, (fn) => {
+      childEdges = fn(childEdges)
+    }),
+  )
+
+  // 2. Find this subnet's proxies with empty handle_id, sorted by y.
+  const emptyInputs = migratedChildren
+    .filter((c) => c.type === 'subnet-input' && !(c.data as Record<string, unknown>)?.handle_id)
+    .sort((a, b) => a.position.y - b.position.y)
+  const emptyOutputs = migratedChildren
+    .filter((c) => c.type === 'subnet-output' && !(c.data as Record<string, unknown>)?.handle_id)
+    .sort((a, b) => a.position.y - b.position.y)
+
+  if (emptyInputs.length === 0 && emptyOutputs.length === 0 &&
+      childEdges === sub_graph.edges) {
+    // No changes anywhere in this subtree.
+    return node
+  }
+
+  // 3. Assign new ids to empty proxies.
+  const inputIdMap = new Map<string, string>() // node id → new handle_id
+  const outputIdMap = new Map<string, string>()
+  const patchedChildren = migratedChildren.map((c) => {
+    const cd = (c.data ?? {}) as Record<string, unknown>
+    if (c.type === 'subnet-input' && !cd.handle_id) {
+      const newId = _randomHandleId('in')
+      inputIdMap.set(c.id, newId)
+      return { ...c, data: { ...cd, handle_id: newId } }
+    }
+    if (c.type === 'subnet-output' && !cd.handle_id) {
+      const newId = _randomHandleId('out')
+      outputIdMap.set(c.id, newId)
+      return { ...c, data: { ...cd, handle_id: newId } }
+    }
+    return c
+  })
+
+  // 4. Remap PARENT-level edges pointing to this subnet's empty handles.
+  //    Only safe when a single proxy per direction had the empty id —
+  //    otherwise we can't tell which proxy the edge meant.
+  if (emptyInputs.length === 1 || emptyOutputs.length === 1) {
+    remapParentEdges((edges) =>
+      edges.map((e) => {
+        if (emptyInputs.length === 1 &&
+            e.target === node.id &&
+            (!e.targetHandle || e.targetHandle === '')) {
+          return { ...e, targetHandle: inputIdMap.get(emptyInputs[0].id) ?? e.targetHandle }
+        }
+        if (emptyOutputs.length === 1 &&
+            e.source === node.id &&
+            (!e.sourceHandle || e.sourceHandle === '')) {
+          return { ...e, sourceHandle: outputIdMap.get(emptyOutputs[0].id) ?? e.sourceHandle }
+        }
+        return e
+      }),
+    )
+  } else if (emptyInputs.length > 1 || emptyOutputs.length > 1) {
+    // Multi-collision — leave edges pointing at '', they'll dangle until
+    // the user reconnects. Log so the first user to hit this knows.
+    console.warn(
+      `[migrateSubnets] subnet ${node.id} had ${emptyInputs.length} in + ` +
+      `${emptyOutputs.length} out proxies with empty handle_id; assigned ` +
+      `new ids but parent-level edges must be reconnected manually.`,
+    )
+  }
+
+  return {
+    ...node,
+    data: { ...d, sub_graph: { ...sub_graph, nodes: patchedChildren, edges: childEdges } },
+  }
+}
+
 /** Read project ID from URL ?project= param (tab-local, survives refresh). */
 function getUrlProjectId(): string | null {
   const params = new URLSearchParams(window.location.search)
@@ -134,8 +252,9 @@ export function useActiveProject(): UseActiveProject {
   // ── Load a project's canvas into React Flow ──
 
   const loadProjectCanvas = useCallback((canvas: ProjectRecord['canvas']) => {
-    const nodes = migrateNodes(canvas.nodes ?? [])
-    const edges = migrateEdges(canvas.edges ?? [])
+    const subnetMigrated = migrateSubnets(canvas.nodes ?? [], canvas.edges ?? [])
+    const nodes = migrateNodes(subnetMigrated.nodes)
+    const edges = migrateEdges(subnetMigrated.edges)
     setNodes(nodes)
     setEdges(edges)
     if (canvas.viewport) {

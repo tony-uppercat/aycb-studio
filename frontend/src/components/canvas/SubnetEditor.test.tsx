@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Node, Edge, Viewport } from '@xyflow/react'
-import { applySubGraphUpdate } from './SubnetEditor'
+import { applySubGraphUpdate, buildProxyNodeData } from './SubnetEditor'
 
 function make_plain(id: string): Node {
   return { id, type: 'text-input', position: { x: 0, y: 0 }, data: { text: 'hello' } }
@@ -81,5 +81,42 @@ describe('applySubGraphUpdate', () => {
     // Original sub_graph.nodes reference untouched
     expect(before_data.sub_graph.nodes).toBe(before_inner)
     expect(before_inner.length).toBe(0)
+  })
+})
+
+
+describe('buildProxyNodeData (audit SC1)', () => {
+  it('assigns unique handle_id to subnet-input', () => {
+    const a = buildProxyNodeData('subnet-input', { name: 'input', slot_type: 'text' })
+    const b = buildProxyNodeData('subnet-input', { name: 'input', slot_type: 'text' })
+    expect(a.handle_id).toMatch(/^in-/)
+    expect(b.handle_id).toMatch(/^in-/)
+    expect(a.handle_id).not.toBe(b.handle_id)
+  })
+
+  it('assigns unique handle_id to subnet-output with out- prefix', () => {
+    const a = buildProxyNodeData('subnet-output', { name: 'output', slot_type: 'text' })
+    const b = buildProxyNodeData('subnet-output', { name: 'output', slot_type: 'text' })
+    expect(a.handle_id).toMatch(/^out-/)
+    expect(b.handle_id).toMatch(/^out-/)
+    expect(a.handle_id).not.toBe(b.handle_id)
+  })
+
+  it('overwrites the manifest default (which is "")', () => {
+    const a = buildProxyNodeData('subnet-input', { handle_id: '', name: 'input', slot_type: 'text' })
+    expect(a.handle_id).not.toBe('')
+    expect(typeof a.handle_id).toBe('string')
+  })
+
+  it('preserves non-proxy types unchanged', () => {
+    const a = buildProxyNodeData('text-input', { text: 'hello' })
+    expect(a).toEqual({ text: 'hello' })
+    expect('handle_id' in a).toBe(false)
+  })
+
+  it('keeps other default fields when adding handle_id', () => {
+    const a = buildProxyNodeData('subnet-input', { name: 'input', slot_type: 'prompt' })
+    expect(a.name).toBe('input')
+    expect(a.slot_type).toBe('prompt')
   })
 })

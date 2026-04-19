@@ -3,10 +3,9 @@ import type { Node, Edge } from '@xyflow/react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import type { SlotType } from '../_shared/types'
-import { toSnakeCase } from '../subnet/subnetUtils'
+import { toSnakeCase, pullBySlotType } from '../subnet/subnetUtils'
 import { findNodePathInTree, resolveLevel } from '../../hooks/subnetTreeHelpers'
 import { getRootTree } from '../../hooks/rootTreeGetter'
-import { pullText, pullMedia } from '../../hooks/useDataPropagation'
 import styles from '../_shared/Node.module.css'
 
 export interface SubnetInputNodeData {
@@ -75,18 +74,13 @@ export function buildInputOnRun(
       return
     }
 
-    // 5. Read the value based on slot type, mirroring buildOutputOnRun.
+    // 5. Read the value based on slot type (shared helper — same as
+    //    buildOutputOnRun's dispatch).
     const slot_type = d.slot_type || 'text'
-    let value: unknown = null
-
-    if (slot_type === 'text' || slot_type === 'prompt') {
-      value = pullText(parent_subnet_id, d.handle_id, get_parent_nodes, get_parent_edges)
-    } else {
-      // image / video / media — pull file, fall back to mediaId
-      const media = await pullMedia(parent_subnet_id, d.handle_id, get_parent_nodes, get_parent_edges)
-      value = media.file ?? media.mediaId ?? null
-    }
-
+    const value = await pullBySlotType(
+      slot_type, parent_subnet_id, d.handle_id,
+      get_parent_nodes, get_parent_edges,
+    )
     updateNodeData(id, { result: value })
   }
 }
@@ -140,17 +134,11 @@ export function SubnetInputNode({ id, data, selected }: NodeProps) {
     >
       <div className={styles.nodeContent}>
         <div>
-          <label
-            style={{
-              fontSize: 10,
-              color: 'var(--color-text-secondary, #a1a1aa)',
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}
-          >
-            Name
-          </label>
+          <div className={styles.row}>
+            <span className={styles.label}>Name</span>
+          </div>
           <input
+            className={styles.promptInput}
             type="text"
             value={inputValue}
             onChange={(e) => setDraft(e.target.value)}
@@ -160,60 +148,27 @@ export function SubnetInputNode({ id, data, selected }: NodeProps) {
             }}
             spellCheck={false}
             aria-label="Subnet input name"
-            style={{
-              width: '100%',
-              background: '#111114',
-              border: '1px solid var(--border, #27272a)',
-              color: 'var(--color-text-primary, #fafafa)',
-              padding: '4px 6px',
-              fontSize: 12,
-              fontFamily: 'ui-monospace, monospace',
-              borderRadius: 2,
-            }}
           />
         </div>
         <div>
-          <label
-            style={{
-              fontSize: 10,
-              color: 'var(--color-text-secondary, #a1a1aa)',
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}
-          >
-            Slot Type
-          </label>
+          <div className={styles.row}>
+            <span className={styles.label}>Type</span>
+          </div>
           <select
+            className={styles.select}
             value={d.slot_type || 'text'}
             onChange={(e) => handleSlotTypeChange(e.target.value as SlotType)}
             aria-label="Subnet input slot type"
-            style={{
-              width: '100%',
-              background: '#111114',
-              border: '1px solid var(--border, #27272a)',
-              color: 'var(--color-text-primary, #fafafa)',
-              padding: '4px 6px',
-              fontSize: 12,
-              borderRadius: 2,
-            }}
           >
             {SLOT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </div>
         {d.handle_id && (
-          <div
-            style={{
-              fontSize: 10,
-              color: 'var(--color-text-secondary, #a1a1aa)',
-              fontFamily: 'ui-monospace, monospace',
-              opacity: 0.6,
-            }}
-          >
-            id: {d.handle_id}
+          <div className={styles.row}>
+            <span className={styles.label}>handle_id</span>
+            <span>{d.handle_id}</span>
           </div>
         )}
       </div>

@@ -2,8 +2,7 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { useReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import type { SlotType } from '../_shared/types'
-import { toSnakeCase } from '../subnet/subnetUtils'
-import { pullText, pullMedia } from '../../hooks/useDataPropagation'
+import { toSnakeCase, pullBySlotType } from '../subnet/subnetUtils'
 import { registerNodeRun, unregisterNodeRun } from '../../utils/cascadeRun'
 import styles from '../_shared/Node.module.css'
 
@@ -36,15 +35,7 @@ export function buildOutputOnRun(
   return async () => {
     const d = getData()
     const slotType = d.slot_type || 'text'
-    let value: unknown
-
-    if (slotType === 'text' || slotType === 'prompt') {
-      value = pullText(id, 'in', getNodes, getEdges)
-    } else {
-      const media = await pullMedia(id, 'in', getNodes, getEdges)
-      value = media.file ?? media.mediaId ?? null
-    }
-
+    const value = await pullBySlotType(slotType, id, 'in', getNodes, getEdges)
     updateNodeData(id, { result: value })
   }
 }

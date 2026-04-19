@@ -18,7 +18,7 @@ interface Props {
 export function MediaGrid({
   items,
   selectedId,
-  onSelect,
+  onSelect: _onSelect,
   onDoubleClick,
   selected_ids,
   show_checkboxes = false,

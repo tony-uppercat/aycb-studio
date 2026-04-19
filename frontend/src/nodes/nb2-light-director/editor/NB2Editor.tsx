@@ -44,7 +44,7 @@ export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile,
   const [copied, setCopied] = useState(false)
   const [panels, setPanels] = useState({ model: true, key: true, fill: true, rim: true, ambient: true, camera: true, lens: true })
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const sceneRef = useRef<SceneRefs>({
     renderer: null, scene: null, camera: null, pls: [], helpers: [], subjectGroup: null,
     glbInnerGroup: null, originalMats: new Map(), clayMat: null, basePos: null, baseScale: 1, centerModel: null,

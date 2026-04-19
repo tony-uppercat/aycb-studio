@@ -13,7 +13,7 @@ export function VideoUploadNode({ id, data, selected }: NodeProps) {
     togglePlay, handleTimeUpdate, handleLoadedMetadata,
     handleVideoClick, handleCaptureFrame,
     handleClearFrames, handleImportFrames,
-    openFullscreen, openPreview,
+    openPreview,
     seekTo, stepFrame, setPlaying,
   } = useVideoUpload(id, data, selected)
 

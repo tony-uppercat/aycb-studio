@@ -66,7 +66,7 @@ function sanitize(text: string): string {
 // ---------------------------------------------------------------------------
 
 export function CommentThread({ mediaId, position }: CommentThreadProps) {
-  const { user_name, get_initials } = useUserStore()
+  const { user_name } = useUserStore()
   const [comments, setComments] = useState<Comment[]>([])
   const [text, setText] = useState('')
   const [replyTo, setReplyTo] = useState<number | null>(null)

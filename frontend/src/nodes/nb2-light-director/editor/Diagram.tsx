@@ -1,5 +1,4 @@
 import type { LightConfig } from '../types'
-import { GELS } from '../constants'
 
 interface DiagramProps {
   lights: LightConfig[]

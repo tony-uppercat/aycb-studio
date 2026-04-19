@@ -15,7 +15,7 @@ interface CameraPanelProps {
   onToggle: () => void
 }
 
-export function CameraPanel({ cam, lens, shot, onCamChange, onResetCam, open, onToggle }: CameraPanelProps) {
+export function CameraPanel({ cam, lens: _lens, shot, onCamChange, onResetCam, open, onToggle }: CameraPanelProps) {
   const azDeg = Math.round((((-cam.theta * 180 / Math.PI) % 360) + 360) % 360)
   const elDeg = Math.round((Math.PI / 2 - cam.phi) * 180 / Math.PI)
   const dist = Math.round(cam.dist * 10) / 10

@@ -58,7 +58,7 @@ export function ReviewGallery() {
 
   const loadRefs = useCallback(async (signal?: AbortSignal) => {
     try { const p: Record<string, string> = {}; if (refSearch) p.search = refSearch; if (refTag) p.tag = refTag
-      const d = await rhApi.listReferences(p, signal); if (!signal?.aborted) setRefs(d.items || [])
+      const d = await rhApi.listReferences(p, signal); if (!signal?.aborted) setRefs((d.items || []) as ReferenceItem[])
     } catch (e) { if (e instanceof Error && e.name !== 'AbortError') { /* swallow */ } }
   }, [refSearch, refTag])
 

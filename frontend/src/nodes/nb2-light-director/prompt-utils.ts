@@ -42,18 +42,6 @@ export function kelvinName(k: number): string {
   return 'deep cool blue'
 }
 
-function azToFrame(az: number): string {
-  const n = ((az % 360) + 360) % 360
-  if (n >= 337.5 || n < 22.5) return 'from directly in front'
-  if (n < 67.5) return 'from front-right'
-  if (n < 112.5) return 'from frame-right'
-  if (n < 157.5) return 'from rear-right'
-  if (n < 202.5) return 'from directly behind'
-  if (n < 247.5) return 'from rear-left'
-  if (n < 292.5) return 'from frame-left'
-  return 'from front-left'
-}
-
 export function azToClock(az: number): number {
   let c = Math.round(((((az % 360) + 360) % 360) / 30)) % 12
   return c === 0 ? 12 : c

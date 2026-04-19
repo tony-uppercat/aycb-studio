@@ -102,9 +102,14 @@ describe('pullText with subnet source', () => {
     expect(result).toBe('')
   })
 
-  it('reads from subnet-input proxy cache (happy path)', () => {
-    // Inside a subnet: a regular node pulls from a subnet-input proxy sibling.
-    // The subnet-input proxy has already cached the external value in data.result.
+  it('reactively walks up through subnet-input proxy to external source', async () => {
+    // Inside a subnet: a consumer pulls text from a subnet-input proxy
+    // sibling. The proxy has NO data.result cached (no Run was pressed);
+    // resolveSource walks up to the containing subnet's external edge and
+    // reads the external upstream node directly. This is the post-audit
+    // reactive behavior — no need to Run the proxy.
+    const { setRootTree, resetRootTree } = await import('./rootTreeGetter')
+
     const subnet_input_proxy: Node = {
       id: 'proxy-in',
       type: 'subnet-input',
@@ -113,7 +118,7 @@ describe('pullText with subnet source', () => {
         handle_id: 'in1',
         name: 'in1',
         slot_type: 'text',
-        result: 'world',
+        // NOTE: no `result` field — the proxy has never Run.
       },
     }
     const consumer: Node = {
@@ -122,18 +127,72 @@ describe('pullText with subnet source', () => {
       position: { x: 0, y: 0 },
       data: {},
     }
-    const edges: Edge[] = [
-      {
-        id: 'e1',
-        source: 'proxy-in',
-        sourceHandle: 'in1',
-        target: 'consumer',
-        targetHandle: 'in',
+    const inner_edges: Edge[] = [{
+      id: 'e-inner',
+      source: 'proxy-in',
+      sourceHandle: 'out',
+      target: 'consumer',
+      targetHandle: 'in',
+    }]
+
+    // Parent-level: an external text-input node feeding the subnet's in1 pin.
+    const external_source: Node = {
+      id: 'src',
+      type: 'textInput',
+      position: { x: 0, y: 0 },
+      data: { outputText: 'hello from outside' },
+    }
+    const subnet: Node = {
+      id: 'subnet-1',
+      type: 'subnet',
+      position: { x: 0, y: 0 },
+      data: {
+        sub_graph: {
+          nodes: [subnet_input_proxy, consumer],
+          edges: inner_edges,
+          viewport: { x: 0, y: 0, zoom: 1 },
+        },
       },
-    ]
-    const nodes = [subnet_input_proxy, consumer]
-    const result = pullText('consumer', 'in', () => nodes, () => edges)
-    expect(result).toBe('world')
+    }
+    const external_edge: Edge = {
+      id: 'e-ext', source: 'src', sourceHandle: 'text-out',
+      target: 'subnet-1', targetHandle: 'in1',
+    }
+
+    setRootTree({
+      root_nodes: [external_source, subnet],
+      root_edges: [external_edge],
+    })
+    try {
+      const result = pullText('consumer', 'in', () => [subnet_input_proxy, consumer], () => inner_edges)
+      expect(result).toBe('hello from outside')
+    } finally {
+      resetRootTree()
+    }
+  })
+
+  it('returns empty string when subnet-input proxy has no parent edge', async () => {
+    const { setRootTree, resetRootTree } = await import('./rootTreeGetter')
+    const proxy: Node = {
+      id: 'orphan-proxy',
+      type: 'subnet-input',
+      position: { x: 0, y: 0 },
+      data: { handle_id: 'h1', name: 'n', slot_type: 'text' },
+    }
+    const consumer: Node = { id: 'c', type: 'result-viewer', position: { x: 0, y: 0 }, data: {} }
+    const inner_edges: Edge[] = [{ id: 'e', source: 'orphan-proxy', sourceHandle: 'out', target: 'c', targetHandle: 'in' }]
+    const subnet: Node = {
+      id: 'sub', type: 'subnet', position: { x: 0, y: 0 },
+      data: { sub_graph: { nodes: [proxy, consumer], edges: inner_edges, viewport: { x: 0, y: 0, zoom: 1 } } },
+    }
+    // No external edge feeding the subnet.
+    setRootTree({ root_nodes: [subnet], root_edges: [] })
+    try {
+      const result = pullText('c', 'in', () => [proxy, consumer], () => inner_edges)
+      expect(result).toBe('')
+    } finally {
+      resetRootTree()
+    }
   })
 
   it('returns empty string when subnet has no sub_graph (malformed subnet)', () => {

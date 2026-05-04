@@ -17,6 +17,7 @@ interface NB2EditorProps {
   initialGlbFile?: File | null
   onClose: () => void
   onUpdate: (prompt: string, config: string, captured: string | null) => void
+  onPreview?: (dataUrl: string) => void
   onGlbFile?: (f: File | null) => void
 }
 
@@ -25,7 +26,7 @@ function parseConfig(json?: string) {
   try { const c = JSON.parse(json); return c.version === '1.0' ? c : null } catch { return null }
 }
 
-export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile, onClose, onUpdate, onGlbFile }: NB2EditorProps) {
+export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile, onClose, onUpdate, onPreview, onGlbFile }: NB2EditorProps) {
   const [cfg] = useState(() => parseConfig(initialConfig))
   const [lights, setLights] = useState<LightConfig[]>(cfg?.lights ?? DEFAULT_LIGHTS)
   const [ambient, setAmbient] = useState(cfg?.ambient ?? 12)
@@ -73,9 +74,52 @@ export function NB2Editor({ initialConfig, initialCapturedImage, initialGlbFile,
     debounceRef.current = setTimeout(() => {
       const config = JSON.stringify({ version: '1.0', mode: useRef3D ? '3d_ref' : 'text', lights, ambient, camera: cam, lens, pin: pinnedCam, bookmarks: camBookmarks, model: { type: model, glbRef: null, rotation: glbRot, offset: glbOffset }, frameAR })
       onUpdate(prompt, config, capturedImg)
+
+      const { renderer, scene, camera } = sceneRef.current
+      if (renderer && scene && camera && onPreview) {
+        renderer.render(scene, camera)
+        const src = renderer.domElement
+        const pw = 280, ph = Math.round(pw * src.height / src.width)
+        const cvs = document.createElement('canvas')
+        cvs.width = pw; cvs.height = ph
+        const ctx = cvs.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(src, 0, 0, pw, ph)
+          if (frameAR) {
+            const ar = AR_PRESETS.find(a => a.id === frameAR)
+            if (ar) {
+              const imgAR = pw / ph
+              let gw: number, gh: number
+              if (ar.ratio >= imgAR) { gw = pw * 0.9; gh = gw / ar.ratio }
+              else { gh = ph * 0.9; gw = gh * ar.ratio }
+              const gx = (pw - gw) / 2, gy = (ph - gh) / 2
+              ctx.fillStyle = 'rgba(0,0,0,0.55)'
+              ctx.fillRect(0, 0, pw, gy)
+              ctx.fillRect(0, gy + gh, pw, ph - gy - gh)
+              ctx.fillRect(0, gy, gx, gh)
+              ctx.fillRect(gx + gw, gy, pw - gx - gw, gh)
+              ctx.strokeStyle = 'rgba(232,168,73,0.4)'
+              ctx.lineWidth = 1
+              ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1)
+              ctx.strokeStyle = 'rgba(255,255,255,0.07)'
+              ctx.lineWidth = 0.5
+              ctx.beginPath()
+              for (const f of [1 / 3, 2 / 3]) {
+                ctx.moveTo(gx + gw * f, gy); ctx.lineTo(gx + gw * f, gy + gh)
+                ctx.moveTo(gx, gy + gh * f); ctx.lineTo(gx + gw, gy + gh * f)
+              }
+              ctx.stroke()
+              ctx.font = '600 10px monospace'
+              ctx.fillStyle = 'rgba(232,168,73,0.45)'
+              ctx.fillText(ar.label, gx + 3, gy + 12)
+            }
+          }
+          onPreview(cvs.toDataURL('image/jpeg', 0.7))
+        }
+      }
     }, 150)
     return () => clearTimeout(debounceRef.current)
-  }, [prompt, lights, ambient, cam, lens, pinnedCam, camBookmarks, model, glbRot, glbOffset, frameAR, useRef3D, capturedImg, onUpdate])
+  }, [prompt, lights, ambient, cam, lens, pinnedCam, camBookmarks, model, glbRot, glbOffset, frameAR, useRef3D, capturedImg, onUpdate, onPreview])
 
   const upd = useCallback((i: number, v: LightConfig) => setLights(p => p.map((l, j) => j === i ? v : l)), [])
   const togglePanel = useCallback((key: string) => setPanels(p => ({ ...p, [key]: !p[key as keyof typeof p] })), [])

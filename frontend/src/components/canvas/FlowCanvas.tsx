@@ -38,6 +38,7 @@ import { SaveIndicator } from '../SaveIndicator'
 import { ProjectSwitcher } from '../project/ProjectSwitcher'
 import { CanvasContextMenu, type ContextMenuTarget } from './CanvasContextMenu'
 import { SubnetEditor } from './SubnetEditor'
+import { canvasClipboard } from '../../stores/clipboardStore'
 import { setRootTree, resetRootTree } from '../../hooks/rootTreeGetter'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { CollageEditor } from '../CollageEditor'
@@ -63,7 +64,7 @@ function FlowCanvasInner() {
   const [privacy, setPrivacy] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: ContextMenuTarget; flowPos?: { x: number; y: number } } | null>(null)
-  const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
+  const clipboardRef = canvasClipboard  // shared across main canvas + subnet editor
   const [collageOpen, setCollageOpen] = useState(false)
   const [collageImages, setCollageImages] = useState<CollageImage[]>([])
   // Track blob URLs created for collage so we can revoke them on close
@@ -94,9 +95,21 @@ function FlowCanvasInner() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftKeyRef.current = true }
     const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftKeyRef.current = false }
+    // Window blur (Alt+Tab) drops the keyup for Shift, leaving shiftKeyRef
+    // stuck true and causing onSelectionChange to re-apply a stale snapshot
+    // on subsequent clicks. Reset on focus loss.
+    const onBlur = () => {
+      shiftKeyRef.current = false
+      preSelectionNodeIdsRef.current = new Set()
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
-    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp) }
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
   }, [])
 
   const onSelectionStart = useCallback(() => {
@@ -126,7 +139,38 @@ function FlowCanvasInner() {
     }
   }, [setNodes])
 
+  // Clear the snapshot once the rect-select drag ends. Without this, a stale
+  // snapshot persists and onSelectionChange re-applies it on the next
+  // shift-click, making previously-rect-selected nodes stick "on".
+  const onSelectionEnd = useCallback(() => {
+    preSelectionNodeIdsRef.current = new Set()
+  }, [])
+
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // ── Prevent middle-mouse autoscroll + accidental zoom while panning ──
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    let midDown = false
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 1) { e.preventDefault(); midDown = true }
+    }
+    const onUp = (e: MouseEvent) => {
+      if (e.button === 1) midDown = false
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (midDown) { e.preventDefault(); e.stopPropagation() }
+    }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mouseup', onUp)
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mouseup', onUp)
+      el.removeEventListener('wheel', onWheel)
+    }
+  }, [])
 
   const { onDragOver, onDrop } = useCanvasDragDrop()
   const { snapshot, undo, redo, resetHistory, onDragStop: historyDragStop } = useCanvasHistory(
@@ -288,7 +332,7 @@ function FlowCanvasInner() {
       setCtxMenu({
         x: event.clientX,
         y: event.clientY,
-        target: { kind: 'pane', canPaste: clipboardRef.current !== null },
+        target: { kind: 'pane', canPaste: canvasClipboard.current !== null },
         flowPos,
       })
     },
@@ -307,7 +351,7 @@ function FlowCanvasInner() {
   // ── Context menu action callbacks ──
   const {
     ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxDuplicate,
-    ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup,
+    ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
   } = useCanvasContextMenuActions({ getNodes, getEdges, setNodes, setEdges, snapshot, clipboardRef, fitView })
 
   function handleClearCanvas(): void {
@@ -620,6 +664,7 @@ function FlowCanvasInner() {
           onEdgeContextMenu={handleEdgeContextMenu}
           onSelectionStart={onSelectionStart}
           onSelectionChange={onSelectionChange}
+          onSelectionEnd={onSelectionEnd}
 
           selectionOnDrag={true}
           selectionMode={SelectionMode.Partial}
@@ -674,6 +719,7 @@ function FlowCanvasInner() {
           onGroup={ctxGroup}
           onUngroup={ctxUngroup}
           onOpenCollage={handleOpenCollage}
+          onUnpack={ctxUnpack}
           onDeleteEdge={ctxDeleteEdge}
           flowPosition={ctxMenu.flowPos}
         />

@@ -341,3 +341,12 @@
   white-space: pre-wrap;
   font-style: italic;
 }
+
+:global(body.prv) .promptBox {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+:global(body.prv) :global([data-prv-show]) .promptBox {
+  filter: none; user-select: auto; pointer-events: auto;
+}

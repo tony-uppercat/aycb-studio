@@ -124,6 +124,14 @@ export async function pullMedia(
   if (!src) return { file: null, mediaId: null }
   const d = src.data as Record<string, unknown>
 
+  // Per-handle output media (batch outputs like Generate Image ×2/×4)
+  const outputMediaIds = d.outputMediaIds as Record<string, string> | undefined
+  if (outputMediaIds && edge.sourceHandle && edge.sourceHandle in outputMediaIds) {
+    const mid = outputMediaIds[edge.sourceHandle]
+    const file = await loadMedia(mid)
+    return { file, mediaId: mid }
+  }
+
   const mediaId = typeof d.mediaId === 'string' ? d.mediaId : null
   let file: File | null = null
 

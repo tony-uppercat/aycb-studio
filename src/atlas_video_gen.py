@@ -77,6 +77,14 @@ def _to_data_uri(file_bytes: bytes, ext: str = ".png") -> str:
 
 # ── Submit ──────────────────────────────────────────────────────────────────
 
+def _is_kling(model_endpoint: str) -> bool:
+    """Atlas hosts both Seedance (ByteDance) and Kling (Kuaishou). Each
+    family expects a different payload schema — Seedance uses
+    image_url/ratio/resolution/generate_audio, Kling uses image/aspect_ratio
+    and rejects the Seedance-specific keys with a 400."""
+    return "kling" in model_endpoint.lower()
+
+
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
     aspect_ratio: str = "16:9", duration: int = 5,
@@ -84,14 +92,23 @@ async def submit_text_to_video(
 ) -> dict[str, Any]:
     """Submit T2V request."""
     info = get_model_info(model_id)
-    payload: dict[str, Any] = {
-        "model": info["model_id"],
-        "prompt": prompt,
-        "duration": duration,
-        "resolution": "720p",
-        "ratio": aspect_ratio,
-        "generate_audio": False,
-    }
+    endpoint = info["model_id"]
+    if _is_kling(endpoint):
+        payload: dict[str, Any] = {
+            "model": endpoint,
+            "prompt": prompt,
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
+        }
+    else:
+        payload = {
+            "model": endpoint,
+            "prompt": prompt,
+            "duration": duration,
+            "resolution": "720p",
+            "ratio": aspect_ratio,
+            "generate_audio": False,
+        }
     if seed is not None and seed >= 0:
         payload["seed"] = seed
     return await _submit(api_key, info["name"], payload)
@@ -115,21 +132,35 @@ async def submit_with_refs(
         logger.warning("Atlas I2V uses only the first image as start keyframe; %d extra ignored",
                         len(ref_image_bytes) - 1)
     if ref_video_bytes:
-        logger.warning("Atlas Seedance does not support video references; ignored")
+        logger.warning("Atlas %s does not support video references; ignored", info["name"])
     if audio_url:
-        logger.warning("Atlas Seedance does not support audio references; ignored")
+        logger.warning("Atlas %s does not support audio references; ignored", info["name"])
 
     name, data = ref_image_bytes[0]
     ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
-    payload: dict[str, Any] = {
-        "model": info["model_id_i2v"],
-        "prompt": prompt,
-        "image_url": _to_data_uri(data, ext),
-        "duration": duration,
-        "resolution": "720p",
-        "ratio": aspect_ratio,
-        "generate_audio": False,
-    }
+    image_data_uri = _to_data_uri(data, ext)
+    endpoint = info["model_id_i2v"]
+    if _is_kling(endpoint):
+        # Kling I2V on Atlas: `image` (not image_url), `aspect_ratio`, no
+        # resolution/ratio/generate_audio fields. Sending Seedance-style keys
+        # triggers HTTP 400 "specified when no first image and not video editing".
+        payload: dict[str, Any] = {
+            "model": endpoint,
+            "prompt": prompt,
+            "image": image_data_uri,
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
+        }
+    else:
+        payload = {
+            "model": endpoint,
+            "prompt": prompt,
+            "image_url": image_data_uri,
+            "duration": duration,
+            "resolution": "720p",
+            "ratio": aspect_ratio,
+            "generate_audio": False,
+        }
     if seed is not None and seed >= 0:
         payload["seed"] = seed
     return await _submit(api_key, info["name"], payload)

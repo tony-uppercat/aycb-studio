@@ -7,6 +7,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UseActiveProject } from '../../hooks/useActiveProject'
+import { exportProjectMedia } from '../../utils/exportMedia'
+import { useToast } from '../ui/Toast'
 import styles from './ProjectSwitcher.module.css'
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -33,6 +35,16 @@ function IconFolder() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+    </svg>
+  )
+}
+
+function IconDownload() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <polyline points="7,10 12,15 17,10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   )
 }
@@ -88,12 +100,14 @@ export function ProjectSwitcher({ project, onExport, onImport, onBackup, onOpenF
     refreshProjects,
   } = project
 
+  const { show: showToast } = useToast()
   const [open, setOpen] = useState(false)
   const [backed, setBacked] = useState(false)
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [exportingId, setExportingId] = useState<string | null>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
   // Guard against the double-fire: Enter key triggers handleCommitRename, then
   // setRenamingId(null) unmounts the input which fires onBlur → handleCommitRename again.
@@ -153,6 +167,25 @@ export function ProjectSwitcher({ project, onExport, onImport, onBackup, onOpenF
     if (!confirm(`Delete project "${name}"? This cannot be undone.`)) return
     await deleteProject(id)
   }, [deleteProject])
+
+  const handleExportMedia = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (exportingId) return
+    setExportingId(id)
+    try {
+      const res = await exportProjectMedia(id)
+      const parts = [`${res.written} file${res.written !== 1 ? 's' : ''} → ${res.dateFolder}`]
+      if (res.skipped > 0) parts.push(`${res.skipped} skipped`)
+      if (res.reusedPath) parts.push('reused path')
+      showToast(parts.join(' · '))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // AbortError fires when the user cancels the native picker
+      if (!/abort/i.test(msg)) showToast(`Export failed: ${msg}`)
+    } finally {
+      setExportingId(null)
+    }
+  }, [exportingId, showToast])
 
   const handleStartRename = useCallback((id: string, currentName: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -290,6 +323,14 @@ export function ProjectSwitcher({ project, onExport, onImport, onBackup, onOpenF
                         </span>
                       </div>
                       <div className={styles.itemActions}>
+                        <button
+                          className={styles.itemBtn}
+                          onClick={e => void handleExportMedia(p.id, e)}
+                          disabled={exportingId === p.id}
+                          title="Export all media to disk"
+                        >
+                          <IconDownload />
+                        </button>
                         <button
                           className={styles.itemBtn}
                           onClick={e => void handleDuplicate(p.id, e)}

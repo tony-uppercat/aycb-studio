@@ -3,7 +3,7 @@ import type { NodeManifest } from '../_shared/types'
 const manifest: NodeManifest = {
   type: 'subnet',
   label: 'Subnet',
-  icon: 'Box',
+  icon: '📦',
   category: 'utility',
   description:
     'Black-box container with nested sub-graph and explicit I/O pins',

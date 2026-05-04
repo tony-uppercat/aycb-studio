@@ -53,8 +53,12 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-body {
+html, body {
   margin: 0;
+  overflow: hidden;
+}
+
+body {
   background: var(--surface-0);
   color: var(--text-primary);
   font-family: var(--font-body);
@@ -78,4 +82,9 @@ body.prv [data-s] {
   user-select: none;
   pointer-events: none;
   transition: filter 0.2s;
+}
+body.prv [data-prv-show] [data-s] {
+  filter: none;
+  user-select: auto;
+  pointer-events: auto;
 }

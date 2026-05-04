@@ -92,7 +92,7 @@ function SubnetOutputNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <NodeShell
       name={`${displayName} >`}
-      icon="CornerRightUp"
+      icon="📤"
       selected={selected}
       inputSlots={[{ id: 'in', label: displayName, type: slotType }]}
       outputSlots={[]}

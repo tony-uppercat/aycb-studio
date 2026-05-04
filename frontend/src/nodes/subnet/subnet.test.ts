@@ -32,7 +32,7 @@ describe('subnet manifest', () => {
     expect(manifest.label).toBe('Subnet')
     expect(manifest.category).toBe('utility')
     expect(manifest.description).toBeTruthy()
-    expect(manifest.icon).toBe('Box')
+    expect(manifest.icon).toBe('📦')
   })
 
   it('has empty static inputs/outputs (pins are dynamic from proxies)', () => {

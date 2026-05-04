@@ -1,22 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import {
-  ReactFlow,
   ReactFlowProvider,
-  Background,
-  Controls,
-  useNodesState,
-  useEdgesState,
   useReactFlow,
-  addEdge,
   type Node,
   type Edge,
-  type Connection,
   type Viewport,
 } from '@xyflow/react'
-import { X, Plus } from 'lucide-react'
-import { NODE_TYPES, NODE_CATALOG } from '../../nodes/index'
+import { X } from 'lucide-react'
 import { useSubnetPathStore } from '../../stores/subnetPathStore'
-import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
+import { SubnetEditorInner } from './SubnetEditorInner'
 import styles from './SubnetEditor.module.css'
 
 interface SubGraph {
@@ -151,7 +143,7 @@ function SubnetEditorContent({
         </div>
         <div className={styles.body}>
           <ReactFlowProvider>
-            <InnerFlow
+            <SubnetEditorInner
               initial_sub_graph={initial_sub_graph}
               onSave={handleSave}
             />
@@ -162,110 +154,3 @@ function SubnetEditorContent({
   )
 }
 
-function InnerFlow({
-  initial_sub_graph,
-  onSave,
-}: {
-  initial_sub_graph: SubGraph
-  onSave: (sg: SubGraph) => void
-}): React.ReactElement {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(
-    initial_sub_graph.nodes,
-  )
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
-    initial_sub_graph.edges,
-  )
-  const [viewport, setViewport] = useState<Viewport>(initial_sub_graph.viewport)
-
-  // Save back on every edit. Use a ref so onSave identity changes don't
-  // re-trigger the effect and risk a render loop with the outer state.
-  // Skip the first render so opening the editor doesn't write a no-op
-  // sub_graph back to the outer state (audit finding SM3).
-  const save_ref = useRef(onSave)
-  save_ref.current = onSave
-  const did_mount_ref = useRef(false)
-  useEffect(() => {
-    if (!did_mount_ref.current) {
-      did_mount_ref.current = true
-      return
-    }
-    save_ref.current({ nodes, edges, viewport })
-  }, [nodes, edges, viewport])
-
-  const onConnect = useCallback(
-    (params: Connection) => {
-      setEdges((es) => addEdge(params, es))
-    },
-    [setEdges],
-  )
-
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
-
-  const addNode = useCallback(
-    (type: string) => {
-      const id = getNextNodeId(type)
-      const manifest = NODE_CATALOG.find((m) => m.type === type)
-      const new_node: Node = {
-        id,
-        type,
-        position: { x: 120, y: 120 },
-        data: buildProxyNodeData(type, manifest?.defaultData ?? {}),
-      }
-      setNodes((ns) => [...ns, new_node])
-      setAddMenuOpen(false)
-    },
-    [setNodes],
-  )
-
-  return (
-    <>
-      <div className={styles.toolbar}>
-        {/* Add Input / Add Output buttons removed — pins are now created
-            implicitly by dropping an edge on the subnet's __pending_in__
-            or __pending_out__ handle from the outside. */}
-        <button
-          type="button"
-          className={styles.toolbarBtn}
-          onClick={() => setAddMenuOpen((v) => !v)}
-          aria-expanded={addMenuOpen}
-        >
-          <Plus size={12} strokeWidth={1.5} /> Add Node
-        </button>
-      </div>
-      {addMenuOpen && (
-        <div className={styles.addNodeMenu}>
-          {NODE_CATALOG.filter(
-            (m) => m.type !== 'subnet' && m.type !== 'subnet-input' && m.type !== 'subnet-output',
-          )
-            .sort((a, b) => a.label.localeCompare(b.label))
-            .map((m) => (
-              <button
-                key={m.type}
-                type="button"
-                className={styles.addNodeItem}
-                onClick={() => addNode(m.type)}
-              >
-                {m.label}
-              </button>
-            ))}
-        </div>
-      )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={NODE_TYPES}
-        defaultViewport={viewport}
-        onMove={(_, vp) => setViewport(vp)}
-        minZoom={0.1}
-        maxZoom={4}
-        fitView={false}
-      >
-        <Background />
-        <Controls />
-      </ReactFlow>
-    </>
-  )
-}

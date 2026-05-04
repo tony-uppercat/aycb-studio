@@ -696,3 +696,8 @@
   color: #22c55e;
   background: rgba(34, 197, 94, 0.1);
 }
+
+:global(body.prv) .fbPanel,
+:global(body.prv) .splitDivider {
+  display: none;
+}

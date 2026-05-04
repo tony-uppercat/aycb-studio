@@ -562,6 +562,21 @@
   color: var(--text-secondary);
 }
 
+:global(body.prv) .promptPreview,
+:global(body.prv) .promptTextarea,
+:global(body.prv) .promptInput {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+:global(body.prv) :global([data-prv-show]) .promptPreview,
+:global(body.prv) :global([data-prv-show]) .promptTextarea,
+:global(body.prv) :global([data-prv-show]) .promptInput {
+  filter: none;
+  user-select: auto;
+  pointer-events: auto;
+}
+
 /* ── Effects Panel ── */
 
 .effectsPanel {

@@ -3,7 +3,7 @@ import type { NodeManifest } from '../_shared/types'
 const manifest: NodeManifest = {
   type: 'nb2LightDirector',
   label: 'NB2 Light Director',
-  icon: 'Lightbulb',
+  icon: '💡',
   category: 'utility',
   description: 'Cinematic lighting setup with 3D viewport — generates NB2-style lighting prompts',
   defaultData: {

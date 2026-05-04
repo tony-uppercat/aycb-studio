@@ -47,6 +47,7 @@ export interface Props {
   onGroup?: () => void
   onUngroup?: () => void
   onOpenCollage?: (images: CollageImage[]) => void
+  onUnpack?: (nodes: Node[]) => void
   onDeleteEdge?: (edgeId: string) => void
   /** Position in flow coordinates (for add-node placement) */
   flowPosition?: { x: number; y: number }
@@ -194,7 +195,7 @@ export function CanvasContextMenu({
   x, y, target, allEdges, onClose,
   onAddNode, onPaste, onSelectAll, onFitView,
   onDuplicate, onCopy, onDelete, onBypass, onGroup, onUngroup,
-  onOpenCollage, onDeleteEdge, flowPosition,
+  onOpenCollage, onUnpack, onDeleteEdge, flowPosition,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [showNodeExportChoice, setShowNodeExportChoice] = useState(false)
@@ -226,6 +227,11 @@ export function CanvasContextMenu({
   const canCollage = imageNodes.length >= 2
   const canSaveTemplate = nodeCount >= 2
   const hasGroups = selectedNodes.some(n => n.type === 'group')
+  const unpackCount = selectedNodes.reduce((sum, n) => {
+    const hids = (n.data as Record<string, unknown>).historyIds as string[] | undefined
+    return sum + (hids?.length ?? 0)
+  }, 0)
+  const canUnpack = unpackCount > 0
 
   // ── Action handlers ──
 
@@ -236,6 +242,7 @@ export function CanvasContextMenu({
 
   const handleBypass = useCallback(() => { onBypass?.(selectedNodes); onClose() }, [onBypass, selectedNodes, onClose])
   const handleDuplicate = useCallback(() => { onDuplicate?.(selectedNodes); onClose() }, [onDuplicate, selectedNodes, onClose])
+  const handleUnpack = useCallback(() => { onUnpack?.(selectedNodes); onClose() }, [onUnpack, selectedNodes, onClose])
   const handleCopy = useCallback(() => { onCopy?.(selectedNodes); onClose() }, [onCopy, selectedNodes, onClose])
 
   const handleDelete = useCallback(() => {
@@ -396,6 +403,9 @@ export function CanvasContextMenu({
 
             <Item icon="⏩" label="Bypass" shortcut="B" onClick={handleBypass} />
             <Item icon="⊕" label="Duplicate" shortcut="Ctrl+D" onClick={handleDuplicate} />
+            {canUnpack && (
+              <Item icon="⊟" label="Unpack History" shortcut="U" badge={unpackCount} onClick={handleUnpack} />
+            )}
             <Item icon="📋" label="Copy" shortcut="Ctrl+C" onClick={handleCopy} />
             <Item icon="🗑" label="Delete" shortcut="Del" danger onClick={handleDelete} />
 

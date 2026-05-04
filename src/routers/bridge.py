@@ -368,30 +368,141 @@ async def serve_media_file(path: str):
     return FileResponse(str(abs_path), media_type=media_type)
 
 
+# ── Explorer window cache ────────────────────────────────────────────────────
+# Per-folder HWND cache so repeated Explorer requests focus the existing
+# window instead of spawning a new one each time. Pure ctypes — no pywin32.
+_explorer_cache: dict[str, int] = {}
+
+
+def _is_window_alive(hwnd: int) -> bool:
+    import ctypes
+    return bool(ctypes.windll.user32.IsWindow(hwnd))
+
+
+def _bring_window_to_front(hwnd: int) -> None:
+    import ctypes
+    user32 = ctypes.windll.user32
+    SW_RESTORE = 9
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, SW_RESTORE)
+    user32.SetForegroundWindow(hwnd)
+
+
+def _find_explorer_hwnd(folder_name: str) -> int | None:
+    """Enumerate top-level windows; return the first CabinetWClass /
+    ExploreWClass whose title matches folder_name, or None.
+
+    Title for an Explorer window is just the leaf folder name (e.g.
+    'Maserati' for 'C:\\...\\shared\\Media\\Maserati'). Two folders with
+    the same leaf name collide — acceptable trade-off vs adding pywin32.
+    """
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found: list[int] = []
+    EnumProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def callback(hwnd, _lparam):
+        cls = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hwnd, cls, 64)
+        if cls.value not in ("CabinetWClass", "ExploreWClass"):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+        title = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, title, length + 1)
+        if title.value == folder_name:
+            found.append(hwnd)
+            return False
+        return True
+
+    user32.EnumWindows(EnumProc(callback), 0)
+    return found[0] if found else None
+
+
+def _open_explorer_select(abs_path: str) -> tuple[bool, str]:
+    """Open Explorer focused on the file. If a window for the file's parent
+    folder already exists (cached or discovered via enumeration), bring it
+    to the foreground instead of opening another. Returns (ok, detail).
+
+    Windows-only dedup; on other platforms just opens the parent folder
+    via xdg-open / open and lets the OS handle window reuse.
+    """
+    import os
+    import platform
+    import subprocess
+    import time
+
+    folder = str(Path(abs_path).parent)
+
+    if platform.system() != "Windows":
+        try:
+            opener = "open" if platform.system() == "Darwin" else "xdg-open"
+            subprocess.Popen([opener, folder])
+            return True, "non-windows opener"
+        except Exception as e:
+            return False, str(e)
+
+    folder_name = os.path.basename(folder.rstrip("\\/"))
+
+    # 1. Cached HWND from a previous launch
+    cached = _explorer_cache.get(folder)
+    if cached:
+        if _is_window_alive(cached):
+            _bring_window_to_front(cached)
+            return True, "focused cached"
+        del _explorer_cache[folder]
+
+    # 2. Live enumeration — folder might be open from a prior session
+    existing = _find_explorer_hwnd(folder_name)
+    if existing:
+        _explorer_cache[folder] = existing
+        _bring_window_to_front(existing)
+        return True, "focused existing"
+
+    # 3. No existing window — launch a new one
+    try:
+        subprocess.Popen(["explorer", f"/select,{abs_path}"])
+    except Exception as e:
+        msg = f"explorer launch failed for {abs_path}: {e}"
+        _log(msg)
+        return False, msg
+
+    # 4. Poll briefly for the new window so the next click can dedup it
+    for _ in range(20):  # up to 1 second
+        time.sleep(0.05)
+        new_hwnd = _find_explorer_hwnd(folder_name)
+        if new_hwnd:
+            _explorer_cache[folder] = new_hwnd
+            return True, "launched new"
+    return True, "launched (cache miss)"
+
+
 @router.post("/explore/{path:path}")
 async def explore_in_file_manager(path: str):
     """Open the file's parent folder in Windows Explorer and select it."""
-    import subprocess
     target = settings.media_dir / path
     if not target.exists():
-        return {"status": "not_found"}
+        _log(f"explore: target not found: {target}")
+        return {"status": "not_found", "path": str(target)}
     abs_path = str(target.resolve())
-    await asyncio.to_thread(subprocess.Popen, f'explorer /select,"{abs_path}"')
-    return {"status": "ok"}
+    ok, detail = await asyncio.to_thread(_open_explorer_select, abs_path)
+    return {"status": "ok"} if ok else {"status": "error", "detail": detail}
 
 
 @router.post("/explore-stem/{stem}")
 async def explore_stem_in_file_manager(stem: str):
     """Find a file by stem name and open in Windows Explorer."""
-    import subprocess
     import glob as globmod
     pattern = str(settings.media_dir / "**" / f"{stem}.png")
     matches = globmod.glob(pattern, recursive=True)
     if not matches:
-        return {"status": "not_found"}
+        _log(f"explore-stem: no match for stem='{stem}' in {settings.media_dir}")
+        return {"status": "not_found", "stem": stem}
     abs_path = str(Path(matches[0]).resolve())
-    await asyncio.to_thread(subprocess.Popen, f'explorer /select,"{abs_path}"')
-    return {"status": "ok"}
+    ok, detail = await asyncio.to_thread(_open_explorer_select, abs_path)
+    return {"status": "ok"} if ok else {"status": "error", "detail": detail}
 
 
 @router.post("/favorite")

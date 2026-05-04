@@ -34,14 +34,14 @@ const VIDEO_MODELS_FALLBACK: VideoModelDef[] = [
   // fal.ai — Kling v3
   {
     id: 'fal-kling-v3-std', name: 'Kling 3.0 Omni Std', provider: 'fal',
-    tooltip: 'fal.ai — Kling 3.0 Omni Standard, 3-15s, fast', price: '$0.07/s',
-    cost: 0.07, ratios: ['16:9', '9:16', '1:1'],
+    tooltip: 'fal.ai — Kling 3.0 Omni Standard, 3-15s, fast', price: '$0.084/s',
+    cost: 0.084, ratios: ['16:9', '9:16', '1:1'],
     qualities: ['720p'], minDuration: 3, maxDuration: 15,
   },
   {
     id: 'fal-kling-v3-pro', name: 'Kling 3.0 Omni Pro', provider: 'fal',
-    tooltip: 'fal.ai — Kling 3.0 Omni Pro, 3-15s, best quality', price: '$0.10/s',
-    cost: 0.10, ratios: ['16:9', '9:16', '1:1'],
+    tooltip: 'fal.ai — Kling 3.0 Omni Pro, 3-15s, best quality', price: '$0.112/s',
+    cost: 0.112, ratios: ['16:9', '9:16', '1:1'],
     qualities: ['1080p'], minDuration: 3, maxDuration: 15,
   },
   {
@@ -62,6 +62,19 @@ const VIDEO_MODELS_FALLBACK: VideoModelDef[] = [
     tooltip: 'Atlas Cloud — full quality Seedance 2.0', price: '$0.25/s',
     cost: 0.25, ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
     qualities: ['720p'], minDuration: 4, maxDuration: 15,
+  },
+  // Atlas Cloud — Kling v3 (newly added 2026-04-26, cheapest Kling on the platform)
+  {
+    id: 'atlas-kling-v3-std', name: 'Kling 3.0 Std', provider: 'atlas',
+    tooltip: 'Atlas Cloud — Kling 3.0 Std, 5/10s, cheapest Kling tier', price: '$0.071/s',
+    cost: 0.071, ratios: ['16:9', '9:16', '1:1'],
+    qualities: ['720p'], minDuration: 5, maxDuration: 10,
+  },
+  {
+    id: 'atlas-kling-v3-pro', name: 'Kling 3.0 Pro', provider: 'atlas',
+    tooltip: 'Atlas Cloud — Kling 3.0 Pro (O3), 5/10s, enhanced physics + lip-sync', price: '$0.095/s',
+    cost: 0.095, ratios: ['16:9', '9:16', '1:1'],
+    qualities: ['720p'], minDuration: 5, maxDuration: 10,
   },
   // PiAPI — Kling 3.0 Omni
   {

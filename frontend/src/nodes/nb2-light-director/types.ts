@@ -61,6 +61,7 @@ export interface NB2LightDirectorNodeData {
   sceneConfig?: string
   prompt?: string
   capturedImage?: string
+  previewImage?: string
   [key: string]: unknown
 }
 

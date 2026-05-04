@@ -161,9 +161,13 @@ export function NodeShell({
 
 
   const isRunning = running || cascadeRunning
+  const prvExempt = customName?.toLowerCase().includes('here')
 
   return (
-    <div className={`${styles.shell} ${selected ? styles.selected : ''} ${isBypassed ? styles.bypassed : ''} ${isCascadeActive ? styles.cascadeActive : ''}`}>
+    <div
+      className={`${styles.shell} ${selected ? styles.selected : ''} ${isBypassed ? styles.bypassed : ''} ${isCascadeActive ? styles.cascadeActive : ''}`}
+      {...(prvExempt ? { 'data-prv-show': '' } : {})}
+    >
       <NodeResizer
         minWidth={180}
         minHeight={80}

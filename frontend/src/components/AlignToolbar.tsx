@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNodes, useReactFlow, useViewport } from '@xyflow/react'
+import { useReactFlow, useStore, useViewport } from '@xyflow/react'
 import { loadMedia } from '../mediaStore'
 import { downloadFile } from '../utils/downloadManager'
 import styles from './AlignToolbar.module.css'
@@ -28,12 +28,23 @@ interface AlignToolbarProps {
 
 const TOOLBAR_ABOVE = 48 // px above the bounding box top edge
 
+// Shallow-ref equality for the selected-nodes array: same length and each
+// element reference unchanged → skip re-render. During drag of non-selected
+// nodes the filter returns the same refs, so this cuts out 60fps work.
+function selectedArrayEq(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
 export function AlignToolbar({ doSnapshot, containerRef }: AlignToolbarProps) {
-  const allNodes = useNodes()
-  const { setNodes, flowToScreenPosition } = useReactFlow()
+  const { getNodes, setNodes, flowToScreenPosition } = useReactFlow()
   useViewport() // re-render on pan/zoom so position tracks the selection
 
-  const selected = allNodes.filter(n => n.selected)
+  const selected = useStore(
+    state => state.nodes.filter(n => n.selected),
+    selectedArrayEq,
+  )
   const selKey = selected.map(n => n.id).sort().join(',')
 
   const [dismissed, setDismissed] = useState(false)
@@ -77,7 +88,7 @@ export function AlignToolbar({ doSnapshot, containerRef }: AlignToolbarProps) {
   }).length
 
   const handleDownloadSelected = useCallback(async () => {
-    const mediaNodes = allNodes.filter(n => n.selected).filter(n => {
+    const mediaNodes = getNodes().filter(n => n.selected).filter(n => {
       const d = n.data as Record<string, unknown>
       return typeof d.mediaId === 'string'
     })
@@ -88,7 +99,7 @@ export function AlignToolbar({ doSnapshot, containerRef }: AlignToolbarProps) {
       if (!file) continue
       downloadFile(file, { filename: file.name || `image_${n.id}.png` })
     }
-  }, [allNodes])
+  }, [getNodes])
 
   // Convert to container-relative screen coordinates
   let toolbarStyle: React.CSSProperties | null = null
@@ -118,7 +129,7 @@ export function AlignToolbar({ doSnapshot, containerRef }: AlignToolbarProps) {
   // Core executor: snapshot then apply position updates
   const run = useCallback(
     (fn: (sel: Node[]) => PositionMap) => {
-      const sel = allNodes.filter(n => n.selected)
+      const sel = getNodes().filter(n => n.selected)
       if (sel.length < 2) return
       doSnapshot()
       const updates = fn(sel)
@@ -130,7 +141,7 @@ export function AlignToolbar({ doSnapshot, containerRef }: AlignToolbarProps) {
         }),
       )
     },
-    [allNodes, doSnapshot, setNodes],
+    [getNodes, doSnapshot, setNodes],
   )
 
   if (!toolbarStyle) return null

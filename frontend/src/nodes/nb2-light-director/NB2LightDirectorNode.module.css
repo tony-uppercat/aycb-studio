@@ -26,6 +26,63 @@
   font-style: italic;
 }
 
+:global(body.prv) .promptPreview {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+:global(body.prv) :global([data-prv-show]) .promptPreview {
+  filter: none; user-select: auto; pointer-events: auto;
+}
+
+.preview {
+  position: relative;
+  margin-bottom: 6px;
+  border: 1px solid #2a2a2e;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #0a0a0b;
+}
+
+.previewImg {
+  display: block;
+  width: 100%;
+}
+
+:global(body.prv) .preview {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+:global(body.prv) :global([data-prv-show]) .preview {
+  filter: none; user-select: auto; pointer-events: auto;
+}
+
+.previewHud {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 5px 3px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  font-weight: 600;
+  color: #e8a849aa;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  letter-spacing: 0.03em;
+}
+
+.previewAr {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 7px;
+  font-weight: 700;
+  color: #e8a84966;
+  letter-spacing: 0.05em;
+}
+
 .thumbWrap {
   margin-bottom: 6px;
   border: 1px solid #2a2a2e;

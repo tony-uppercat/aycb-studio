@@ -126,7 +126,7 @@ export function SubnetInputNode({ id, data, selected }: NodeProps) {
     <NodeShell
       name="Subnet Input"
       selected={selected}
-      icon="CornerRightDown"
+      icon="📥"
       outputSlots={[
         { id: 'out', label: displayName, type: d.slot_type || 'text' },
       ]}

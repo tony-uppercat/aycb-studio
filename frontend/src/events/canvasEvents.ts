@@ -10,8 +10,6 @@ export const CANVAS_EVENTS = {
   MEDIA_IMPORT_TO_PROJECT: 'media-import-to-project',
   /** Trigger a manual canvas save (dispatched by SaveIndicator). */
   AYCB_MANUAL_SAVE: 'aycb-manual-save',
-  /** Duplicate a specific node by ID (dispatched from ImageUploadNode context menu). */
-  DUPLICATE_NODE: 'duplicate-node',
 } as const
 
 export type CanvasEventType = typeof CANVAS_EVENTS[keyof typeof CANVAS_EVENTS]

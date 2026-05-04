@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useReactFlow } from '@xyflow/react'
+import { useReactFlow, useStore } from '@xyflow/react'
 import { useFileDrop } from '../../hooks/useFileDrop'
 import { saveMediaForProject, loadMedia, generateMediaId } from '../../mediaStore'
 import { useMediaPreview } from '../../components/media/MediaPreview'
@@ -7,7 +7,6 @@ import { useCropOverlay } from '../../hooks/useCropOverlay'
 import { useSplitOverlay } from '../../hooks/useSplitOverlay'
 import type { ImageUploadNodeData } from '../../types'
 import { useCanvasStore } from '../../stores/canvasStore'
-import { CANVAS_EVENTS } from '../../events/canvasEvents'
 import { readPngTextChunks } from '../../utils/pngMeta'
 import { saveMediaMeta } from '../../utils/reviewStatus'
 
@@ -16,6 +15,22 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
   const { updateNodeData } = useReactFlow()
   const [preview, setPreview] = useState<string | null>(null)
   const fileRef = useRef<File | null>(null)
+
+  // Reactive input: when upstream pushes an image via image-in, read its mediaId
+  const incomingMediaId = useStore(useCallback(state => {
+    const edge = state.edges.find((e: { target: string; targetHandle?: string | null }) => e.target === id && e.targetHandle === 'image-in')
+    if (!edge) return null
+    const src = state.nodes.find((n: { id: string }) => n.id === edge.source)
+    if (!src) return null
+    const d = src.data as Record<string, unknown>
+    const outputMediaIds = d.outputMediaIds as Record<string, string> | undefined
+    if (outputMediaIds && edge.sourceHandle && edge.sourceHandle in outputMediaIds) {
+      return outputMediaIds[edge.sourceHandle]
+    }
+    return (d.mediaId as string) ?? null
+  }, [id]))
+
+  const isProxy = !!incomingMediaId
 
   // Context menu state
   const [showCtxMenu, setShowCtxMenu] = useState(false)
@@ -48,26 +63,33 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
   // Split overlay hook
   const splitOverlay = useSplitOverlay({ mediaFile: fileRef, nodeId: id })
 
-  // Load media from IndexedDB
+  // Source of truth for the preview: upstream blob if proxy mode active,
+  // otherwise the node's own media. Switches transparently on connect/disconnect.
+  const previewMediaId = incomingMediaId ?? data.mediaId
   useEffect(() => {
-    const mediaId = data.mediaId
-    if (!mediaId) return
+    if (!previewMediaId) {
+      setPreview(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      fileRef.current = null
+      return
+    }
     let blobUrl: string | null = null
-    loadMedia(mediaId).then(file => {
+    let cancelled = false
+    loadMedia(previewMediaId).then(file => {
+      if (cancelled) return
       if (file) {
         fileRef.current = file
         blobUrl = URL.createObjectURL(file)
         setPreview(blobUrl)
       }
     })
-    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
-  }, [data.mediaId])
-
-  useEffect(() => {
     return () => {
-      if (preview) URL.revokeObjectURL(preview)
+      cancelled = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
-  }, [preview])
+  }, [previewMediaId])
 
   const { dragging, inputRef, dragHandlers, onInputChange, openPicker } =
     useFileDrop('image/', pickFile)
@@ -123,12 +145,6 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
     }
   }, [])
 
-  const handleCtxDuplicate = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    setShowCtxMenu(false)
-    window.dispatchEvent(new CustomEvent(CANVAS_EVENTS.DUPLICATE_NODE, { detail: { nodeId: id } }))
-  }, [id])
-
   // Close context menu on outside click
   useEffect(() => {
     if (!showCtxMenu) return
@@ -137,8 +153,22 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
     return () => window.removeEventListener('pointerdown', onDown)
   }, [showCtxMenu])
 
+  // Proxy passthrough: when image-in is connected, mirror upstream via
+  // outputMediaIds. Never touch data.mediaId — preserves the node's own
+  // image so disconnect restores it.
+  useEffect(() => {
+    const currentOut = (data as { outputMediaIds?: Record<string, string> | null }).outputMediaIds
+    if (incomingMediaId) {
+      if (currentOut?.['image-out'] === incomingMediaId) return
+      updateNodeData(id, { outputMediaIds: { 'image-out': incomingMediaId } })
+    } else if (currentOut) {
+      updateNodeData(id, { outputMediaIds: null })
+    }
+  }, [incomingMediaId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return {
     preview,
+    isProxy,
     dragging,
     inputRef,
     dragHandlers,
@@ -150,7 +180,6 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
     handleCtxSplit,
     handleCtxCrop,
     handleCtxCopy,
-    handleCtxDuplicate,
     cropOverlay,
     splitOverlay,
     fileRef,

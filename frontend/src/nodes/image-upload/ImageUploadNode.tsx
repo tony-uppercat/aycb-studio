@@ -61,9 +61,9 @@ function renderCropGridLines() {
 
 export function ImageUploadNode({ id, data, selected }: NodeProps<ImageUploadNodeType>) {
   const {
-    preview, dragging, inputRef, dragHandlers, onInputChange, openPicker,
+    preview, isProxy, dragging, inputRef, dragHandlers, onInputChange, openPicker,
     showCtxMenu, setShowCtxMenu, handlePreviewClick,
-    handleCtxSplit, handleCtxCrop, handleCtxCopy, handleCtxDuplicate,
+    handleCtxSplit, handleCtxCrop, handleCtxCopy,
     cropOverlay, splitOverlay,
   } = useImageUpload(id, data, selected)
 
@@ -146,13 +146,23 @@ export function ImageUploadNode({ id, data, selected }: NodeProps<ImageUploadNod
 
   function renderNormalView() {
     return (
-      <div className={styles.previewArea} onClick={openPicker} {...dragHandlers}
+      <div className={styles.previewArea}
+        onClick={isProxy ? undefined : openPicker}
+        {...(isProxy ? {} : dragHandlers)}
         style={{ position: 'relative', ...(dragging ? { borderColor: '#3b82f6' } : undefined) }}>
         {preview
-          ? <img src={preview} alt="uploaded" className={styles.previewImg}
+          ? <img src={preview} alt={isProxy ? 'proxy preview' : 'uploaded'} className={styles.previewImg}
               onClick={handlePreviewClick} style={{ cursor: 'pointer' }} />
-          : <span className={styles.dropHint}>Click or drag an image</span>}
-        {preview && (
+          : <span className={styles.dropHint}>{isProxy ? 'proxy: no upstream image' : 'Click or drag an image'}</span>}
+        {isProxy && (
+          <span style={{
+            position: 'absolute', top: 4, left: 4, zIndex: 4,
+            fontSize: 10, color: 'var(--text-dim)',
+            background: 'rgba(0,0,0,0.5)', padding: '1px 5px', borderRadius: 2,
+            pointerEvents: 'none', userSelect: 'none',
+          }}>proxy</span>
+        )}
+        {preview && !isProxy && (
           <>
             <button className={styles.nodeContextBtn} title="Options"
               onClick={e => { e.stopPropagation(); e.preventDefault(); setShowCtxMenu(v => !v) }}>&#x22EE;</button>
@@ -164,8 +174,6 @@ export function ImageUploadNode({ id, data, selected }: NodeProps<ImageUploadNod
                   <span style={{ opacity: 0.6, marginRight: 6 }}>&#x25A6;</span>Split</button>
                 <button className={styles.nodeContextItem} onClick={handleCtxCopy}>
                   <span style={{ opacity: 0.6, marginRight: 6 }}>&#x2398;</span>Copy to clipboard</button>
-                <button className={styles.nodeContextItem} onClick={handleCtxDuplicate}>
-                  <span style={{ opacity: 0.6, marginRight: 6 }}>&#x2750;</span>Duplicate</button>
               </div>
             )}
           </>
@@ -175,11 +183,12 @@ export function ImageUploadNode({ id, data, selected }: NodeProps<ImageUploadNod
   }
 
   return (
-    <NodeShell name="Image Upload" selected={selected}
+    <NodeShell name="Image" selected={selected}
+      inputSlots={[{ id: 'image-in', label: 'Image', type: 'image' }]}
       outputSlots={[{ id: 'image-out', label: 'Image', type: 'image' }]}>
       <div className={styles.nodeContent}>
-        {cropMode && preview ? renderCropOverlay()
-          : splitMode && preview ? renderSplitOverlay()
+        {!isProxy && cropMode && preview ? renderCropOverlay()
+          : !isProxy && splitMode && preview ? renderSplitOverlay()
           : renderNormalView()}
         <input ref={inputRef} type="file" accept="image/*" className={styles.hidden}
           onChange={onInputChange} />

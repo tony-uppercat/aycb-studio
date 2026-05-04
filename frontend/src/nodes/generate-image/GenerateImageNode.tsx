@@ -27,9 +27,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
         ...h.imageSlots,
       ]}
-      outputSlots={[
-        { id: 'image-out', label: 'Image', type: 'image' },
-      ]}
+      outputSlots={h.outputSlots}
       onRun={h.run}
       running={h.loading}
       lastCost={h.lastCost}
@@ -43,6 +41,8 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         >
           {[
             { label: 'Google Gemini', filter: 'gemini' },
+            { label: 'OpenAI', filter: 'openai' },
+            { label: 'Recraft', filter: 'recraft' },
             { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
             { label: 'Local GPU', filter: 'local' },
           ].map(g => {
@@ -61,12 +61,15 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         )}
         <div className={styles.arResRow}>
           <select className={styles.selectSmall} value={h.aspectRatio}
-            onChange={e => { h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
+            onChange={e => { h.markManualOverride(); h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
             title="Aspect Ratio">
-            {ASPECT_RATIOS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+            {ASPECT_RATIOS
+              .filter(a => a.value === '' || h.modelInfo.aspect_ratios.length === 0 || h.modelInfo.aspect_ratios.includes(a.value))
+              .map(a => <option key={a.value} value={a.value}>{a.label}</option>)
+            }
           </select>
           <select className={styles.selectSmall} value={h.resolution}
-            onChange={e => { h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
+            onChange={e => { h.markManualOverride(); h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
             title="Resolution">
             {RESOLUTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>

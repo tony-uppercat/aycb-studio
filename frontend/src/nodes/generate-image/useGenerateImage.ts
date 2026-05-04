@@ -23,21 +23,36 @@ export interface ImageModelDef {
   price: string
   cost: number
   deprecated: boolean
+  /** Subset of ASPECT_RATIOS the model actually accepts. Empty = no filter. */
+  aspect_ratios: string[]
 }
 
 // Hardcoded fallback — see useGenerateVideo.ts for the same pattern.
 // Registry-derived values override this once /api/registry/models
 // resolves; cloud mode (no backend) keeps using these values.
+const GEMINI_FLASH_AR = ['1:1', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '16:9', '9:16', '21:9', '4:1', '1:4', '8:1', '1:8']
+const GEMINI_PRO_AR = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9']
+const OPENAI_AR = ['1:1', '3:2', '2:3', '16:9', '9:16', '21:9']
+const RECRAFT_AR = ['1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16']
+const FLUX_AR = ['1:1', '4:3', '3:4', '16:9', '9:16']
+
 const IMAGE_MODELS_FALLBACK: ImageModelDef[] = [
   // Google Gemini — text-to-image & image-to-image (pass ref images for editing)
-  { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false },
-  { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false },
+  { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false, aspect_ratios: GEMINI_FLASH_AR },
+  { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false, aspect_ratios: GEMINI_PRO_AR },
+  // OpenAI
+  { id: 'gpt-image-2', name: 'GPT Image 2', provider: 'openai', tooltip: 'OpenAI gpt-image-2 — multi-ref edit, text fidelity, 1K med / 2K high', price: '$0.211', cost: 0.211, deprecated: false, aspect_ratios: OPENAI_AR },
+  // Recraft V4
+  { id: 'recraftv4', name: 'Recraft V4', provider: 'recraft', tooltip: 'Recraft V4 — fast raster, 1MP', price: '$0.04', cost: 0.04, deprecated: false, aspect_ratios: RECRAFT_AR },
+  { id: 'recraftv4_pro', name: 'Recraft V4 Pro', provider: 'recraft', tooltip: 'Recraft V4 Pro — high-quality raster, 4MP', price: '$0.25', cost: 0.25, deprecated: false, aspect_ratios: RECRAFT_AR },
+  { id: 'recraftv4_vector', name: 'Recraft V4 Vector', provider: 'recraft', tooltip: 'Recraft V4 Vector — SVG output (raster preview)', price: '$0.08', cost: 0.08, deprecated: false, aspect_ratios: RECRAFT_AR },
+  { id: 'recraftv4_pro_vector', name: 'Recraft V4 Pro Vector', provider: 'recraft', tooltip: 'Recraft V4 Pro Vector — high-quality SVG (raster preview)', price: '$0.30', cost: 0.30, deprecated: false, aspect_ratios: RECRAFT_AR },
   // Flux (BFL Cloud)
-  { id: 'flux-2-klein-4b', name: 'Flux 2 Klein 4B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 4B via BFL API', price: '~$0.014', cost: 0.014, deprecated: false },
-  { id: 'flux-2-klein-9b', name: 'Flux 2 Klein 9B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 9B via BFL API', price: '~$0.015', cost: 0.015, deprecated: false },
+  { id: 'flux-2-klein-4b', name: 'Flux 2 Klein 4B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 4B via BFL API', price: '~$0.014', cost: 0.014, deprecated: false, aspect_ratios: FLUX_AR },
+  { id: 'flux-2-klein-9b', name: 'Flux 2 Klein 9B', provider: 'flux-cloud', tooltip: 'Black Forest Labs 9B via BFL API', price: '~$0.015', cost: 0.015, deprecated: false, aspect_ratios: FLUX_AR },
   // Flux (Local GPU)
-  { id: 'local/flux-2-klein-4b', name: 'Flux 2 Klein 4B (Local)', provider: 'local', tooltip: 'Run on your GPU', price: 'Free', cost: 0, deprecated: false },
-  { id: 'local/flux-2-klein-9b', name: 'Flux 2 Klein 9B (Local)', provider: 'local', tooltip: 'Run on your GPU (24GB+ VRAM)', price: 'Free', cost: 0, deprecated: false },
+  { id: 'local/flux-2-klein-4b', name: 'Flux 2 Klein 4B (Local)', provider: 'local', tooltip: 'Run on your GPU', price: 'Free', cost: 0, deprecated: false, aspect_ratios: FLUX_AR },
+  { id: 'local/flux-2-klein-9b', name: 'Flux 2 Klein 9B (Local)', provider: 'local', tooltip: 'Run on your GPU (24GB+ VRAM)', price: 'Free', cost: 0, deprecated: false, aspect_ratios: FLUX_AR },
 ]
 
 export const IMAGE_MODELS: ImageModelDef[] = IMAGE_MODELS_FALLBACK
@@ -60,6 +75,7 @@ function registryToImageModelDef(m: RegistryModel): ImageModelDef {
     price,
     cost,
     deprecated: m.deprecated,
+    aspect_ratios: m.aspect_ratios ?? [],
   }
 }
 
@@ -104,7 +120,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const { updateNodeData, getNodes, getEdges, setEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const { openPreview } = useMediaPreview()
-  const { apiKey, bflApiKey, localServerUrl } = useSettings()
+  const { apiKey, openaiApiKey, recraftApiKey, bflApiKey, localServerUrl } = useSettings()
 
   // Dynamic image pins (same pattern as LLM media pins)
   const connectedImageCount = useStore(state =>
@@ -129,10 +145,10 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // state directly would see stale values. `useStateRef` fuses the
   // useState / useRef / syncing-useEffect triplet into one line each.
   const [aspectRatio, setAspectRatio, aspectRatioRef] = useStateRef(
-    (data as Record<string, unknown>).aspectRatio as string || '21:9'
+    (data as Record<string, unknown>).aspectRatio as string || '16:9'
   )
   const [resolution, setResolution, resolutionRef] = useStateRef(
-    (data as Record<string, unknown>).resolution as string || '2K'
+    (data as Record<string, unknown>).resolution as string || '1K'
   )
   const [useGrounding, setUseGrounding, groundingRef] = useStateRef(
     Boolean((data as Record<string, unknown>).useGrounding)
@@ -274,6 +290,91 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const imageModels = useImageModels()
   const modelInfo = imageModels.find(m => m.id === selectedModel) ?? imageModels[0] ?? IMAGE_MODELS_FALLBACK[0]
 
+  // Auto-clamp: when the model changes, if the previously-selected AR is not
+  // in the new model's supported list, reset to Auto. Without this, switching
+  // from Gemini Flash (8:1) to OpenAI silently lets the provider snap to 16:9.
+  useEffect(() => {
+    if (!aspectRatio) return
+    if (modelInfo.aspect_ratios.length === 0) return
+    if (modelInfo.aspect_ratios.includes(aspectRatio)) return
+    setAspectRatio('')
+    updateNodeData(id, { aspectRatio: '' })
+  }, [selectedModel, modelInfo.aspect_ratios]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-adapt: when an image is connected to image-0 (or its source mediaId
+  // changes), measure the input dimensions and pick the closest supported AR
+  // + a 1K/2K bucket. Fires only when the source mediaId actually changes —
+  // model switches alone do not re-adapt, so manual choices stick.
+  const sourceMediaIdImage0 = useStore(state => {
+    const edge = state.edges.find(e => e.target === id && e.targetHandle === 'image-0')
+    if (!edge) return null
+    const src = state.nodes.find(n => n.id === edge.source)
+    const d = src?.data as Record<string, unknown> | undefined
+    return (d?.mediaId as string | undefined) ?? null
+  })
+  // The ref tracks the last mediaId we adapted to and is NEVER reset on
+  // disconnect/transient null — that prevented a perceived bug where adding
+  // an unrelated text edge appeared to change the resolution. Mechanism:
+  // React Flow's edge updates can briefly null out the image-0 source mid
+  // operation; resetting the ref then would let the next non-null re-fire
+  // adapt and overwrite the user's manual choice. Keep the ref sticky:
+  // only adapt when the connected mediaId is genuinely DIFFERENT from the
+  // last one we adapted to.
+  const lastAdaptedRef = useRef<string | null>(null)
+  // Once the user picks an AR or resolution from the dropdowns, auto-adapt
+  // must not override them anymore — node values always win.
+  const userOverrodeRef = useRef(false)
+  useEffect(() => {
+    if (userOverrodeRef.current) return
+    if (!sourceMediaIdImage0) return
+    if (lastAdaptedRef.current === sourceMediaIdImage0) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const file = await loadMedia(sourceMediaIdImage0)
+        if (!file || cancelled || !file.type.startsWith('image/')) return
+        // Image() reads dimensions from headers without decoding the full
+        // pixel buffer — much faster than createImageBitmap, which keeps
+        // the async window tiny so adapt completes before the user can
+        // start typing or connecting other inputs.
+        const url = URL.createObjectURL(file)
+        const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
+          const img = new Image()
+          img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url) }
+          img.onerror = () => { resolve(null); URL.revokeObjectURL(url) }
+          img.src = url
+        })
+        if (!dims || cancelled) return
+        const { w, h } = dims
+        const targetRatio = w / h
+        const candidates = modelInfo.aspect_ratios.length > 0
+          ? modelInfo.aspect_ratios
+          : ASPECT_RATIOS.map(a => a.value).filter((v): v is string => v !== '')
+        let bestAr = ''
+        let bestDelta = Infinity
+        for (const ar of candidates) {
+          const [a, b] = ar.split(':').map(Number)
+          if (!a || !b) continue
+          const delta = Math.abs(targetRatio - a / b)
+          if (delta < bestDelta) { bestDelta = delta; bestAr = ar }
+        }
+        // Tolerance: if the input is far from any supported ratio, fall back
+        // to Auto rather than forcing a bad match.
+        if (bestDelta > 0.5) bestAr = ''
+        // Resolution is NOT auto-adapted from input dimensions — 1K is the
+        // standard default and the user explicitly bumps to 2K when needed.
+        // Promoting to 2K for high-MP inputs surprised the user with extra
+        // cost on every image edit / iteration.
+        lastAdaptedRef.current = sourceMediaIdImage0
+        setAspectRatio(bestAr)
+        updateNodeData(id, { aspectRatio: bestAr })
+      } catch (err) {
+        console.warn('[GenerateImage] auto-adapt failed:', err)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [sourceMediaIdImage0]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function swapRefs() {
     setEdges(eds => {
       const e0 = eds.find(e => e.target === id && e.targetHandle === 'image-0')
@@ -294,6 +395,18 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
 
   const [batchCount, setBatchCount] = useState(1)
   const [batchProgress, setBatchProgress] = useState(0)
+
+  // Dynamic output slots: one per batch slot when ×2/×4
+  const outputSlots: SlotDef[] = useMemo(() => {
+    if (batchCount <= 1) return [{ id: 'image-out', label: 'Image', type: 'image' as const }]
+    return Array.from({ length: batchCount }, (_, i) => ({
+      id: i === 0 ? 'image-out' : `image-out-${i}`,
+      label: `${i + 1}`,
+      type: 'image' as const,
+    }))
+  }, [batchCount])
+
+  useEffect(() => { updateNodeInternals(id) }, [batchCount, id, updateNodeInternals])
 
   // Ref to accumulate history IDs atomically during batch runs
   const batchHistoryRef = useRef<string[]>([])
@@ -326,6 +439,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     }
     const providerKey = modelInfo.provider === 'flux-cloud' ? bflApiKey
                      : modelInfo.provider === 'local' ? localServerUrl
+                     : modelInfo.provider === 'openai' ? openaiApiKey
+                     : modelInfo.provider === 'recraft' ? recraftApiKey
                      : apiKey
     const currentAspectRatio = aspectRatioRef.current
     const currentResolution = resolutionRef.current
@@ -386,7 +501,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       // Single mode: update history immediately
       const currentIds: string[] = (getNodes().find(n => n.id === id)?.data as Record<string, unknown>)?.historyIds as string[] ?? historyIds
       const newHistory = [...currentIds, mediaId].slice(-MAX_HISTORY)
-      updateNodeData(id, { mediaId, historyIds: newHistory })
+      updateNodeData(id, { mediaId, historyIds: newHistory, outputMediaIds: null })
       setHistoryIds(newHistory)
       // Signal that we want to clear imageB64 once historyPreview loads
       waitingForPreviewRef.current = true
@@ -406,7 +521,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       outputTokens: actualUsage?.output_tokens ?? fallback.outputTokens,
       costUsd,
     })
-  }, [activePrompt, apiKey, bflApiKey, localServerUrl, modelInfo, id, updateNodeData, getNodes, getEdges, historyIds, selectedModel, setHistoryIds])
+  }, [activePrompt, apiKey, openaiApiKey, recraftApiKey, bflApiKey, localServerUrl, modelInfo, id, updateNodeData, getNodes, getEdges, historyIds, selectedModel, setHistoryIds])
 
   const run = useCallback(async () => {
     setLoading(true)
@@ -434,7 +549,11 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
 
         // Merge all results into history in one update
         const mergedHistory = [...currentIds, ...accum].slice(-MAX_HISTORY)
-        updateNodeData(id, { historyIds: mergedHistory })
+        const outputMediaIds: Record<string, string> = {}
+        accum.forEach((mid, i) => {
+          outputMediaIds[i === 0 ? 'image-out' : `image-out-${i}`] = mid
+        })
+        updateNodeData(id, { historyIds: mergedHistory, outputMediaIds })
         setHistoryIds(mergedHistory)
       }
     } catch (e: unknown) {
@@ -447,11 +566,17 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     }
   }, [batchCount, runSingle, id, getNodes, historyIds, updateNodeData, setHistoryIds])
 
+  // Called from dropdown onChange handlers — once the user has touched AR
+  // or Resolution manually, auto-adapt is suppressed for the rest of the
+  // node's life so node values always win over input-driven adaptation.
+  const markManualOverride = useCallback(() => { userOverrodeRef.current = true }, [])
+
   return {
     // State
     selectedModel, setSelectedModel,
     aspectRatio, setAspectRatio,
     resolution, setResolution,
+    markManualOverride,
     useGrounding, setUseGrounding,
     editMode, setEditMode,
     localPrompt, setLocalPrompt,
@@ -479,6 +604,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     activePrompt,
     connectedImageCount,
     imageSlots,
+    outputSlots,
     estimatedLabel,
     // Actions
     run,

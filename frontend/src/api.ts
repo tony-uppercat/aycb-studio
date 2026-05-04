@@ -1,6 +1,8 @@
 import type { AnalyzeImageResult, AnalyzeVideoResult, GenerateImageResult, ImageEditResult, HistoryEntry, UsageInfo } from './types'
 import { useCanvasStore } from './stores/canvasStore'
 import './providers/geminiProvider'
+import './providers/openaiProvider'
+import './providers/recraftProvider'
 import './providers/fluxProvider'
 import './providers/localProvider'
 import './providers/ollamaProvider'

@@ -21,6 +21,8 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   'gemini-3-flash-preview':           [0.50,  3.00],
   // Nano Banana Pro (Gemini 3 Pro Image) — ~$0.134/image @1K-2K, $0.24 @4K
   'gemini-3-pro-image-preview':       [2.00, 120.00],
+  // GPT Image 2 (tokenized: $5/M text in, $8/M image in, $30/M image out)
+  'gpt-image-2':                      [5.00, 30.00],
   // Gemini 2.5 (legacy — kept for historical cost lookups)
   'gemini-2.5-flash':                 [0.30,  2.50],
   'gemini-2.5-pro':                   [1.25, 10.00],
@@ -28,6 +30,11 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   'claude-sonnet-4-6-20250620':       [3.00, 15.00],
   'claude-opus-4-6-20250620':         [15.00, 75.00],
   'claude-haiku-4-5-20251001':        [0.80, 4.00],
+  // Recraft V4 (fixed per-image pricing)
+  'recraftv4':                            [0, 40.00],
+  'recraftv4_pro':                        [0, 250.00],
+  'recraftv4_vector':                     [0, 80.00],
+  'recraftv4_pro_vector':                 [0, 300.00],
   // Flux models (BFL API — approximated per image as output tokens)
   'flux-2-klein-4b':                    [0, 14.00],
   'flux-2-klein-9b':                    [0, 15.00],
@@ -102,12 +109,31 @@ export function estimateCost(
     const FIXED_IMAGE_COST: Record<string, Record<string, number>> = {
       'gemini-3.1-flash-image-preview': { '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
       'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
+      // gpt-image-2 high-quality per OpenAI docs 2026-04-21; 1K=medium, 2K=high
+      'gpt-image-2':                    { '1K': 0.053, '2K': 0.211, '4K': 0.211, '': 0.211 },
+      // Recraft V4 — flat per-image, no resolution tiers
+      'recraftv4':                      { '': 0.04 },
+      'recraftv4_pro':                  { '': 0.25 },
+      'recraftv4_vector':               { '': 0.08 },
+      'recraftv4_pro_vector':           { '': 0.30 },
     }
     const resMap = FIXED_IMAGE_COST[pricingModelId]
     if (resMap !== undefined) {
       const imgCost = resMap[resolution] ?? resMap[''] ?? 0.067
-      // Add input cost for reference images (edit mode): ~560 tokens per image
-      const inputRefCost = imageCount > 0 ? (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50) : 0
+      // Per-ref input cost varies sharply by provider. OpenAI's gpt-image-2
+      // bills image input separately at $8/M tokens (~1000 tokens per 1K
+      // ref ≈ $0.008, ~2000 tokens per 2K ≈ $0.016) — a 2nd ref visibly
+      // bumps the displayed cost. Gemini's per-image fixed price covers
+      // small text-token input charges using the model's input rate.
+      const PER_REF_AVG: Record<string, number> = {
+        'gpt-image-2': 0.008,
+      }
+      let inputRefCost = 0
+      if (imageCount > 0) {
+        inputRefCost = pricingModelId in PER_REF_AVG
+          ? PER_REF_AVG[pricingModelId] * imageCount
+          : (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50)
+      }
       return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: imgCost + inputRefCost, model: modelId }
     }
   }

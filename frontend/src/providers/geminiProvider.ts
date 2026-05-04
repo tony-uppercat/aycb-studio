@@ -101,7 +101,18 @@ const geminiImageProvider: ImageProvider = {
       ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
     }
     if (options?.useGrounding) {
-      config.tools = [{ googleSearch: {} }]
+      // Per Google docs (gemini-3.1-flash-image-preview), grounding requires
+      // explicit searchTypes (webSearch + imageSearch). Sending an empty
+      // `googleSearch: {}` was causing degraded/blurred output — the model
+      // appeared to fall back to a draft mode without proper search context.
+      config.tools = [{
+        googleSearch: {
+          searchTypes: {
+            webSearch: {},
+            imageSearch: {},
+          },
+        },
+      }]
     }
 
     const response = await ai.models.generateContent({

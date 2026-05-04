@@ -1,6 +1,20 @@
 import type { GenerateImageResult, UsageInfo } from '../types'
-import { registerImageProvider, type ImageProvider } from './index'
+import { registerImageProvider, type ImageProvider, type ImageGenerationOptions } from './index'
 import { getCachedRegistry } from '../hooks/useModelRegistry'
+
+/** Flux 2 Klein dimensions per aspect ratio. Multiples of 32, ~1MP target. */
+const FLUX_DIMS: Record<string, { width: number; height: number }> = {
+  '1:1':  { width: 1024, height: 1024 },
+  '4:3':  { width: 1152, height: 896 },
+  '3:4':  { width: 896,  height: 1152 },
+  '16:9': { width: 1344, height: 768 },
+  '9:16': { width: 768,  height: 1344 },
+}
+
+function fluxDimsFor(aspectRatio?: string): { width: number; height: number } {
+  if (!aspectRatio) return FLUX_DIMS['1:1']
+  return FLUX_DIMS[aspectRatio] ?? FLUX_DIMS['1:1']
+}
 
 /**
  * BFL API model id pass-through. The backend registry is the source of
@@ -51,8 +65,15 @@ async function pollForResult(pollingUrl: string, maxAttempts = 60): Promise<stri
 
 const fluxProvider: ImageProvider = {
   id: 'flux-cloud',
-  async generateImage(prompt: string, modelId: string, apiKey: string): Promise<GenerateImageResult> {
+  async generateImage(
+    prompt: string,
+    modelId: string,
+    apiKey: string,
+    _refs?: File[],
+    options?: ImageGenerationOptions,
+  ): Promise<GenerateImageResult> {
     const bflModel = resolveBflModel(modelId)
+    const { width, height } = fluxDimsFor(options?.aspectRatio)
 
     // Submit generation request to BFL API
     const response = await fetch(`https://api.bfl.ai/v1/${bflModel}`, {
@@ -63,8 +84,8 @@ const fluxProvider: ImageProvider = {
       },
       body: JSON.stringify({
         prompt,
-        width: 1024,
-        height: 1024,
+        width,
+        height,
         output_format: 'png',
       }),
     })

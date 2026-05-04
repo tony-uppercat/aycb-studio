@@ -2,6 +2,37 @@ import { useCallback } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { getNextNodeId } from './useCanvasDragDrop'
 import type { NodeManifest } from '../nodes/index'
+import { cloneNodeMedia } from '../mediaStore'
+
+const UNPACK_W = 230, UNPACK_H = 200, UNPACK_GAP = 20, UNPACK_COLS = 5
+
+export function createUnpackedNodes(sourceNodes: Node[], allNodes: Node[]): Node[] {
+  const result: Node[] = []
+  for (const node of sourceNodes) {
+    const hids = (node.data as Record<string, unknown>).historyIds as string[] | undefined
+    if (!hids || hids.length === 0) continue
+    let ax = node.position.x, ay = node.position.y
+    let cur: Node | undefined = node
+    while (cur?.parentId) {
+      cur = allNodes.find(n => n.id === cur!.parentId)
+      if (cur) { ax += cur.position.x; ay += cur.position.y }
+    }
+    const sx = ax + UNPACK_W + UNPACK_GAP * 2, sy = ay
+    for (let i = 0; i < hids.length; i++) {
+      result.push({
+        id: getNextNodeId('imageUpload'),
+        type: 'imageUpload',
+        position: {
+          x: sx + (i % UNPACK_COLS) * (UNPACK_W + UNPACK_GAP),
+          y: sy + Math.floor(i / UNPACK_COLS) * (UNPACK_H + UNPACK_GAP),
+        },
+        data: { mediaId: hids[i] },
+        selected: true,
+      })
+    }
+  }
+  return result
+}
 
 interface UseCanvasContextMenuActionsParams {
   getNodes: () => Node[]
@@ -44,13 +75,14 @@ export function useCanvasContextMenuActions({
     }
   }, [setNodes])
 
-  const ctxDuplicate = useCallback((nodes: Node[]) => {
-    const newNodes = nodes.map(n => ({
+  const ctxDuplicate = useCallback(async (nodes: Node[]) => {
+    const newNodes = await Promise.all(nodes.map(async n => ({
       ...n,
       id: getNextNodeId(n.type || 'unknown'),
       position: { x: n.position.x + 40, y: n.position.y + 40 },
       selected: true,
-    }))
+      data: await cloneNodeMedia(n.data as Record<string, unknown>),
+    })))
     const postNodes = [...getNodes().map(n => ({ ...n, selected: false })), ...newNodes]
     snapshot(postNodes, getEdges())
     setNodes(postNodes)
@@ -62,15 +94,21 @@ export function useCanvasContextMenuActions({
     clipboardRef.current = { nodes, edges: internalEdges }
   }, [getEdges, clipboardRef])
 
-  const ctxPaste = useCallback(() => {
+  const ctxPaste = useCallback(async () => {
     if (!clipboardRef.current) return
     const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current
     const idMap: Record<string, string> = {}
-    const newNodes = clipNodes.map(n => {
+    const newNodes = await Promise.all(clipNodes.map(async n => {
       const newId = getNextNodeId(n.type || 'unknown')
       idMap[n.id] = newId
-      return { ...n, id: newId, position: { x: n.position.x + 40, y: n.position.y + 40 }, selected: true }
-    })
+      return {
+        ...n,
+        id: newId,
+        position: { x: n.position.x + 40, y: n.position.y + 40 },
+        selected: true,
+        data: await cloneNodeMedia(n.data as Record<string, unknown>),
+      }
+    }))
     const newEdges = clipEdges.map(e => ({
       ...e,
       id: `e-${idMap[e.source]}-${idMap[e.target]}-${Date.now()}`,
@@ -108,8 +146,17 @@ export function useCanvasContextMenuActions({
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true, bubbles: true }))
   }, [])
 
+  const ctxUnpack = useCallback((nodes: Node[]) => {
+    const allNodes = getNodes()
+    const created = createUnpackedNodes(nodes, allNodes)
+    if (created.length === 0) return
+    const postNodes = [...allNodes.map(n => ({ ...n, selected: false })), ...created]
+    snapshot(postNodes, getEdges())
+    setNodes(postNodes)
+  }, [getNodes, getEdges, setNodes, snapshot])
+
   return {
     ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxDuplicate,
-    ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup,
+    ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
   }
 }

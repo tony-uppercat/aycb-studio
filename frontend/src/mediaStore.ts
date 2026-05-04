@@ -278,3 +278,7 @@ export async function listMedia(): Promise<MediaEntry[]> {
     req.onerror = () => { db.close(); reject(req.error) }
   })
 }
+
+// Re-export for callers that import cloneNodeMedia from './mediaStore'
+export type { CloneLoaders } from './cloneNodeMedia'
+export { cloneNodeMedia } from './cloneNodeMedia'

@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef } from 'react'
 import { addEdge, type Node, type Edge } from '@xyflow/react'
 import { getNextNodeId } from './useCanvasDragDrop'
 import { enforceOneEdgePerInput } from './useConnectionHandlers'
+import { createUnpackedNodes } from './useCanvasContextMenuActions'
 import { edgeStyle } from '../utils/edgeStyles'
-import { deleteMedia, deleteMultipleMedia } from '../mediaStore'
+import { deleteMedia, deleteMultipleMedia, cloneNodeMedia } from '../mediaStore'
 import { MANIFEST_MAP } from '../nodes/index'
+import { useSubnetPathStore } from '../stores/subnetPathStore'
+import { canvasClipboard } from '../stores/clipboardStore'
 
 export interface UseKeyboardShortcutsParams {
   getNodes: () => Node[]
@@ -20,7 +23,7 @@ export interface UseKeyboardShortcutsParams {
 }
 
 /** Compute the absolute position of a node by walking up the parentId chain. */
-function getAbsolutePosition(node: Node, allNodes: Node[]): { x: number; y: number } {
+export function getAbsolutePosition(node: Node, allNodes: Node[]): { x: number; y: number } {
   let x = node.position.x
   let y = node.position.y
   let current = node
@@ -38,7 +41,7 @@ function getAbsolutePosition(node: Node, allNodes: Node[]): { x: number; y: numb
  * Expand selection to include children of any selected group nodes (recursive).
  * Returns the expanded set of nodes to copy/duplicate.
  */
-function expandGroupChildren(selected: Node[], allNodes: Node[]): Node[] {
+export function expandGroupChildren(selected: Node[], allNodes: Node[]): Node[] {
   const ids = new Set(selected.map(n => n.id))
   const queue = [...selected]
   const result: Node[] = []
@@ -135,15 +138,16 @@ function cloneSubGraph(subGraph: {
  * When a cloned node is a subnet, its sub_graph is also recursively cloned
  * so inner ids don't collide with the source (audit SM2).
  */
-function cloneNodesAndEdges(
-  nodes: Node[], edges: Edge[], prefix: string, offset = { x: 0, y: 0 }
-): { clones: Node[]; clonedEdges: Edge[]; oldToNew: Map<string, string> } {
+export async function cloneNodesAndEdges(
+  nodes: Node[], edges: Edge[], prefix: string, offset = { x: 0, y: 0 },
+  opts: { includeExternalIncoming?: boolean } = {},
+): Promise<{ clones: Node[]; clonedEdges: Edge[]; oldToNew: Map<string, string> }> {
   const oldToNew = new Map<string, string>()
   for (const node of nodes) {
     oldToNew.set(node.id, getNextNodeId(node.type ?? prefix))
   }
   const nodeIds = new Set(nodes.map(n => n.id))
-  const clones: Node[] = nodes.map(node => {
+  const rawClones: Node[] = nodes.map(node => {
     const rawData = node.data as Record<string, unknown>
     const cleanData: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(rawData)) {
@@ -176,7 +180,13 @@ function cloneNodesAndEdges(
       dragging: false,
     }
   })
-  const clonedEdges: Edge[] = edges
+  // Fork media blobs so cloned nodes own independent IDB entries.
+  const clones: Node[] = await Promise.all(rawClones.map(async c => ({
+    ...c,
+    data: await cloneNodeMedia(c.data as Record<string, unknown>),
+  })))
+  // Internal edges: both endpoints are in the selection → fully remap.
+  const internalEdges: Edge[] = edges
     .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
     .map(e => ({
       ...e,
@@ -184,6 +194,21 @@ function cloneNodesAndEdges(
       source: oldToNew.get(e.source)!,
       target: oldToNew.get(e.target)!,
     }))
+  // External-incoming edges: source outside the selection → clone gets the
+  // same upstream feed (branching pattern). Outgoing is intentionally NOT
+  // cloned because that would double-feed downstream nodes — almost never
+  // what the user wants.
+  const externalIncomingEdges: Edge[] = opts.includeExternalIncoming
+    ? edges
+        .filter(e => !nodeIds.has(e.source) && nodeIds.has(e.target))
+        .map(e => ({
+          ...e,
+          id: `e-${e.source}-${oldToNew.get(e.target)}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          source: e.source,
+          target: oldToNew.get(e.target)!,
+        }))
+    : []
+  const clonedEdges = [...internalEdges, ...externalIncomingEdges]
   return { clones, clonedEdges, oldToNew }
 }
 
@@ -198,7 +223,7 @@ interface DeleteSelectionResult {
   nodes: Node[]
   edges: Edge[]
 }
-function deleteSelection(
+export function deleteSelection(
   allNodes: Node[],
   allEdges: Edge[],
   selNodes: Node[],
@@ -263,7 +288,7 @@ function deleteSelection(
  * grandchildren, etc.). Used by Shift+Delete to delete a group AND its
  * contents instead of ungrouping.
  */
-function collectGroupDescendants(groups: Node[], allNodes: Node[]): Set<string> {
+export function collectGroupDescendants(groups: Node[], allNodes: Node[]): Set<string> {
   const ids = new Set<string>(groups.map(g => g.id))
   let changed = true
   while (changed) {
@@ -285,7 +310,7 @@ function collectGroupDescendants(groups: Node[], allNodes: Node[]): Set<string> 
  * edges via synthesized dashed `_bypassOf`-tagged edges. Toggling off
  * removes the synthesized edges.
  */
-function applyBypass(
+export function applyBypass(
   allNodes: Node[],
   allEdges: Edge[],
   selectedNodes: Node[],
@@ -330,7 +355,7 @@ function applyBypass(
 
 
 /** Delete associated media from IndexedDB for removed nodes. */
-function cleanupNodeMedia(deletedNodes: Node[]): void {
+export function cleanupNodeMedia(deletedNodes: Node[]): void {
   for (const node of deletedNodes) {
     const d = node.data as Record<string, unknown>
     const mediaId = d.mediaId as string | undefined
@@ -469,8 +494,8 @@ export function useKeyboardShortcuts({
     setNodes(updated)
   }, [getNodes, getEdges, setNodes, snapshot])
 
-  // ── Clipboard for Ctrl+C / Ctrl+V ───────────────────────────────────────
-  const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
+  // ── Clipboard (shared module-level ref — also visible to subnet editor) ──
+  const clipboardRef = canvasClipboard
 
   // ── Ctrl+Drag to duplicate selected nodes ───────────────────────────────
   // React Flow captures dragItems BEFORE onNodeDragStart fires and always includes
@@ -498,34 +523,48 @@ export function useKeyboardShortcuts({
 
     const currentNodes = getNodes()
     const savedIds = new Set(saved.nodes.map(n => n.id))
-    const { clones, clonedEdges } = cloneNodesAndEdges(saved.nodes, saved.edges, 'clone')
+    // Snap originals back to source immediately (before async clone resolves)
+    const srcPos = new Map(saved.nodes.map(n => [n.id, n.position]))
+    setNodes(ns => ns.map(n => savedIds.has(n.id) ? { ...n, position: srcPos.get(n.id)!, selected: false } : n))
 
-    // clones[i] ↔ saved.nodes[i] (cloneNodesAndEdges preserves order)
-    const destPos = new Map(currentNodes.filter(n => savedIds.has(n.id)).map(n => [n.id, n.position]))
-    const srcPos  = new Map(saved.nodes.map(n => [n.id, n.position]))
-    // Identify clone IDs so we can select only top-level clones (not children of copied groups)
-    const cloneIdSet = new Set(clones.map(c => c.id))
+    // Drag-to-copy: include incoming external edges so clones share the same
+    // upstream sources as the originals (branching pattern). Paste (Ctrl+V)
+    // intentionally keeps the strict-internal default — pasted nodes don't
+    // re-attach to whatever was upstream of the original copy.
+    void (async () => {
+      const { clones, clonedEdges } = await cloneNodesAndEdges(saved.nodes, saved.edges, 'clone', { x: 0, y: 0 }, { includeExternalIncoming: true })
 
-    const finalNodes = [
-      // Originals: snap back to source position, deselect
-      ...currentNodes.map(n => savedIds.has(n.id) ? { ...n, position: srcPos.get(n.id)!, selected: false } : n),
-      // Clones: place at destination; select top-level clones, not children of copied groups
-      ...clones.map((c, i) => ({
-        ...c,
-        position: destPos.get(saved.nodes[i].id) ?? c.position,
-        selected: !c.parentId || !cloneIdSet.has(c.parentId),
-      })),
-    ]
-    const finalEdges = [...getEdges(), ...clonedEdges]
-    setNodes(finalNodes)
-    setEdges(finalEdges)
-    snapshot(finalNodes, finalEdges)
+      // clones[i] ↔ saved.nodes[i] (cloneNodesAndEdges preserves order)
+      const destPos = new Map(currentNodes.filter(n => savedIds.has(n.id)).map(n => [n.id, n.position]))
+      // Identify clone IDs so we can select only top-level clones (not children of copied groups)
+      const cloneIdSet = new Set(clones.map(c => c.id))
+
+      const finalNodes = [
+        // Originals already snapped; merge clones on top
+        ...getNodes().filter(n => !cloneIdSet.has(n.id)),
+        // Clones: place at destination; select top-level clones, not children of copied groups
+        ...clones.map((c, i) => ({
+          ...c,
+          position: destPos.get(saved.nodes[i].id) ?? c.position,
+          selected: !c.parentId || !cloneIdSet.has(c.parentId),
+        })),
+      ]
+      const finalEdges = [...getEdges(), ...clonedEdges]
+      setNodes(finalNodes)
+      setEdges(finalEdges)
+      snapshot(finalNodes, finalEdges)
+    })()
     return true
   }, [getNodes, getEdges, setNodes, setEdges, snapshot])
 
   // ── Unified keyboard handler ─────────────────────────────────────────────
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const subnetOpen = useSubnetPathStore.getState().current_path.length > 0
+      if (e.ctrlKey && (e.key === 'v' || e.key === 'c')) {
+        console.log(`[MainShortcuts] Ctrl+${e.key.toUpperCase()} — subnetOpen=${subnetOpen}, clip=`, clipboardRef.current ? `${clipboardRef.current.nodes.length} nodes` : 'EMPTY')
+      }
+      if (subnetOpen) return
       const tag = (e.target as HTMLElement).tagName
       const isEditable = (e.target as HTMLElement).isContentEditable
       const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditable
@@ -590,6 +629,18 @@ export function useKeyboardShortcuts({
           setEdges(edges)
         }
       }
+      // U — unpack history into separate Image nodes
+      if (e.code === 'KeyU' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !inInput) {
+        const allNodes = getNodes()
+        const sel = allNodes.filter(n => n.selected)
+        const created = createUnpackedNodes(sel, allNodes)
+        if (created.length > 0) {
+          e.preventDefault()
+          const postNodes = [...allNodes.map(n => ({ ...n, selected: false })), ...created]
+          snapshot(postNodes, getEdges())
+          setNodes(postNodes)
+        }
+      }
       // Ctrl+C — copy selected nodes + internal edges (including group children)
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !inInput) {
         const allNodes = getNodes()
@@ -634,22 +685,24 @@ export function useKeyboardShortcuts({
           // Offset = move clipboard center to viewport center
           const offset = { x: viewportCenter.x - clipCenterX, y: viewportCenter.y - clipCenterY }
 
-          const { clones, clonedEdges } = cloneNodesAndEdges(clip.nodes, clip.edges, 'paste', offset)
-          // Mark pasted nodes as selected
-          clones.forEach(n => { n.selected = true })
+          void (async () => {
+            const { clones, clonedEdges } = await cloneNodesAndEdges(clip.nodes, clip.edges, 'paste', offset)
+            // Mark pasted nodes as selected
+            clones.forEach(n => { n.selected = true })
 
-          // Deselect existing, add pasted as selected
-          const postNodes = [
-            ...getNodes().map(n => ({ ...n, selected: false })),
-            ...clones,
-          ]
-          const postEdges = [...getEdges(), ...clonedEdges]
+            // Deselect existing, add pasted as selected
+            const postNodes = [
+              ...getNodes().map(n => ({ ...n, selected: false })),
+              ...clones,
+            ]
+            const postEdges = [...getEdges(), ...clonedEdges]
 
-          snapshot(postNodes, postEdges)
-          setNodes(postNodes)
-          setEdges(postEdges)
+            snapshot(postNodes, postEdges)
+            setNodes(postNodes)
+            setEdges(postEdges)
 
-          console.log(`[Paste] ${clones.length} nodes, ${clonedEdges.length} edges`)
+            console.log(`[Paste] ${clones.length} nodes, ${clonedEdges.length} edges`)
+          })()
         }
       }
       // Shift+R — swap first two input connections on selected node

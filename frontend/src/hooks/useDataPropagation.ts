@@ -22,27 +22,49 @@ export function getHandleType(handleId: string | null | undefined): string {
 }
 
 /**
- * Resolve the actual source node, following bypass chains.
- * If the source node is bypassed, follow its incoming edge to find the real source.
+ * Resolve the actual source node, following bypass and subnet boundary
+ * chains. Returns the resolved node together with the source handle id
+ * that should be used for per-pin lookups (outputPins, outputMediaIds).
+ *
+ * Why the handleId is part of the return value: across a subnet boundary
+ * the OUTER edge's sourceHandle is the subnet's external pin id (e.g.
+ * "out1"), while the INNER source's per-pin maps are keyed by the inner
+ * handle id (e.g. "image-out", "text-out"). Returning just the node
+ * would silently miss those per-pin values for multi-output nodes
+ * (batch generateImage, bracketParser, ...).
  */
-function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[], getEdges: () => Edge[], depth = 0): Node | null {
+function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[], getEdges: () => Edge[], depth = 0): { node: Node; handleId: string } | null {
   if (depth > 20) return null // prevent infinite loops
   const node = getNodes().find(n => n.id === sourceId)
   if (!node) return null
   const d = node.data as Record<string, unknown>
 
-  // Subnet source: caller is pulling from an external output handle on a subnet
-  // container. Walk into sub_graph and find the subnet-output proxy whose
-  // handle_id matches. Caller then reads proxy.data.result via the fallback chain.
+  // Subnet source: caller is pulling from an external output handle on a
+  // subnet container. Reactive boundary — walk DOWN into sub_graph, find
+  // the subnet-output proxy whose handle_id matches, then follow the
+  // internal edge feeding the proxy's 'in' handle and resolve at the inner
+  // level. The consumer always sees the live upstream value, no Run on
+  // the proxy required. Symmetric to the subnet-input walk-up below.
   if (node.type === 'subnet') {
-    const sub_graph = d.sub_graph as { nodes: Node[] } | undefined
+    const sub_graph = d.sub_graph as { nodes: Node[]; edges: Edge[] } | undefined
     if (!sub_graph) return null
     const proxy = sub_graph.nodes.find(
       (n) =>
         n.type === 'subnet-output' &&
         (n.data as Record<string, unknown>).handle_id === handleId,
     )
-    return proxy ?? null
+    if (!proxy) return null
+    const inner_edge = sub_graph.edges.find(
+      (e) => e.target === proxy.id && e.targetHandle === 'in',
+    )
+    if (!inner_edge) return null
+    return resolveSource(
+      inner_edge.source,
+      inner_edge.sourceHandle ?? '',
+      () => sub_graph.nodes,
+      () => sub_graph.edges,
+      depth + 1,
+    )
   }
 
   // Subnet-input source: caller is pulling from a subnet-input proxy INSIDE
@@ -75,11 +97,11 @@ function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[
     )
   }
 
-  if (!d._bypassed) return node
+  if (!d._bypassed) return { node, handleId }
   // Node is bypassed — follow its incoming edges to find the real upstream
   const incoming = getEdges().find(e => e.target === sourceId)
   if (!incoming) return null
-  return resolveSource(incoming.source, handleId, getNodes, getEdges, depth + 1)
+  return resolveSource(incoming.source, incoming.sourceHandle ?? handleId, getNodes, getEdges, depth + 1)
 }
 
 /**
@@ -95,14 +117,17 @@ export function pullText(
 ): string {
   const edge = getEdges().find(e => e.target === nodeId && e.targetHandle === handleId)
   if (!edge) return ''
-  const src = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
-  if (!src) return ''
+  const result = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
+  if (!result) return ''
+  const { node: src, handleId: srcHandle } = result
   const d = src.data as Record<string, unknown>
 
-  // Per-pin output data (for dynamic outputs like JsonParser unpack pins)
+  // Per-pin output data (for dynamic outputs like JsonParser unpack pins).
+  // srcHandle is the resolved handle on the actual source — across a subnet
+  // boundary this is the inner handle, not the subnet's external pin id.
   const outputPins = d.outputPins as Record<string, string> | undefined
-  if (outputPins && edge.sourceHandle && edge.sourceHandle in outputPins) {
-    return outputPins[edge.sourceHandle]
+  if (outputPins && srcHandle && srcHandle in outputPins) {
+    return outputPins[srcHandle]
   }
 
   return (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
@@ -120,14 +145,17 @@ export async function pullMedia(
 ): Promise<{ file: File | null; mediaId: string | null }> {
   const edge = getEdges().find(e => e.target === nodeId && e.targetHandle === handleId)
   if (!edge) return { file: null, mediaId: null }
-  const src = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
-  if (!src) return { file: null, mediaId: null }
+  const result = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
+  if (!result) return { file: null, mediaId: null }
+  const { node: src, handleId: srcHandle } = result
   const d = src.data as Record<string, unknown>
 
-  // Per-handle output media (batch outputs like Generate Image ×2/×4)
+  // Per-handle output media (batch outputs like Generate Image ×2/×4).
+  // srcHandle is the resolved handle on the actual source — across a subnet
+  // boundary this is the inner handle, not the subnet's external pin id.
   const outputMediaIds = d.outputMediaIds as Record<string, string> | undefined
-  if (outputMediaIds && edge.sourceHandle && edge.sourceHandle in outputMediaIds) {
-    const mid = outputMediaIds[edge.sourceHandle]
+  if (outputMediaIds && srcHandle && srcHandle in outputMediaIds) {
+    const mid = outputMediaIds[srcHandle]
     const file = await loadMedia(mid)
     return { file, mediaId: mid }
   }
@@ -167,9 +195,9 @@ export async function pullAllMedia(
   )
   const files: File[] = []
   for (const edge of edges) {
-    const src = resolveSource(edge.source, edge.targetHandle ?? '', getNodes, getEdges)
-    if (!src) continue
-    const d = src.data as Record<string, unknown>
+    const result = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
+    if (!result) continue
+    const d = result.node.data as Record<string, unknown>
     if (d.file instanceof File) {
       files.push(d.file)
     } else if (d.imageFile instanceof File) {

@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { useReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
-import { NodeShell } from '../_shared/NodeShell'
+import { Handle, Position, useReactFlow, useStore, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import type { SlotType } from '../_shared/types'
 import { toSnakeCase, pullBySlotType } from '../subnet/subnetUtils'
 import { registerNodeRun, unregisterNodeRun } from '../../utils/cascadeRun'
-import styles from '../_shared/Node.module.css'
+import pinStyles from '../_shared/BoundaryPin.module.css'
+
+const zoomSelector = (s: { transform: [number, number, number] }) => s.transform[2]
 
 export interface SubnetOutputNodeData {
   handle_id: string
@@ -14,16 +15,19 @@ export interface SubnetOutputNodeData {
   [key: string]: unknown
 }
 
+const SLOT_TYPES: SlotType[] = ['text', 'image', 'video', 'prompt', 'media']
+
 /**
  * Pure onRun builder for subnet-output.
  *
  * Reads the value connected to the 'in' handle (text/media based on slot_type)
  * and writes it into `data.result` via updateNodeData.
  *
- * Exported so it can be unit-tested without mounting the component.
- *
- * At the subnet level, `getNodes()`/`getEdges()` return the ACTIVE sub_graph's
- * nodes/edges — the output proxy reads from a sibling internal node.
+ * Note: with the post-2026-05-04 reactive boundary in
+ * useDataPropagation.resolveSource, external consumers no longer rely on
+ * data.result — they walk DOWN sub_graph and follow the proxy's incoming
+ * edge directly. This onRun is kept as a fallback for explicit-Run flows
+ * (e.g. cascadeRun) and for tests.
  */
 export function buildOutputOnRun(
   id: string,
@@ -40,30 +44,36 @@ export function buildOutputOnRun(
   }
 }
 
+/**
+ * Boundary-pin rendering: a slim pill anchored to the right edge of the
+ * subnet editor flow. The Handle protrudes to the left
+ * (Position.Left, type="target") so internal nodes feed the proxy via
+ * standard React Flow drag-connect.
+ *
+ * Selected state expands an inline editor (name + slot_type) on the right
+ * side. Rename commits snake_case on blur.
+ */
 function SubnetOutputNodeComponent({ id, data, selected }: NodeProps) {
   const d = data as SubnetOutputNodeData
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
+  // Counter-scale to keep the boundary pin fixed in screen px regardless of
+  // the flow's zoom. transformOrigin pinned to the left edge so the Handle
+  // stays anchored to the proxy's flow position.
+  const zoom = useStore(zoomSelector)
+  const inverseScale = zoom > 0 ? 1 / zoom : 1
 
-  // Local draft so the user can type freely; committed to snake_case on blur.
   const [draft, setDraft] = useState(d.name ?? '')
-  useEffect(() => {
-    setDraft(d.name ?? '')
-  }, [d.name])
+  useEffect(() => { setDraft(d.name ?? '') }, [d.name])
 
   const commitRename = useCallback(() => {
     const snake = toSnakeCase(draft) || 'output'
     if (snake !== d.name) updateNodeData(id, { name: snake })
   }, [draft, d.name, id, updateNodeData])
 
-  const handleSlotTypeChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      updateNodeData(id, { slot_type: e.target.value as SlotType })
-    },
-    [id, updateNodeData]
-  )
+  const handleSlotTypeChange = useCallback((next: SlotType) => {
+    updateNodeData(id, { slot_type: next })
+  }, [id, updateNodeData])
 
-  // Build onRun using the pure helper. getData reads the live node data
-  // at invocation time so it always sees the current slot_type.
   const onRun = useCallback(
     buildOutputOnRun(
       id,
@@ -78,69 +88,59 @@ function SubnetOutputNodeComponent({ id, data, selected }: NodeProps) {
     [id, getNodes, getEdges, updateNodeData, d]
   )
 
-  // Register with cascade registry so upstream nodes can walk back to us.
-  // NodeShell also registers via its own useEffect, but doing it here too
-  // keeps the registration stable across footer-less renders.
+  // Keep the node's onRun registered with cascadeRun so explicit-Run flows
+  // can still reach the proxy. The reactive read path bypasses this.
   useEffect(() => {
     registerNodeRun(id, onRun)
     return () => unregisterNodeRun(id)
   }, [id, onRun])
 
   const displayName = d.name || 'output'
-  const slotType: SlotType = d.slot_type || 'text'
 
   return (
-    <NodeShell
-      name={`${displayName} >`}
-      icon="📤"
-      selected={selected}
-      inputSlots={[{ id: 'in', label: displayName, type: slotType }]}
-      outputSlots={[]}
-      onRun={onRun}
-    >
-      <div className={styles.nodeContent}>
-        <div>
-          <div className={styles.row}>
-            <span className={styles.label}>Name</span>
+    <div style={{ transform: `scale(${inverseScale})`, transformOrigin: 'left center' }}>
+    <div className={pinStyles.pin} data-direction="output" data-selected={selected}>
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        className={pinStyles.handle}
+      />
+      <span className={pinStyles.label}>{displayName}</span>
+      {selected && (
+        <div className={pinStyles.editor} data-direction="output">
+          <div className={pinStyles.editorRow}>
+            <span className={pinStyles.editorLabel}>name</span>
+            <input
+              className={`${pinStyles.editorInput} nodrag nopan`}
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              }}
+              placeholder="output_name"
+              aria-label="Output name"
+            />
           </div>
-          <input
-            className={styles.promptInput}
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            }}
-            placeholder="output_name"
-            aria-label="Output name"
-          />
+          <div className={pinStyles.editorRow}>
+            <span className={pinStyles.editorLabel}>type</span>
+            <select
+              className={`${pinStyles.editorSelect} nodrag nopan`}
+              value={d.slot_type || 'text'}
+              onChange={(e) => handleSlotTypeChange(e.target.value as SlotType)}
+              aria-label="Output slot type"
+            >
+              {SLOT_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div>
-          <div className={styles.row}>
-            <span className={styles.label}>Type</span>
-          </div>
-          <select
-            className={styles.select}
-            value={slotType}
-            onChange={handleSlotTypeChange}
-            aria-label="Output slot type"
-          >
-            <option value="text">text</option>
-            <option value="image">image</option>
-            <option value="video">video</option>
-            <option value="prompt">prompt</option>
-            <option value="media">media</option>
-          </select>
-        </div>
-        {d.handle_id && (
-          <div className={styles.row}>
-            <span className={styles.label}>handle_id</span>
-            <span>{d.handle_id}</span>
-          </div>
-        )}
-      </div>
-    </NodeShell>
+      )}
+    </div>
+    </div>
   )
 }
 

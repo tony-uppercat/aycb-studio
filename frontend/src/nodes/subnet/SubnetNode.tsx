@@ -185,7 +185,8 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           ))}
           {/* Pending input — always below the last committed input.
-              Becomes a committed pin the moment an edge connects. */}
+              Generic until an edge drops on it; commitPendingPin then
+              materializes a real proxy with the inferred slot_type. */}
           <div className={`${styles.pinRow} ${styles.pinRowPending}`}>
             <span className={styles.pinDot} style={{ background: 'transparent', border: '1.5px dashed rgba(245,39,118,0.55)' }} />
             input...
@@ -196,7 +197,8 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
               <span className={styles.pinDot} />
             </div>
           ))}
-          {/* Pending output — same idea, mirrored. */}
+          {/* Pending output — same idea, mirrored. Always present so the
+              user has a generic slot to drop an outgoing edge on. */}
           <div className={`${styles.pinRow} ${styles.pinRowOut} ${styles.pinRowPending}`}>
             output...
             <span className={styles.pinDot} style={{ background: 'transparent', border: '1.5px dashed rgba(245,39,118,0.55)' }} />
@@ -215,7 +217,8 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
         />
       ))}
       {/* Pending input handle. ID is the sentinel PENDING_IN_HANDLE_ID
-          consumed by the auto-commit hook in FlowCanvas onConnect. */}
+          consumed by the auto-commit hook in FlowCanvas onConnect. Always
+          rendered so the user always has a generic slot to drop on. */}
       <Handle
         key="pending-in"
         type="target"

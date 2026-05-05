@@ -28,6 +28,41 @@ interface UseConnectionHandlersParams {
 export const MULTI_INPUT_NODE_TYPES = new Set(['switch', 'batch'])
 
 /**
+ * Resolve the slot type of a handle taking subnet boundary into account.
+ *
+ * Subnet pins use handle ids of the form `in-{rand}` / `out-{rand}` where the
+ * prefix encodes direction, NOT slot type. `getHandleType` would split on '-'
+ * and return 'in'/'out' which doesn't match any real slot type, breaking
+ * `isValidConnection` (drag rejected) and `onConnectStart` (pendingConnection
+ * carries a useless slotType so AddNodeMenu can't filter compatible nodes).
+ *
+ * For subnet pins, look up the actual slot_type from the subnet's
+ * `external_inputs` / `external_outputs` array. For everything else, fall
+ * back to the prefix-based `getHandleType` heuristic.
+ */
+export function getEffectiveSlotType(
+  nodeId: string | null | undefined,
+  handleId: string | null | undefined,
+  handleType: 'source' | 'target',
+  nodes: Node[],
+): string {
+  if (!handleId) return ''
+  const prefix = getHandleType(handleId)
+  if ((prefix === 'in' || prefix === 'out') && nodeId) {
+    const node = nodes.find(n => n.id === nodeId)
+    if (node?.type === 'subnet') {
+      const data = node.data as Record<string, unknown>
+      const pins = (handleType === 'source'
+        ? data.external_outputs
+        : data.external_inputs) as Array<{ handle_id: string; slot_type: string }> | undefined
+      const pin = pins?.find(p => p.handle_id === handleId)
+      if (pin) return pin.slot_type
+    }
+  }
+  return prefix
+}
+
+/**
  * Remove existing edges on a target handle if the node doesn't allow multi-input.
  * Returns the filtered edge array.
  */
@@ -54,7 +89,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
 
   const onConnectStart = useCallback((_: unknown, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
     if (params.nodeId && params.handleId && params.handleType) {
-      const slotType = getHandleType(params.handleId)
+      const slotType = getEffectiveSlotType(params.nodeId, params.handleId, params.handleType, getNodes())
       const pending: NonNullable<PendingConnection> = {
         nodeId: params.nodeId,
         handleId: params.handleId,
@@ -65,7 +100,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
       pendingRef.current = pending
       setPendingConnection(pending)
     }
-  }, [])
+  }, [getNodes])
 
   const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
     const pending = pendingRef.current
@@ -229,7 +264,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
       if (connection.targetHandle === PENDING_IN && connection.target) {
         const subnet = currentNodes.find(n => n.id === connection.target)
         if (subnet?.type === 'subnet') {
-          const slot_type = (getHandleType(connection.sourceHandle) || 'text') as SlotType
+          const slot_type = (getEffectiveSlotType(connection.source, connection.sourceHandle, 'source', currentNodes) || 'text') as SlotType
           const { updatedSubGraph, newHandleId } = commitPendingPin(subnet, 'in', slot_type)
           setNodes(ns => ns.map(n => n.id === subnet.id
             ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
@@ -242,7 +277,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
       } else if (connection.sourceHandle === PENDING_OUT && connection.source) {
         const subnet = currentNodes.find(n => n.id === connection.source)
         if (subnet?.type === 'subnet') {
-          const slot_type = (getHandleType(connection.targetHandle) || 'text') as SlotType
+          const slot_type = (getEffectiveSlotType(connection.target, connection.targetHandle, 'target', currentNodes) || 'text') as SlotType
           const { updatedSubGraph, newHandleId } = commitPendingPin(subnet, 'out', slot_type)
           setNodes(ns => ns.map(n => n.id === subnet.id
             ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
@@ -325,9 +360,10 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
       // We allow connections to occupied input pins so onConnect can replace the old edge.
       // Blocking here would prevent replacement (isValidConnection=false → onConnect never fires).
 
+      const nodes = getNodes()
       return areSlotsCompatible(
-        getHandleType(connection.sourceHandle),
-        getHandleType(connection.targetHandle),
+        getEffectiveSlotType(connection.source, connection.sourceHandle, 'source', nodes),
+        getEffectiveSlotType(connection.target, connection.targetHandle, 'target', nodes),
       )
     },
     [getNodes]

@@ -2,18 +2,28 @@
  * Tests for useDataPropagation — subnet-aware resolveSource branches.
  *
  * Covers:
- * - Pulling text from a subnet's external output handle (walks into sub_graph
- *   to find the subnet-output proxy matching handle_id)
- * - Pulling text from a subnet-input proxy inside a subnet (reads cached result)
- * - Failure paths: missing result, missing sub_graph, orphan pin
- * - Regression guard: bypass chain still walks upstream
+ * - Pulling text from a subnet's external output handle: reactively walks
+ *   DOWN into sub_graph, follows the edge feeding the matching
+ *   subnet-output proxy, returns the live source node (no Run on proxy).
+ * - Pulling text from a subnet-input proxy inside a subnet: walks UP to
+ *   the parent's external edge.
+ * - Failure paths: no inner edge, missing sub_graph, orphan pin.
+ * - Regression guard: bypass chain still walks upstream.
  */
 import { describe, it, expect } from 'vitest'
 import type { Node, Edge } from '@xyflow/react'
 import { pullText } from './useDataPropagation'
 
 describe('pullText with subnet source', () => {
-  it('reads proxy.data.result from subnet-output inside subnet (happy path)', () => {
+  it('reactively walks DOWN through subnet-output proxy to internal source', () => {
+    // Internal source feeds the proxy; consumer reads its live outputText
+    // without any Run on the proxy.
+    const internal_source: Node = {
+      id: 'inner-src',
+      type: 'textInput',
+      position: { x: 0, y: 0 },
+      data: { outputText: 'hello' },
+    }
     const inner_proxy: Node = {
       id: 'proxy-out',
       type: 'subnet-output',
@@ -22,9 +32,13 @@ describe('pullText with subnet source', () => {
         handle_id: 'out1',
         name: 'out1',
         slot_type: 'text',
-        result: 'hello',
+        // No `result` cache — the reactive path bypasses it.
       },
     }
+    const inner_edges: Edge[] = [{
+      id: 'e-inner', source: 'inner-src', sourceHandle: 'text-out',
+      target: 'proxy-out', targetHandle: 'in',
+    }]
     const subnet: Node = {
       id: 'sub-1',
       type: 'subnet',
@@ -32,8 +46,8 @@ describe('pullText with subnet source', () => {
       data: {
         name: 'Subnet',
         sub_graph: {
-          nodes: [inner_proxy],
-          edges: [],
+          nodes: [internal_source, inner_proxy],
+          edges: inner_edges,
           viewport: { x: 0, y: 0, zoom: 1 },
         },
         external_outputs: [{ handle_id: 'out1', name: 'out1', slot_type: 'text' }],
@@ -59,7 +73,7 @@ describe('pullText with subnet source', () => {
     expect(result).toBe('hello')
   })
 
-  it('returns empty string when subnet-output has no cached result (failure path)', () => {
+  it('returns empty string when nothing is connected to the subnet-output proxy (failure path)', () => {
     const inner_proxy: Node = {
       id: 'proxy-out',
       type: 'subnet-output',
@@ -68,7 +82,6 @@ describe('pullText with subnet source', () => {
         handle_id: 'out1',
         name: 'out1',
         slot_type: 'text',
-        // result intentionally missing
       },
     }
     const subnet: Node = {

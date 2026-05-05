@@ -13,13 +13,15 @@ import {
   type Connection,
   type Viewport,
 } from '@xyflow/react'
-import { Plus } from 'lucide-react'
-import { NODE_TYPES, NODE_CATALOG, type NodeManifest } from '../../nodes/index'
+import { Plus, LayoutGrid } from 'lucide-react'
+import { NODE_TYPES, type NodeManifest } from '../../nodes/index'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { useCanvasHistory } from '../../hooks/useCanvasHistory'
 import { useCanvasContextMenuActions } from '../../hooks/useCanvasContextMenuActions'
 import { useSubnetShortcuts } from '../../hooks/useSubnetShortcuts'
 import { CanvasContextMenu, type ContextMenuTarget } from './CanvasContextMenu'
+import { AddNodeMenu } from '../AddNodeMenu'
+import { ProjectGallery } from '../project/ProjectGallery'
 import { buildProxyNodeData } from './SubnetEditor'
 import { canvasClipboard } from '../../stores/clipboardStore'
 import styles from './SubnetEditor.module.css'
@@ -52,6 +54,7 @@ export function SubnetEditorInner({
   const canvasRef = useRef<HTMLDivElement>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const toggleAddMenu = useCallback(() => setAddMenuOpen(v => !v), [])
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   // ── Keyboard shortcuts ──
   useSubnetShortcuts({
@@ -127,23 +130,161 @@ export function SubnetEditorInner({
     save_ref.current({ nodes, edges, viewport })
   }, [nodes, edges, viewport])
 
+  // ── Guarantee at least one input and one output proxy ──
+  // The subnet must always expose 1 input pin + 1 output pin on its
+  // boundary, even when empty. On mount, if either direction is missing,
+  // seed a default proxy (slot_type 'text', name 'input'/'output'). Subsequent
+  // user deletions re-seed on the next open.
+  useEffect(() => {
+    setNodes(ns => {
+      const hasInput = ns.some(n => n.type === 'subnet-input')
+      const hasOutput = ns.some(n => n.type === 'subnet-output')
+      if (hasInput && hasOutput) return ns
+      const additions: Node[] = []
+      if (!hasInput) {
+        additions.push({
+          id: getNextNodeId('subnet-input'),
+          type: 'subnet-input',
+          position: { x: 0, y: 0 },
+          data: buildProxyNodeData('subnet-input', { name: 'input', slot_type: 'text' }),
+        })
+      }
+      if (!hasOutput) {
+        additions.push({
+          id: getNextNodeId('subnet-output'),
+          type: 'subnet-output',
+          position: { x: 0, y: 0 },
+          data: buildProxyNodeData('subnet-output', { name: 'output', slot_type: 'text' }),
+        })
+      }
+      return [...ns, ...additions]
+    })
+    // Run once on mount only; deletions during the session are intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Boundary pin anchoring ──
+  // Pin the subnet-input / subnet-output proxies to the left/right edges of
+  // the visible viewport, stacked vertically. Recomputed on viewport pan/zoom
+  // and on proxy add/remove. Position is in flow coords (so the spacing
+  // adapts to zoom). Drag is disabled so the user can't accidentally rip a
+  // pin off the boundary — rename/slot edits go through the proxy's inline
+  // editor when selected.
+  const proxyCount = nodes.filter(
+    n => n.type === 'subnet-input' || n.type === 'subnet-output',
+  ).length
+  useEffect(() => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const MARGIN = 16
+    const PIN_WIDTH = 130
+    const START_Y_SCREEN = 56
+    const STEP_Y_SCREEN = 38
+    setNodes(ns => {
+      let inputIdx = 0
+      let outputIdx = 0
+      let changed = false
+      const out = ns.map(n => {
+        let target: { x: number; y: number } | null = null
+        if (n.type === 'subnet-input') {
+          const ys = rect.top + START_Y_SCREEN + (inputIdx++) * STEP_Y_SCREEN
+          target = screenToFlowPosition({ x: rect.left + MARGIN, y: ys })
+        } else if (n.type === 'subnet-output') {
+          const ys = rect.top + START_Y_SCREEN + (outputIdx++) * STEP_Y_SCREEN
+          target = screenToFlowPosition({ x: rect.right - MARGIN - PIN_WIDTH, y: ys })
+        }
+        if (!target) return n
+        const samePos = n.position.x === target.x && n.position.y === target.y
+        if (samePos && n.draggable === false) return n
+        changed = true
+        return { ...n, position: target, draggable: false }
+      })
+      return changed ? out : ns
+    })
+  }, [viewport, proxyCount, screenToFlowPosition, setNodes])
+
   const onConnect = useCallback(
     (params: Connection) => { setEdges(es => addEdge(params, es)) },
     [setEdges],
   )
 
   // ── Add node menu ──
+  // Mirrors handleAddNode in useConnectionHandlers: drop the new node at the
+  // visible viewport center using screenToFlowPosition over the inner canvas
+  // bounds, with the same -150/-100 offset so it lands roughly centered on
+  // its own width/height.
   const addNode = useCallback(
-    (type: string) => {
-      const manifest = NODE_CATALOG.find(m => m.type === type)
+    (entry: NodeManifest) => {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+      const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2
+      const pos = screenToFlowPosition({ x: cx, y: cy })
       const new_node: Node = {
-        id: getNextNodeId(type), type,
-        position: { x: 120, y: 120 },
-        data: buildProxyNodeData(type, manifest?.defaultData ?? {}),
+        id: getNextNodeId(entry.type),
+        type: entry.type,
+        position: { x: pos.x - 150, y: pos.y - 100 },
+        data: buildProxyNodeData(entry.type, entry.defaultData ?? {}),
       }
       setNodes(ns => [...ns, new_node])
       setAddMenuOpen(false)
-    }, [setNodes],
+    },
+    [setNodes, screenToFlowPosition],
+  )
+
+  // ── Insert template ──
+  // Mirrors FlowCanvas.handleTemplateSelect but writes into the inner sub_graph.
+  // Centers the template's bounding box on the subnet viewport, remaps node ids
+  // to avoid collisions, rewrites edge endpoints to the new ids.
+  const insertTemplate = useCallback(
+    (templateNodes: Node[], templateEdges: Edge[]) => {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (const n of templateNodes) {
+        const w = (n.style?.width as number) ?? n.measured?.width ?? n.width ?? 200
+        const h = (n.style?.height as number) ?? n.measured?.height ?? n.height ?? 150
+        const nx = n.position?.x ?? 0
+        const ny = n.position?.y ?? 0
+        minX = Math.min(minX, nx); minY = Math.min(minY, ny)
+        maxX = Math.max(maxX, nx + w); maxY = Math.max(maxY, ny + h)
+      }
+      const tplCx = (minX + maxX) / 2
+      const tplCy = (minY + maxY) / 2
+
+      const rect = canvasRef.current?.getBoundingClientRect()
+      const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+      const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2
+      const vc = screenToFlowPosition({ x: cx, y: cy })
+      const offX = vc.x - tplCx
+      const offY = vc.y - tplCy
+
+      const idMap: Record<string, string> = {}
+      const newNodes = templateNodes.map(n => {
+        const newId = getNextNodeId(n.type || 'unknown')
+        idMap[n.id] = newId
+        const isChild = n.parentId && idMap[n.parentId]
+        return {
+          ...n,
+          id: newId,
+          position: isChild
+            ? n.position
+            : { x: (n.position?.x ?? 0) + offX, y: (n.position?.y ?? 0) + offY },
+          ...(n.parentId ? { parentId: idMap[n.parentId] ?? n.parentId } : {}),
+          selected: false,
+        }
+      })
+      const newEdges = templateEdges.map(e => ({
+        ...e,
+        id: `e-${idMap[e.source] ?? e.source}-${idMap[e.target] ?? e.target}-${Date.now()}`,
+        source: idMap[e.source] ?? e.source,
+        target: idMap[e.target] ?? e.target,
+      }))
+      const postNodes = [...getNodes(), ...newNodes]
+      const postEdges = [...getEdges(), ...newEdges]
+      snapshot(postNodes, postEdges)
+      setNodes(postNodes)
+      setEdges(postEdges)
+      setTemplatesOpen(false)
+    },
+    [screenToFlowPosition, getNodes, getEdges, setNodes, setEdges, snapshot],
   )
 
   return (
@@ -152,21 +293,18 @@ export function SubnetEditorInner({
         <button type="button" className={styles.toolbarBtn} onClick={() => setAddMenuOpen(v => !v)} aria-expanded={addMenuOpen}>
           <Plus size={12} strokeWidth={1.5} /> Add Node
         </button>
+        <button type="button" className={styles.toolbarBtn} onClick={() => setTemplatesOpen(true)} title="Templates">
+          <LayoutGrid size={12} strokeWidth={1.5} /> Templates
+        </button>
         <button type="button" className={styles.toolbarBtn} onClick={undo} title="Undo (Ctrl+Z)">Undo</button>
         <button type="button" className={styles.toolbarBtn} onClick={redo} title="Redo (Ctrl+Shift+Z)">Redo</button>
       </div>
-      {addMenuOpen && (
-        <div className={styles.addNodeMenu}>
-          {NODE_CATALOG
-            .filter(m => m.type !== 'subnet' && m.type !== 'subnet-input' && m.type !== 'subnet-output')
-            .sort((a, b) => a.label.localeCompare(b.label))
-            .map(m => (
-              <button key={m.type} type="button" className={styles.addNodeItem} onClick={() => addNode(m.type)}>
-                {m.label}
-              </button>
-            ))}
-        </div>
-      )}
+      <AddNodeMenu
+        open={addMenuOpen}
+        onClose={() => setAddMenuOpen(false)}
+        onAdd={addNode}
+        onAddTemplate={insertTemplate}
+      />
       <div ref={canvasRef} style={{ flex: 1, minHeight: 0 }}>
         <ReactFlow
           nodes={nodes}
@@ -215,6 +353,11 @@ export function SubnetEditorInner({
           flowPosition={ctxMenu.flowPos}
         />
       )}
+      <ProjectGallery
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onSelect={insertTemplate}
+      />
     </>
   )
 }

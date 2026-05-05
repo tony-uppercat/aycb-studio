@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef } from 'react'
-import { Handle, Position, NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import { Handle, Position, NodeResizer, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react'
 import { ChevronDown, ChevronRight, Box } from 'lucide-react'
 import type { Node, Edge, Viewport } from '@xyflow/react'
 import styles from './SubnetNode.module.css'
@@ -81,6 +81,7 @@ export function toggleCollapsed(
 function SubnetNodeComponent({ id, data, selected }: NodeProps) {
   const d = data as unknown as SubnetNodeData
   const { updateNodeData } = useReactFlow()
+  const updateNodeInternals = useUpdateNodeInternals()
 
   const sub_nodes = d.sub_graph?.nodes ?? []
   const child_count = sub_nodes.length
@@ -97,6 +98,13 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
     const patch = computePinPatch(sub_nodes, pins_ref.current.inputs, pins_ref.current.outputs)
     if (patch) updateNodeData(id, patch)
   }, [sub_nodes, id, updateNodeData])
+
+  // Notify React Flow when the handle set changes — without this its handle
+  // registry stays stale after pending-pin auto-commit, breaking edges that
+  // target/source the freshly materialized pin.
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [external_inputs.length, external_outputs.length, id, updateNodeInternals])
 
   const handleRenameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

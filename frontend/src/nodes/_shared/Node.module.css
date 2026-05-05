@@ -508,6 +508,8 @@
 }
 
 .compareBtn:hover { opacity: 1; color: var(--color-text-primary); }
+.compareBtn:disabled { opacity: 0.25; cursor: not-allowed; }
+.compareBtn:disabled:hover { opacity: 0.25; color: var(--color-text-secondary); }
 
 .swapBtn {
   background: var(--surface-2);

@@ -33,6 +33,57 @@ export function getHandleType(handleId: string | null | undefined): string {
  * would silently miss those per-pin values for multi-output nodes
  * (batch generateImage, bracketParser, ...).
  */
+/**
+ * Sync helper for reactive selectors that need the upstream mediaId without
+ * actually loading the file. Mirrors the lookup pullMedia performs once
+ * resolveSource has resolved the actual source — honors per-pin
+ * outputMediaIds first (batch outputs, image-proxy passthrough), then falls
+ * back to data.mediaId. Walks subnets and bypass chains via resolveSource,
+ * so a consumer pulling from a subnet's external output reads the real
+ * inner source's mediaId rather than the subnet's empty data.
+ */
+export function resolveSourceMediaId(
+  sourceId: string,
+  sourceHandleId: string,
+  nodes: Node[],
+  edges: Edge[],
+): string | null {
+  const result = resolveSource(sourceId, sourceHandleId, () => nodes, () => edges)
+  if (!result) return null
+  const { node, handleId } = result
+  const d = node.data as Record<string, unknown>
+  const outputMediaIds = d.outputMediaIds as Record<string, string> | undefined
+  if (outputMediaIds && handleId && handleId in outputMediaIds) {
+    return outputMediaIds[handleId]
+  }
+  return (d.mediaId as string) ?? null
+}
+
+/**
+ * Sync helper for reactive selectors that display upstream text. Mirrors
+ * pullText: walks subnets/bypass via resolveSource, reads per-pin outputPins
+ * first (json/bracket parser dynamic outputs), then falls back to the
+ * standard text fields. Without this, reactive previews (Result Viewer,
+ * Generate Image active prompt, PromptEditor upstream text, etc.) read the
+ * outer subnet's empty data and silently show nothing.
+ */
+export function resolveSourceText(
+  sourceId: string,
+  sourceHandleId: string,
+  nodes: Node[],
+  edges: Edge[],
+): string {
+  const result = resolveSource(sourceId, sourceHandleId, () => nodes, () => edges)
+  if (!result) return ''
+  const { node, handleId } = result
+  const d = node.data as Record<string, unknown>
+  const outputPins = d.outputPins as Record<string, string> | undefined
+  if (outputPins && handleId && handleId in outputPins) {
+    return outputPins[handleId]
+  }
+  return (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
+}
+
 function resolveSource(sourceId: string, handleId: string, getNodes: () => Node[], getEdges: () => Edge[], depth = 0): { node: Node; handleId: string } | null {
   if (depth > 20) return null // prevent infinite loops
   const node = getNodes().find(n => n.id === sourceId)
@@ -197,7 +248,20 @@ export async function pullAllMedia(
   for (const edge of edges) {
     const result = resolveSource(edge.source, edge.sourceHandle ?? '', getNodes, getEdges)
     if (!result) continue
-    const d = result.node.data as Record<string, unknown>
+    const { node: src, handleId: srcHandle } = result
+    const d = src.data as Record<string, unknown>
+
+    // Per-handle output media (batch outputs like Generate Image ×2/×4, and
+    // Image-node proxy passthrough). Must take precedence over data.mediaId
+    // so a proxying Image node exposes the upstream image instead of its
+    // own preserved mediaId. Mirrors pullMedia.
+    const outputMediaIds = d.outputMediaIds as Record<string, string> | undefined
+    if (outputMediaIds && srcHandle && srcHandle in outputMediaIds) {
+      const f = await loadMedia(outputMediaIds[srcHandle])
+      if (f) files.push(f)
+      continue
+    }
+
     if (d.file instanceof File) {
       files.push(d.file)
     } else if (d.imageFile instanceof File) {

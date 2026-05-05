@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals, type Node, type NodeProps } from '@xyflow/react'
 import { NodeShell, type SlotDef } from '../_shared/NodeShell'
 import { ExpandableText } from '../_shared/ExpandableText'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 import { isCascadeRunning } from '../../utils/cascadeRun'
 import type { TextCombineNodeData } from '../../types'
 import { colorizeJson } from '../../utils/jsonColorize'
@@ -44,13 +44,13 @@ export function TextCombineNode({ id, data, selected }: NodeProps<TextCombineNod
     setPinCount(rawPinCount)
   }
 
-  // Subscribe to upstream data changes to trigger re-render
+  // Subscribe to upstream data changes to trigger re-render. Walks subnets
+  // via resolveSourceText so sub_graph inner edits trigger re-render here.
   useStore(state => {
     const edges = state.edges.filter(e => e.target === id)
     return edges.map(e => {
-      const src = state.nodes.find(n => n.id === e.source)
-      const d = src?.data as Record<string, unknown> | undefined
-      return `${e.source}:${e.targetHandle}:${String(d?.outputText ?? '')}`
+      const txt = resolveSourceText(e.source, e.sourceHandle ?? '', state.nodes, state.edges)
+      return `${e.source}:${e.targetHandle}:${txt}`
     }).join('|')
   })
 

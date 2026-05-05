@@ -18,6 +18,7 @@ import {
   downloadNodesFull,
   collectCollageImages,
 } from '../../services/canvasExport'
+import { stripNodeData, keepNodeContent } from '../../services/templateData'
 import type { CollageImage } from '../CollageEditor'
 import styles from './CanvasContextMenu.module.css'
 
@@ -76,33 +77,6 @@ function collectMediaIds(nodes: Node[]): string[] {
 function getInternalEdges(nodes: Node[], allEdges: Edge[]): Edge[] {
   const nodeIds = new Set(nodes.map(n => n.id))
   return allEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
-}
-
-function stripNodeData(data: Record<string, unknown>): Record<string, unknown> {
-  const KEEP_KEYS = new Set([
-    'selectedModel', 'model', 'doEmbed', 'nFrames', 'effect',
-    'cannyThreshold1', 'cannyThreshold2', 'separator', 'jsonPath',
-    'activeChannel', 'label', 'collapsed', 'systemPrompt',
-    'aspectRatio', 'resolution', '_customName', '_bypassed',
-    'imageSize', 'maxFrames', 'extractionMode', 'cutSensitivity', 'color',
-    'autoUpdate', 'showThinking', 'excludedKeys', 'outputLimit', 'parseMode',
-    'selections',
-  ])
-  const clean: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(data)) {
-    if (KEEP_KEYS.has(k)) clean[k] = v
-  }
-  return clean
-}
-
-function keepNodeContent(data: Record<string, unknown>): Record<string, unknown> {
-  const clean: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(data)) {
-    if (v instanceof File) continue
-    if (typeof v === 'string' && v.startsWith('blob:')) continue
-    clean[k] = v
-  }
-  return clean
 }
 
 /* ── Submenu Wrapper ── */

@@ -143,13 +143,12 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                 style={{ cursor: 'pointer' }} />
             : <span className={styles.dropHint}>{h.activePrompt ? 'Ready — click Run' : 'Write a prompt or connect one'}</span>
           }
-          {canCompare && (
-            <button
-              className={`${styles.subtleToggle} ${styles.compareBtn}`}
-              onClick={() => setCompareMode(!compareMode)}
-              title={compareMode ? 'Show output' : 'Compare with source'}
-            >{compareMode ? 'IMG' : 'A/B'}</button>
-          )}
+          <button
+            className={`${styles.subtleToggle} ${styles.compareBtn}`}
+            onClick={() => canCompare && setCompareMode(!compareMode)}
+            disabled={!canCompare}
+            title={canCompare ? (compareMode ? 'Show output' : 'Compare with source') : 'Connect a ref or generate twice to enable A/B'}
+          >{compareMode && canCompare ? 'IMG' : 'A/B'}</button>
           {h.currentMediaId && (h.imageB64 || h.historyPreview) && (
             <button
               className={`${styles.favBtn} ${h.reviewStatuses[h.currentMediaId]?.favorite ? styles.favBtnActive : ''}`}

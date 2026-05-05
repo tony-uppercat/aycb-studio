@@ -3,7 +3,7 @@ import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
 import { useSettings } from '../../components/SettingsContext'
 import { api, bridgeVideo } from '../../api'
-import { pullText, pullAllMedia, pullMedia } from '../../hooks/useDataPropagation'
+import { pullText, pullAllMedia, pullMedia, resolveSourceText } from '../../hooks/useDataPropagation'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { useModelRegistry, type RegistryModel } from '../../hooks/useModelRegistry'
@@ -236,13 +236,14 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     state.edges.some(e => e.target === id && e.targetHandle === 'audio-ref')
   )
 
+  // Walks subnets/bypass via resolveSourceText so the preview reflects content
+  // INSIDE a subnet source — reading src.data directly fell back to localPrompt
+  // for any subnet upstream.
   const activePrompt = useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'prompt-in')
     if (!edge) return localPrompt
-    const src = state.nodes.find(n => n.id === edge.source)
-    if (!src) return localPrompt
-    const sd = src.data as Record<string, unknown>
-    return String(sd.outputText ?? sd.text ?? sd.prompt ?? localPrompt)
+    const txt = resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
+    return txt || localPrompt
   })
 
   // Cost estimate

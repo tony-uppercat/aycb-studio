@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 import { isCascadeRunning } from '../../utils/cascadeRun'
 import type { SlotDef } from '../_shared/NodeShell'
 
@@ -62,13 +62,13 @@ export function useJsonBlend(id: string, data: BlendData) {
     updateNodeInternals(id)
   }, [pinCount, id, updateNodeInternals])
 
-  // Subscribe to upstream data changes
+  // Subscribe to upstream data changes. Walks subnets via resolveSourceText
+  // so sub_graph inner edits trigger re-render here.
   useStore(state => {
     const edges = state.edges.filter(e => e.target === id)
     return edges.map(e => {
-      const src = state.nodes.find(n => n.id === e.source)
-      const d = src?.data as Record<string, unknown> | undefined
-      return `${e.source}:${e.targetHandle}:${String(d?.outputText ?? '')}`
+      const txt = resolveSourceText(e.source, e.sourceHandle ?? '', state.nodes, state.edges)
+      return `${e.source}:${e.targetHandle}:${txt}`
     }).join('|')
   })
 

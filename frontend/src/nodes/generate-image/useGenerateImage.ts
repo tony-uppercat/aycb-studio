@@ -6,7 +6,7 @@ import { api, bridgeMedia } from '../../api'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { saveMediaForProject, generateMediaId, loadMedia } from '../../mediaStore'
-import { pullText, pullAllMedia } from '../../hooks/useDataPropagation'
+import { pullText, pullAllMedia, resolveSourceText, resolveSourceMediaId } from '../../hooks/useDataPropagation'
 import { useGenerateImageHistory } from '../../hooks/useGenerateImageHistory'
 import { useStateRef } from '../../hooks/useStateRef'
 import { useModelRegistry, type RegistryModel } from '../../hooks/useModelRegistry'
@@ -277,14 +277,16 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     state.edges.some(e => e.target === id && e.targetHandle === 'prompt-in')
   )
 
-  // Subscribe to upstream prompt changes for live preview
+  // Subscribe to upstream prompt changes for live preview. Goes through
+  // resolveSourceText so the preview reflects content INSIDE a subnet
+  // source — reading src.data directly returned localPrompt fallback for
+  // every subnet source, leaving the prompt preview stuck on the local
+  // textarea value.
   const activePrompt = useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'prompt-in')
     if (!edge) return localPrompt
-    const src = state.nodes.find(n => n.id === edge.source)
-    if (!src) return localPrompt
-    const d = src.data as Record<string, unknown>
-    return String(d.outputText ?? d.text ?? d.prompt ?? localPrompt)
+    const txt = resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
+    return txt || localPrompt
   })
 
   const imageModels = useImageModels()
@@ -308,9 +310,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const sourceMediaIdImage0 = useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'image-0')
     if (!edge) return null
-    const src = state.nodes.find(n => n.id === edge.source)
-    const d = src?.data as Record<string, unknown> | undefined
-    return (d?.mediaId as string | undefined) ?? null
+    return resolveSourceMediaId(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
   })
   // The ref tracks the last mediaId we adapted to and is NEVER reset on
   // disconnect/transient null — that prevented a perceived bug where adding

@@ -9,6 +9,7 @@ import type { ImageUploadNodeData } from '../../types'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { readPngTextChunks } from '../../utils/pngMeta'
 import { saveMediaMeta } from '../../utils/reviewStatus'
+import { resolveSourceMediaId } from '../../hooks/useDataPropagation'
 
 export function useImageUpload(id: string, data: ImageUploadNodeData, selected?: boolean) {
   const { openPreview, isOpen: previewOpen } = useMediaPreview()
@@ -16,18 +17,17 @@ export function useImageUpload(id: string, data: ImageUploadNodeData, selected?:
   const [preview, setPreview] = useState<string | null>(null)
   const fileRef = useRef<File | null>(null)
 
-  // Reactive input: when upstream pushes an image via image-in, read its mediaId
+  // Reactive input: when upstream pushes an image via image-in, read its
+  // mediaId. Goes through resolveSourceMediaId so the source can be a subnet
+  // (walks DOWN to the inner proxy's source), a subnet-input (walks UP),
+  // a bypassed node, or a multi-output node (per-pin outputMediaIds).
+  // Reading src.data directly only worked when the source was a regular
+  // single-output node — connecting an Image-Upload-in-proxy-mode to a
+  // subnet's external output silently failed.
   const incomingMediaId = useStore(useCallback(state => {
     const edge = state.edges.find((e: { target: string; targetHandle?: string | null }) => e.target === id && e.targetHandle === 'image-in')
     if (!edge) return null
-    const src = state.nodes.find((n: { id: string }) => n.id === edge.source)
-    if (!src) return null
-    const d = src.data as Record<string, unknown>
-    const outputMediaIds = d.outputMediaIds as Record<string, string> | undefined
-    if (outputMediaIds && edge.sourceHandle && edge.sourceHandle in outputMediaIds) {
-      return outputMediaIds[edge.sourceHandle]
-    }
-    return (d.mediaId as string) ?? null
+    return resolveSourceMediaId(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
   }, [id]))
 
   const isProxy = !!incomingMediaId

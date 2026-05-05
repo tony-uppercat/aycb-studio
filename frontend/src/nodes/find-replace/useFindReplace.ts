@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 
 export interface FindReplaceRule {
   find: string
@@ -23,11 +23,11 @@ export interface FindReplaceNodeData extends Record<string, unknown> {
 export function useFindReplace(id: string, data: FindReplaceNodeData) {
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
 
+  // Re-render trigger that walks subnets so sub_graph inner edits propagate.
   useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'text-in')
     if (!edge) return ''
-    const src = state.nodes.find(n => n.id === edge.source)
-    return String((src?.data as Record<string, unknown>)?.outputText ?? '')
+    return resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
   })
 
   function handleRun() {

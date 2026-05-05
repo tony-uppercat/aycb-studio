@@ -3,7 +3,7 @@ import { useReactFlow, useStore, useUpdateNodeInternals, type Node } from '@xyfl
 import type { SlotDef } from '../_shared/NodeShell'
 import { parseJsonInput } from '../../utils/jsonParserUtils'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 import type { JsonParserNodeData } from '../../types'
 
 type JsonParserNodeType = Node<JsonParserNodeData, 'jsonParser'>
@@ -54,11 +54,13 @@ export function useJsonParser(id: string, data: JsonParserNodeData) {
   const { updateNodeData, addNodes, addEdges, getNode, getNodes, getEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
 
+  // Re-render trigger that walks subnets so sub_graph inner edits propagate
+  // to this consumer (otherwise the upstream signature was always '' for any
+  // subnet source and JSON Parser would not refresh until manual Run).
   useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'text-in')
     if (!edge) return ''
-    const src = state.nodes.find(n => n.id === edge.source)
-    return String((src?.data as Record<string, unknown>)?.outputText ?? '')
+    return resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
   })
 
   function handleRun() {
@@ -222,14 +224,15 @@ export function useJsonParser(id: string, data: JsonParserNodeData) {
   // Effective output: override takes precedence over computed
   const effectiveOutput = outputOverride ?? (visibleEntries.length > 0 ? filteredOutput : (result.ok ? result.display : ''))
 
-  // Sync output (skip if unchanged)
-  const prevOutputRef = useRef('')
-  const prevPinsRef = useRef('')
+  // Sync output (skip if unchanged). The signature MUST include the
+  // visibility toggles — they don't affect effectiveOutput or outputPins,
+  // so guarding only on those values silently dropped persistence and the
+  // collapsed state vanished on reload.
+  const prevSyncRef = useRef('')
   useEffect(() => {
-    const pinsJson = JSON.stringify(outputPins)
-    if (prevOutputRef.current === effectiveOutput && prevPinsRef.current === pinsJson) return
-    prevOutputRef.current = effectiveOutput
-    prevPinsRef.current = pinsJson
+    const sig = JSON.stringify([effectiveOutput, outputPins, pinsCollapsed, previewCollapsed, textCollapsed])
+    if (prevSyncRef.current === sig) return
+    prevSyncRef.current = sig
     updateNodeData(id, {
       outputText: effectiveOutput, outputPins, jsonPath: path, parseMode, outputFormat, flatten, overrides,
       excludedKeys: [...excludedKeys], excludedSections: [...excludedSections], outputLimit, maxDepth,

@@ -170,16 +170,28 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
     const handler = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) e.stopPropagation()
 
-      if (e.key === 'Escape' || e.key === 'Backspace') { e.preventDefault(); close() }
-      if (e.code === 'Space') {
-        const tag = (e.target as HTMLElement)?.tagName
-        if (tag === 'TEXTAREA' || tag === 'INPUT') return
-        e.preventDefault(); close()
+      const tag = (e.target as HTMLElement)?.tagName
+      const inEditor = tag === 'TEXTAREA' || tag === 'INPUT'
+
+      // Ctrl/Cmd+Enter — save (when editable) and close.
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (mediaRef.current?.onEdit) {
+          mediaRef.current.onEdit(editText)
+        }
+        close()
+        return
       }
+      // Escape always closes.
+      if (e.key === 'Escape') { e.preventDefault(); close(); return }
+      // Backspace and Space close only when focus is not in the textarea —
+      // otherwise they're swallowed character-edit keystrokes.
+      if (e.key === 'Backspace' && !inEditor) { e.preventDefault(); close(); return }
+      if (e.code === 'Space' && !inEditor) { e.preventDefault(); close() }
     }
     document.addEventListener('keydown', handler, true)
     return () => document.removeEventListener('keydown', handler, true)
-  }, [media, close])
+  }, [media, close, editText])
 
   return (
     <MediaPreviewContext.Provider value={{ openPreview, isOpen: !!media }}>
@@ -246,7 +258,11 @@ export function MediaPreviewProvider({ children }: { children: React.ReactNode }
                 <pre className={styles.textContent}>{editText}</pre>
               )}
             </div>
-            <div className={styles.hint}>Space / Backspace / Esc to close</div>
+            <div className={styles.hint}>
+              {media.onEdit
+                ? 'Esc to close · Ctrl+Enter to save'
+                : 'Space / Backspace / Esc to close'}
+            </div>
           </div>
         </>
       )}

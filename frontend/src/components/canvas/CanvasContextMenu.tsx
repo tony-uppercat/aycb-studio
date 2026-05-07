@@ -20,6 +20,7 @@ import {
 } from '../../services/canvasExport'
 import { stripNodeData, keepNodeContent } from '../../services/templateData'
 import type { CollageImage } from '../CollageEditor'
+import type { LayoutMode } from '../../utils/imageMergeRender'
 import styles from './CanvasContextMenu.module.css'
 
 /* ── Types ── */
@@ -48,6 +49,7 @@ export interface Props {
   onGroup?: () => void
   onUngroup?: () => void
   onOpenCollage?: (images: CollageImage[]) => void
+  onMerge?: (layout: LayoutMode, imageNodes: Node[]) => void
   onUnpack?: (nodes: Node[]) => void
   onDeleteEdge?: (edgeId: string) => void
   /** Position in flow coordinates (for add-node placement) */
@@ -169,7 +171,7 @@ export function CanvasContextMenu({
   x, y, target, allEdges, onClose,
   onAddNode, onPaste, onSelectAll, onFitView,
   onDuplicate, onCopy, onDelete, onBypass, onGroup, onUngroup,
-  onOpenCollage, onUnpack, onDeleteEdge, flowPosition,
+  onOpenCollage, onMerge, onUnpack, onDeleteEdge, flowPosition,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [showNodeExportChoice, setShowNodeExportChoice] = useState(false)
@@ -337,6 +339,13 @@ export function CanvasContextMenu({
     setTimeout(() => { setTemplateSaved(false); onClose() }, 1200)
   }
 
+  // ── Quick Merge (right-click → pick layout → new image node) ──
+  const handleMerge = useCallback((layout: LayoutMode) => {
+    if (!onMerge || imageNodes.length < 2) return
+    onMerge(layout, imageNodes)
+    onClose()
+  }, [onMerge, imageNodes, onClose])
+
   // ── Create Collage ──
   async function handleCreateCollage() {
     if (!canCollage || !onOpenCollage) return
@@ -411,6 +420,25 @@ export function CanvasContextMenu({
                 disabled={busy !== null}
                 onClick={handleSaveToAssets}
               />
+            )}
+            {canCollage && onMerge && (
+              <SubMenu label="Merge" icon="🧩" menuX={menuX}>
+                <button className={styles.item} onClick={() => handleMerge('grid')}>
+                  <span className={styles.icon}>⊞</span>
+                  <span className={styles.label}>Grid</span>
+                  <span className={styles.badge}>{imageNodes.length}</span>
+                </button>
+                <button className={styles.item} onClick={() => handleMerge('horizontal')}>
+                  <span className={styles.icon}>▭</span>
+                  <span className={styles.label}>Horizontal</span>
+                  <span className={styles.badge}>{imageNodes.length}</span>
+                </button>
+                <button className={styles.item} onClick={() => handleMerge('vertical')}>
+                  <span className={styles.icon}>▯</span>
+                  <span className={styles.label}>Vertical</span>
+                  <span className={styles.badge}>{imageNodes.length}</span>
+                </button>
+              </SubMenu>
             )}
             {canCollage && onOpenCollage && (
               <Item

@@ -43,6 +43,8 @@ import { setRootTree, resetRootTree } from '../../hooks/rootTreeGetter'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { CollageEditor } from '../CollageEditor'
 import type { CollageImage } from '../CollageEditor'
+import { runQuickMerge } from '../../services/quickMerge'
+import type { LayoutMode } from '../../utils/imageMergeRender'
 import { useActiveProject } from '../../hooks/useActiveProject'
 import { useBackendHealth } from '../../hooks/useBackendHealth'
 import styles from './FlowCanvas.module.css'
@@ -460,6 +462,44 @@ function FlowCanvasInner() {
     }
   }, [])
 
+  // ── Quick Merge (right-click → Merge → pick layout) ──
+  const handleQuickMerge = useCallback(async (layout: LayoutMode, imageNodes: Node[]) => {
+    const mediaIds = imageNodes
+      .map(n => (n.data as Record<string, unknown>).mediaId)
+      .filter((m): m is string => typeof m === 'string' && m.length > 0)
+    if (mediaIds.length < 2) return
+
+    let result: { mediaId: string }
+    try {
+      result = await runQuickMerge({ mediaIds, layout })
+    } catch (err) {
+      console.warn('[AYCB] Quick merge failed:', err)
+      return
+    }
+
+    // Place new node to the right of the selection's bounding box.
+    let maxRight = -Infinity
+    let centerY = 0
+    for (const n of imageNodes) {
+      const w = n.measured?.width ?? (n.style?.width as number) ?? 240
+      const right = (n.position?.x ?? 0) + w
+      if (right > maxRight) maxRight = right
+      centerY += n.position?.y ?? 0
+    }
+    centerY = centerY / imageNodes.length
+    const newNode: Node = {
+      id: getNextNodeId('imageUpload'),
+      type: 'imageUpload',
+      position: { x: maxRight + 60, y: centerY },
+      data: { mediaId: result.mediaId },
+      selected: true,
+    }
+
+    const postNodes = [...getNodes().map(n => ({ ...n, selected: false })), newNode]
+    snapshot(postNodes, getEdges())
+    setNodes(postNodes)
+  }, [getNodes, getEdges, setNodes, snapshot])
+
   const handleCollageExport = useCallback(async (blob: Blob) => {
     // Save blob as a File to mediaStore and create a new ImageUploadNode at viewport center
     const filename = `collage-${Date.now()}.png`
@@ -719,6 +759,7 @@ function FlowCanvasInner() {
           onGroup={ctxGroup}
           onUngroup={ctxUngroup}
           onOpenCollage={handleOpenCollage}
+          onMerge={handleQuickMerge}
           onUnpack={ctxUnpack}
           onDeleteEdge={ctxDeleteEdge}
           flowPosition={ctxMenu.flowPos}

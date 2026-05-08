@@ -128,6 +128,56 @@ def restore_page(project_id: str = Query(...), name: str = Query("restored")):
     return HTMLResponse(content=html)
 
 
+@router.get("/backup/list")
+def list_all_backups():
+    """List every project that has a backup directory and its backup files.
+
+    Returns metadata only (no full canvas content) so the UI can pick a backup
+    to restore without loading megabytes of JSON.
+    """
+    root = settings.shared_root / "data" / _BACKUP_DIR_NAME
+    if not root.exists():
+        return {"projects": []}
+
+    projects: list[dict[str, Any]] = []
+    for proj_dir in sorted(root.iterdir()):
+        if not proj_dir.is_dir():
+            continue
+        files = sorted(proj_dir.glob("canvas_*.json"))
+        backups: list[dict[str, Any]] = []
+        for f in files:
+            try:
+                data = _json.loads(f.read_text(encoding="utf-8"))
+                canvas = data.get("canvas", {})
+                backups.append({
+                    "filename": f.name,
+                    "timestamp": data.get("timestamp", ""),
+                    "nodes": len(canvas.get("nodes", [])),
+                    "edges": len(canvas.get("edges", [])),
+                })
+            except (OSError, ValueError) as e:
+                _log(f"canvas_backup: skipping unreadable {f.name}: {e}")
+        if backups:
+            projects.append({"project_id": proj_dir.name, "backups": backups})
+    return {"projects": projects}
+
+
+@router.get("/backup/file")
+def get_backup_file(project_id: str = Query(...), filename: str = Query(...)):
+    """Return the full contents of a specific backup file.
+
+    `filename` is validated to match the canvas_*.json pattern so the caller
+    cannot escape the project's backup directory via path traversal.
+    """
+    if not filename.startswith("canvas_") or not filename.endswith(".json") or "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    backup_dir = settings.shared_root / "data" / _BACKUP_DIR_NAME / project_id
+    filepath = backup_dir / filename
+    if not filepath.exists() or not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Backup not found")
+    return _json.loads(filepath.read_text(encoding="utf-8"))
+
+
 @router.get("/backup/open")
 def open_backup_folder(project_id: str = Query(...)):
     backup_dir = settings.shared_root / "data" / _BACKUP_DIR_NAME / project_id

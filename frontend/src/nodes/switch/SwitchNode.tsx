@@ -6,36 +6,35 @@ import styles from '../_shared/Node.module.css'
 
 type SwitchNodeType = Node<SwitchNodeData, 'switch'>
 
+// SOH delimiter — never present in user text — joins inputs into a primitive
+// so useStore's default reference equality short-circuits subsequent renders.
+const SEP = String.fromCharCode(1)
+
 export function SwitchNode({ id, data, selected }: NodeProps<SwitchNodeType>) {
   const { updateNodeData } = useReactFlow()
 
-  // Get all edges connected to our single input pin, sorted by connection order
-  const connectedSources = useStore(state => {
+  // Returning a fresh array here would re-render on every store change and
+  // trip the useEffect below into an infinite updateNodeData loop. A stable
+  // string lets useStore bail out unless the actual text content changed.
+  const textsKey = useStore(state => {
     const edges = state.edges.filter(e => e.target === id && e.targetHandle === 'text-in')
     return edges.map(e => {
       const src = state.nodes.find(n => n.id === e.source)
       const d = src?.data as Record<string, unknown> | undefined
-      return {
-        sourceId: e.source,
-        text: String(d?.outputText ?? d?.text ?? d?.prompt ?? ''),
-      }
-    })
+      return String(d?.outputText ?? d?.text ?? d?.prompt ?? '')
+    }).join(SEP)
   })
 
-  const count = connectedSources.length
+  const texts = textsKey ? textsKey.split(SEP) : []
+  const count = texts.length
   const [active, setActive] = useState(data.activeChannel ?? 0)
-
-  // Clamp active to valid range
   const clamped = count > 0 ? Math.min(active, count - 1) : 0
 
-  // Stable string for dependency tracking (avoids complex expression in deps)
-  const textsKey = connectedSources.map(s => s.text).join('|')
-
-  // Auto-propagate selected channel's text
   useEffect(() => {
-    const text = connectedSources[clamped]?.text ?? ''
+    const list = textsKey ? textsKey.split(SEP) : []
+    const text = list[clamped] ?? ''
     updateNodeData(id, { outputText: text, activeChannel: clamped })
-  }, [clamped, textsKey, connectedSources, id, updateNodeData])
+  }, [clamped, textsKey, id, updateNodeData])
 
   return (
     <NodeShell name="Switch" selected={selected} icon="⇄"

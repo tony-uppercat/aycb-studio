@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSettings } from './SettingsContext'
 import { useCanvasStore } from '../stores/canvasStore'
 import { MODELS } from '../presets'
+import { BackupsTab } from './BackupsTab'
 import styles from './SettingsPanel.module.css'
 
-type Tab = 'api' | 'local' | 'defaults' | 'paths' | 'backend'
+type Tab = 'api' | 'local' | 'defaults' | 'paths' | 'backend' | 'backups'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'api', label: 'API Keys' },
@@ -12,6 +13,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'defaults', label: 'Defaults' },
   { id: 'paths', label: 'Paths' },
   { id: 'backend', label: 'Backend' },
+  { id: 'backups', label: 'Backups' },
 ]
 
 interface Props {
@@ -474,6 +476,9 @@ export function SettingsPanel({ open, onClose }: Props) {
               </div>
             </>
           )}
+
+          {/* ===== Backups Tab ===== */}
+          {activeTab === 'backups' && <BackupsTab />}
 
           {/* ===== Backend Tab ===== */}
           {activeTab === 'backend' && (

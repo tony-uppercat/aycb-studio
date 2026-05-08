@@ -6,9 +6,9 @@ const manifest: NodeManifest = {
   icon: '⇄',
   category: 'utility',
   description: 'Route between multiple connected inputs by index',
-  defaultData: { selectedIndex: 0 },
-  inputs: [{ type: 'media', handleId: 'media-in' }],
-  outputs: [{ type: 'media', handleId: 'media-out' }],
+  defaultData: { activeChannel: 0 },
+  inputs: [{ type: 'text', handleId: 'text-in' }],
+  outputs: [{ type: 'text', handleId: 'text-out' }],
 }
 
 export default manifest

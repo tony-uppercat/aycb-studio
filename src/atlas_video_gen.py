@@ -154,9 +154,38 @@ async def submit_with_refs(
     if not ref_image_bytes:
         return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration, seed)
 
+    # Multi-ref dispatch — Omni Pro reference-to-video.
+    endpoint_ref2v = info.get("model_id_ref2v")
+    if len(ref_image_bytes) >= 2 and endpoint_ref2v:
+        capped = ref_image_bytes[:4]
+        images_uris: list[str] = []
+        for name, data in capped:
+            ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
+            images_uris.append(_to_data_uri(data, ext))
+        if ref_video_bytes:
+            logger.warning(
+                "Atlas %s reference-to-video does not accept video refs; ignored",
+                info["name"],
+            )
+        if audio_url:
+            logger.warning("Atlas %s does not support audio refs; ignored", info["name"])
+        payload: dict[str, Any] = {
+            "model": endpoint_ref2v,
+            "prompt": prompt,
+            "images": images_uris,
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
+        }
+        if seed is not None and seed >= 0:
+            payload["seed"] = seed
+        return await _submit(api_key, info["name"], payload)
+
+    # Single-image dispatch (existing kling-vs-seedance branching).
     if len(ref_image_bytes) > 1:
-        logger.warning("Atlas I2V uses only the first image as start keyframe; %d extra ignored",
-                        len(ref_image_bytes) - 1)
+        logger.warning(
+            "Atlas I2V uses only the first image as start keyframe; %d extra ignored",
+            len(ref_image_bytes) - 1,
+        )
     if ref_video_bytes:
         logger.warning("Atlas %s does not support video references; ignored", info["name"])
     if audio_url:

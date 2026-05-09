@@ -133,3 +133,70 @@ async def test_submit_with_refs_motion_control_requires_image_and_video():
             ref_image_bytes=None,
             ref_video_bytes=("m.mp4", b"."),  # no image
         )
+
+
+@pytest.mark.asyncio
+async def test_omni_pro_uses_ref2v_endpoint_with_2plus_images(httpx_mock):
+    from src.atlas_video_gen import submit_with_refs
+    httpx_mock.add_response(
+        url="https://api.atlascloud.ai/api/v1/model/generateVideo",
+        json={"data": {"id": "task-r2v"}},
+    )
+    await submit_with_refs(
+        api_key="k",
+        model_id="atlas-kling-v3-pro",
+        prompt="multi-ref scene",
+        ref_image_bytes=[("a.png", b"."), ("b.png", b"."), ("c.png", b".")],
+        aspect_ratio="16:9",
+        duration=8,
+    )
+    import json as _json
+    payload = _json.loads(httpx_mock.get_request().read().decode())
+    assert payload["model"] == "kwaivgi/kling-video-o3-pro/reference-to-video"
+    assert isinstance(payload["images"], list)
+    assert len(payload["images"]) == 3
+    assert all(uri.startswith("data:image/") for uri in payload["images"])
+    assert payload["aspect_ratio"] == "16:9"
+    assert payload["duration"] == 8
+    # ref2v uses multi-image key, NOT single-image keys.
+    assert "image" not in payload
+    assert "image_url" not in payload
+
+
+@pytest.mark.asyncio
+async def test_omni_pro_uses_i2v_endpoint_with_1_image(httpx_mock):
+    from src.atlas_video_gen import submit_with_refs
+    httpx_mock.add_response(
+        url="https://api.atlascloud.ai/api/v1/model/generateVideo",
+        json={"data": {"id": "task-i2v"}},
+    )
+    await submit_with_refs(
+        api_key="k",
+        model_id="atlas-kling-v3-pro",
+        prompt="single-ref scene",
+        ref_image_bytes=[("only.png", b".")],
+        aspect_ratio="9:16",
+        duration=5,
+    )
+    import json as _json
+    payload = _json.loads(httpx_mock.get_request().read().decode())
+    assert payload["model"] == "kwaivgi/kling-video-o3-pro/image-to-video"
+    assert "image" in payload
+    assert "images" not in payload
+
+
+@pytest.mark.asyncio
+async def test_omni_pro_ref2v_caps_at_4_images(httpx_mock):
+    from src.atlas_video_gen import submit_with_refs
+    httpx_mock.add_response(
+        url="https://api.atlascloud.ai/api/v1/model/generateVideo",
+        json={"data": {"id": "task-cap"}},
+    )
+    refs = [(f"r{i}.png", b".") for i in range(7)]
+    await submit_with_refs(
+        api_key="k", model_id="atlas-kling-v3-pro",
+        prompt="x", ref_image_bytes=refs, duration=5,
+    )
+    import json as _json
+    payload = _json.loads(httpx_mock.get_request().read().decode())
+    assert len(payload["images"]) == 4

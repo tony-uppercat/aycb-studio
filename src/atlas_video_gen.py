@@ -173,6 +173,53 @@ async def submit_with_refs(
     return await _submit(api_key, info["name"], payload)
 
 
+async def submit_motion_control(
+    api_key: str, model_id: str, prompt: str,
+    subject_image_bytes: tuple[str, bytes],
+    motion_video_bytes: tuple[str, bytes],
+    character_orientation: str = "image",
+    duration: int = 5,
+    negative_prompt: str = "",
+    keep_original_sound: bool = False,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    """Submit a Kling 2.6 Pro motion-control request.
+
+    Schema is intentionally minimal — Atlas's motion-control endpoint
+    rejects every Seedance/Kling-i2v key (ratio, resolution, image_url,
+    generate_audio, seed). Only `image`, `video`, `character_orientation`,
+    `prompt`, `duration`, and the two optional fields below are accepted.
+    """
+    info = get_model_info(model_id)
+    endpoint = info["model_id"]
+    if not _is_motion_control(endpoint):
+        raise AtlasVideoGenError(
+            f"{model_id} is not a motion-control model (endpoint={endpoint})"
+        )
+    if character_orientation not in ("image", "video"):
+        raise AtlasVideoGenError(
+            f"character_orientation must be 'image' or 'video', got {character_orientation!r}"
+        )
+
+    img_name, img_data = subject_image_bytes
+    vid_name, vid_data = motion_video_bytes
+    img_ext = "." + img_name.rsplit(".", 1)[-1] if "." in img_name else ".png"
+    vid_ext = "." + vid_name.rsplit(".", 1)[-1] if "." in vid_name else ".mp4"
+
+    payload: dict[str, Any] = {
+        "model": endpoint,
+        "image": _to_data_uri(img_data, img_ext),
+        "video": _to_data_uri(vid_data, vid_ext),
+        "character_orientation": character_orientation,
+        "prompt": prompt,
+        "duration": duration,
+        "keep_original_sound": keep_original_sound,
+    }
+    if negative_prompt:
+        payload["negative_prompt"] = negative_prompt
+    return await _submit(api_key, info["name"], payload)
+
+
 async def _submit(api_key: str, name: str, payload: dict) -> dict[str, Any]:
     """Submit generation request. Returns {request_id, status}."""
     logger.info("%s submit: %s", name, payload.get("prompt", "")[:80])

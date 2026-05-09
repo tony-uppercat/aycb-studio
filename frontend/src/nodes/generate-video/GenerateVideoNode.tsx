@@ -37,6 +37,8 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     duration, setDuration,
     quality, setQuality,
     seed, setSeed,
+    characterOrientation, setCharacterOrientation,
+    isMotionControl,
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,
@@ -63,9 +65,11 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
       icon="\u{1F39E}"
       inputSlots={[
         { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
-        ...imageSlots,
-        { id: 'video-ref', label: 'Video Ref', type: 'video' },
-        { id: 'audio-ref', label: 'Audio URL', type: 'text' },
+        ...(isMotionControl
+          ? [{ id: 'image-0', label: 'Subject', type: 'image' as const }]
+          : imageSlots),
+        { id: 'video-ref', label: isMotionControl ? 'Motion (required)' : 'Video Ref', type: 'video' as const },
+        { id: 'audio-ref', label: 'Audio URL', type: 'text' as const },
       ]}
       outputSlots={[
         { id: 'video-out', label: 'Video', type: 'video' },
@@ -111,6 +115,26 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
           ))}
         </select>
 
+        {isMotionControl && (
+          <div className={nodeStyles.controlsRow}>
+            <div className={nodeStyles.controlGroup}>
+              <span className={nodeStyles.controlLabel}>Frame</span>
+              <select
+                className={nodeStyles.selectSmall}
+                value={characterOrientation}
+                onChange={e => {
+                  const v = e.target.value as 'image' | 'video'
+                  setCharacterOrientation(v)
+                  updateNodeData(id, { characterOrientation: v })
+                }}
+              >
+                <option value="image">Subject</option>
+                <option value="video">Motion video</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Prompt textarea (only when no prompt connected) */}
         {!hasPromptEdge && (
           <textarea
@@ -133,22 +157,18 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
         )}
 
         {/* Mode indicator */}
-        <div className={nodeStyles.controlsRow}>
-          <div className={nodeStyles.modeToggle}>
-            <button className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}
-              onClick={() => setMode('t2v')}>
-              T2V
-            </button>
-            <button className={`${nodeStyles.modeBtn} ${mode === 'i2v' ? nodeStyles.modeBtnActive : ''}`}
-              onClick={() => setMode('i2v')}>
-              I2V
-            </button>
-            <button className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}
-              onClick={() => setMode('multi-ref')}>
-              Multi-Ref
-            </button>
+        {!isMotionControl && (
+          <div className={nodeStyles.controlsRow}>
+            <div className={nodeStyles.modeToggle}>
+              <button className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}
+                onClick={() => setMode('t2v')}>T2V</button>
+              <button className={`${nodeStyles.modeBtn} ${mode === 'i2v' ? nodeStyles.modeBtnActive : ''}`}
+                onClick={() => setMode('i2v')}>I2V</button>
+              <button className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}
+                onClick={() => setMode('multi-ref')}>Multi-Ref</button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Aspect Ratio + Quality */}
         <div className={nodeStyles.controlsRow}>

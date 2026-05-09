@@ -99,6 +99,8 @@ async def generate_video(
     api_key: str = Form(""),
     audio_url: str = Form(""),
     seed: int = Form(-1),
+    character_orientation: str = Form("image"),
+    negative_prompt: str = Form(""),
     ref_images: list[UploadFile] | None = File(default=None),
     ref_video: UploadFile | None = File(default=None),
 ):
@@ -111,7 +113,10 @@ async def generate_video(
         return await _generate_video_fal(prompt, model, api_key, aspect_ratio, duration, ref_images, seed)
     if model.startswith("atlas-"):
         return await _generate_video_atlas(
-            prompt, model, api_key, aspect_ratio, duration, audio_url, ref_images, ref_video, seed,
+            prompt, model, api_key, aspect_ratio, duration, audio_url,
+            ref_images, ref_video, seed,
+            character_orientation=character_orientation,
+            negative_prompt=negative_prompt,
         )
     return await _generate_video_piapi(
         prompt, model, api_key, aspect_ratio, duration, quality, audio_url, ref_images, ref_video, seed,
@@ -201,6 +206,9 @@ async def _generate_video_atlas(
     duration: int, audio_url: str,
     ref_images: list[UploadFile] | None, ref_video: UploadFile | None,
     seed: int = -1,
+    *,
+    character_orientation: str = "image",
+    negative_prompt: str = "",
 ):
     from src.atlas_video_gen import AtlasVideoGenError, submit_text_to_video as atlas_t2v, submit_with_refs as atlas_refs
 
@@ -226,6 +234,8 @@ async def _generate_video_atlas(
                 ref_image_bytes=image_bytes or None, ref_video_bytes=video_bytes,
                 audio_url=audio_url, aspect_ratio=aspect_ratio, duration=duration,
                 seed=seed,
+                character_orientation=character_orientation,
+                negative_prompt=negative_prompt,
             )
         else:
             result = await atlas_t2v(

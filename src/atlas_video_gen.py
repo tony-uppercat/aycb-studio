@@ -31,6 +31,7 @@ def _build_models_dict() -> dict[str, dict[str, Any]]:
             "name": m.name,
             "model_id": m.endpoint_t2v,
             "model_id_i2v": m.endpoint_i2v,
+            "model_id_ref2v": m.endpoint_ref2v,
             "aspect_ratios": list(m.aspect_ratios),
             "qualities": list(m.qualities),
             "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
@@ -83,6 +84,12 @@ def _is_kling(model_endpoint: str) -> bool:
     image_url/ratio/resolution/generate_audio, Kling uses image/aspect_ratio
     and rejects the Seedance-specific keys with a 400."""
     return "kling" in model_endpoint.lower()
+
+
+def _is_motion_control(model_endpoint: str) -> bool:
+    """Atlas Kling 2.6 Pro motion-control model — separate payload schema
+    requiring both `image` (subject) and `video` (motion source)."""
+    return "motion-control" in model_endpoint.lower()
 
 
 async def submit_text_to_video(

@@ -296,11 +296,20 @@ export const api = {
     return post('/effects/depth', fd)
   },
 
-  /** Submit a video generation request via PiAPI (Kling / Seedance). Returns {request_id}. */
+  /** Submit a video generation request via PiAPI / fal.ai / Atlas / Veo. Returns {request_id}. */
   generateVideo(
     prompt: string,
     apiKey: string,
-    options: { model?: string; aspectRatio?: string; duration?: number; quality?: string; audioUrl?: string; seed?: number },
+    options: {
+      model?: string
+      aspectRatio?: string
+      duration?: number
+      quality?: string
+      audioUrl?: string
+      seed?: number
+      characterOrientation?: 'image' | 'video'
+      negativePrompt?: string
+    },
     refImages?: File[],
     refVideo?: File,
   ): Promise<import('./types').GenerateVideoResult> {
@@ -314,6 +323,8 @@ export const api = {
     fd.append('quality', options.quality ?? '720p')
     if (options.audioUrl) fd.append('audio_url', options.audioUrl)
     fd.append('seed', String(options.seed ?? -1))
+    if (options.characterOrientation) fd.append('character_orientation', options.characterOrientation)
+    if (options.negativePrompt) fd.append('negative_prompt', options.negativePrompt)
     refImages?.forEach(f => fd.append('ref_images', f))
     if (refVideo) fd.append('ref_video', refVideo)
     return post('/generate/video', fd)

@@ -90,3 +90,46 @@ async def test_motion_control_includes_negative_prompt_when_provided(httpx_mock)
     import json as _json
     payload = _json.loads(httpx_mock.get_request().read().decode())
     assert payload["negative_prompt"] == "blur, low quality"
+
+
+@pytest.mark.asyncio
+async def test_submit_with_refs_dispatches_to_motion_control(httpx_mock):
+    from src.atlas_video_gen import submit_with_refs
+    httpx_mock.add_response(
+        url="https://api.atlascloud.ai/api/v1/model/generateVideo",
+        json={"data": {"id": "task-mc"}},
+    )
+    result = await submit_with_refs(
+        api_key="k",
+        model_id="atlas-kling-motion-control",
+        prompt="walk",
+        ref_image_bytes=[("s.png", b".")],
+        ref_video_bytes=("m.mp4", b"."),
+        character_orientation="video",
+        duration=10,
+    )
+    assert result["request_id"] == "task-mc"
+    import json as _json
+    payload = _json.loads(httpx_mock.get_request().read().decode())
+    assert payload["model"] == "kwaivgi/kling-v2.6-pro/motion-control"
+    assert payload["character_orientation"] == "video"
+
+
+@pytest.mark.asyncio
+async def test_submit_with_refs_motion_control_requires_image_and_video():
+    from src.atlas_video_gen import AtlasVideoGenError, submit_with_refs
+    with pytest.raises(AtlasVideoGenError, match="motion control"):
+        await submit_with_refs(
+            api_key="k",
+            model_id="atlas-kling-motion-control",
+            prompt="walk",
+            ref_image_bytes=[("s.png", b".")],  # no video
+        )
+    with pytest.raises(AtlasVideoGenError, match="motion control"):
+        await submit_with_refs(
+            api_key="k",
+            model_id="atlas-kling-motion-control",
+            prompt="walk",
+            ref_image_bytes=None,
+            ref_video_bytes=("m.mp4", b"."),  # no image
+        )

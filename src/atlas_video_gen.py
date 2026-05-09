@@ -132,6 +132,25 @@ async def submit_with_refs(
     """Submit I2V request. Atlas only supports first image as start keyframe."""
     info = get_model_info(model_id)
 
+    # Motion-control dispatch — separate payload schema, requires both inputs.
+    endpoint_t2v = info["model_id"] or ""
+    if _is_motion_control(endpoint_t2v):
+        if not ref_image_bytes or not ref_video_bytes:
+            raise AtlasVideoGenError(
+                "motion control requires both an image (subject) and a video (motion source)"
+            )
+        return await submit_motion_control(
+            api_key=api_key,
+            model_id=model_id,
+            prompt=prompt,
+            subject_image_bytes=ref_image_bytes[0],
+            motion_video_bytes=ref_video_bytes,
+            character_orientation=_kwargs.get("character_orientation", "image"),
+            duration=duration,
+            negative_prompt=_kwargs.get("negative_prompt", ""),
+            keep_original_sound=_kwargs.get("keep_original_sound", False),
+        )
+
     if not ref_image_bytes:
         return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration, seed)
 

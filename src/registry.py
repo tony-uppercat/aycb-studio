@@ -66,6 +66,7 @@ class Model:
     # module can look up its own URL without needing a parallel dict.
     endpoint_t2v: str | None = None
     endpoint_i2v: str | None = None
+    endpoint_ref2v: str | None = None
     provider_model_id: str | None = None  # e.g. the Gemini-API model id
     task_type: str | None = None  # PiAPI task_type
 
@@ -380,16 +381,42 @@ _VIDEO_MODELS: tuple[Model, ...] = (
     ),
     Model(
         id="atlas-kling-v3-pro",
-        name="Kling 3.0 Pro (Atlas)",
+        name="Kling 3.0 Omni Pro (Atlas)",
         provider="atlas",
         capability="video",
         cost_per_sec={"720p": 0.095},
         aspect_ratios=("16:9", "9:16", "1:1"),
         qualities=("720p",),
-        allowed_durations=(5, 10),
-        tooltip="Atlas Cloud — Kling 3.0 Pro (O3), 5/10s, enhanced physics + lip-sync",
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="Atlas Cloud — Kling 3.0 Omni Pro (O3), 3-15s, multi-ref + lip-sync",
         endpoint_t2v="kwaivgi/kling-video-o3-pro/text-to-video",
         endpoint_i2v="kwaivgi/kling-video-o3-pro/image-to-video",
+        endpoint_ref2v="kwaivgi/kling-video-o3-pro/reference-to-video",
+    ),
+    Model(
+        id="atlas-kling-motion-control",
+        name="Kling Motion Control (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.112},
+        aspect_ratios=("9:16", "16:9", "1:1"),
+        qualities=("720p",),
+        allowed_durations=(5, 10, 15, 30),
+        tooltip="Atlas Cloud — Kling 2.6 Pro motion transfer (image + ref video)",
+        endpoint_t2v="kwaivgi/kling-v2.6-pro/motion-control",
+    ),
+    Model(
+        id="atlas-kling-omni-std",
+        name="Kling 3.0 Omni Std (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.071},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="Atlas Cloud — Kling 3.0 Omni Std (O3), 3-15s",
+        endpoint_t2v="kwaivgi/kling-video-o3-std/text-to-video",
+        endpoint_i2v="kwaivgi/kling-video-o3-std/image-to-video",
     ),
     # Vertex / Veo — default duration is 8 (API forces 8 for refs / HD anyway).
     Model(

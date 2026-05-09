@@ -98,3 +98,33 @@ def test_dataclass_serializes_tuples_as_lists(client):
     veo = next(m for m in resp.json()["models"] if m["id"] == "vertex-veo-3.1")
     assert veo["allowed_durations"] == [4, 6, 8]
     assert isinstance(veo["aspect_ratios"], list)
+
+
+# ── motion control + Omni cleanup ──────────────────────────────────────
+
+def test_atlas_kling_motion_control_registered():
+    from src.registry import REGISTRY
+    m = REGISTRY["atlas-kling-motion-control"]
+    assert m.provider == "atlas"
+    assert m.capability == "video"
+    assert m.endpoint_t2v == "kwaivgi/kling-v2.6-pro/motion-control"
+    assert m.cost_per_sec == {"720p": 0.112}
+    assert m.allowed_durations == (5, 10, 15, 30)
+
+
+def test_atlas_kling_omni_std_registered():
+    from src.registry import REGISTRY
+    m = REGISTRY["atlas-kling-omni-std"]
+    assert m.provider == "atlas"
+    assert m.endpoint_t2v == "kwaivgi/kling-video-o3-std/text-to-video"
+    assert m.endpoint_i2v == "kwaivgi/kling-video-o3-std/image-to-video"
+    assert m.cost_per_sec == {"720p": 0.071}
+    assert min(m.allowed_durations) == 3 and max(m.allowed_durations) == 15
+
+
+def test_atlas_kling_v3_pro_renamed_and_has_ref2v():
+    from src.registry import REGISTRY
+    m = REGISTRY["atlas-kling-v3-pro"]
+    assert m.name == "Kling 3.0 Omni Pro (Atlas)"
+    assert m.endpoint_ref2v == "kwaivgi/kling-video-o3-pro/reference-to-video"
+    assert min(m.allowed_durations) == 3 and max(m.allowed_durations) == 15

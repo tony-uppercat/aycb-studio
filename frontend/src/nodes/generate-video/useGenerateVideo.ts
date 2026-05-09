@@ -71,10 +71,24 @@ const VIDEO_MODELS_FALLBACK: VideoModelDef[] = [
     qualities: ['720p'], minDuration: 5, maxDuration: 10,
   },
   {
-    id: 'atlas-kling-v3-pro', name: 'Kling 3.0 Pro', provider: 'atlas',
-    tooltip: 'Atlas Cloud — Kling 3.0 Pro (O3), 5/10s, enhanced physics + lip-sync', price: '$0.095/s',
+    id: 'atlas-kling-v3-pro', name: 'Kling 3.0 Omni Pro', provider: 'atlas',
+    tooltip: 'Atlas Cloud — Kling 3.0 Omni Pro (O3), 3-15s, multi-ref + lip-sync', price: '$0.095/s',
     cost: 0.095, ratios: ['16:9', '9:16', '1:1'],
-    qualities: ['720p'], minDuration: 5, maxDuration: 10,
+    qualities: ['720p'], minDuration: 3, maxDuration: 15,
+  },
+  // Atlas Cloud — Kling 3.0 Omni Std (O3 Std)
+  {
+    id: 'atlas-kling-omni-std', name: 'Kling 3.0 Omni Std', provider: 'atlas',
+    tooltip: 'Atlas Cloud — Kling 3.0 Omni Std (O3), 3-15s', price: '$0.071/s',
+    cost: 0.071, ratios: ['16:9', '9:16', '1:1'],
+    qualities: ['720p'], minDuration: 3, maxDuration: 15,
+  },
+  // Atlas Cloud — Kling 2.6 Pro Motion Control (image + ref video)
+  {
+    id: 'atlas-kling-motion-control', name: 'Kling Motion Control', provider: 'atlas',
+    tooltip: 'Atlas Cloud — Kling 2.6 Pro motion transfer (image + ref video)', price: '$0.112/s',
+    cost: 0.112, ratios: ['9:16', '16:9', '1:1'],
+    qualities: ['720p'], minDuration: 5, maxDuration: 30,
   },
   // PiAPI — Kling 3.0 Omni
   {
@@ -172,6 +186,10 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     const v = (data as Record<string, unknown>).modeOverride
     return v === 't2v' || v === 'i2v' || v === 'multi-ref' ? v : null
   })
+  const [characterOrientation, setCharacterOrientation] = useState<'image' | 'video'>(() => {
+    const v = (data as Record<string, unknown>).characterOrientation
+    return v === 'video' ? 'video' : 'image'
+  })
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -199,12 +217,15 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   useEffect(() => { aspectRatioRef.current = aspectRatio }, [aspectRatio])
   const localPromptRef = useRef(localPrompt)
   useEffect(() => { localPromptRef.current = localPrompt }, [localPrompt])
+  const characterOrientationRef = useRef(characterOrientation)
+  useEffect(() => { characterOrientationRef.current = characterOrientation }, [characterOrientation])
 
   const videoModels = useVideoModels()
   const modelInfo = videoModels.find(m => m.id === selectedModel) ?? videoModels[0] ?? VIDEO_MODELS_FALLBACK[0]
   const isFal = modelInfo.provider === 'fal'
   const isAtlas = modelInfo.provider === 'atlas'
   const isVertex = modelInfo.provider === 'vertex'
+  const isMotionControl = selectedModel === 'atlas-kling-motion-control'
   const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : isVertex ? apiKey : piApiKey
   const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : isVertex ? 'vertex' : 'piapi'
 
@@ -251,10 +272,12 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
 
   // Detect mode — user override takes precedence over auto-detection
   const hasRefs = connectedImageCount > 0 || hasVideoRef || hasAudioRef
-  const autoMode = !hasRefs ? 't2v'
+  const autoMode: 't2v' | 'i2v' | 'multi-ref' | 'motion-control' =
+    isMotionControl ? 'motion-control'
+    : !hasRefs ? 't2v'
     : (connectedImageCount <= 2 && !hasVideoRef && !hasAudioRef) ? 'i2v'
     : 'multi-ref'
-  const mode = modeOverride ?? autoMode
+  const mode = isMotionControl ? 'motion-control' : (modeOverride ?? autoMode)
   const modeRef = useRef(mode)
   useEffect(() => { modeRef.current = mode }, [mode])
 
@@ -398,6 +421,16 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const run = useCallback(async () => {
     const prompt = (pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt).trim()
     if (!prompt) { setError('Write a prompt'); return }
+    if (isMotionControl) {
+      if (connectedImageCount === 0) {
+        setError('Motion control requires a connected image (subject)')
+        return
+      }
+      if (!hasVideoRef) {
+        setError('Motion control requires a connected video reference (motion source)')
+        return
+      }
+    }
     if (!activeApiKey) {
       setError(isFal ? 'Set fal.ai key in Settings'
              : isAtlas ? 'Set Atlas Cloud key in Settings'
@@ -419,10 +452,12 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
         refImages = (await pullAllMedia(id, 'image-', getNodes, getEdges)).slice(0, 2)
       } else if (curMode === 'multi-ref') {
         refImages = await pullAllMedia(id, 'image-', getNodes, getEdges)
+      } else if (curMode === 'motion-control') {
+        refImages = (await pullAllMedia(id, 'image-', getNodes, getEdges)).slice(0, 1)
       }
 
       let refVideo: File | undefined
-      if (hasVideoRef && curMode === 'multi-ref') {
+      if (hasVideoRef && (curMode === 'multi-ref' || curMode === 'motion-control')) {
         const { file } = await pullMedia(id, 'video-ref', getNodes, getEdges)
         if (file) refVideo = file
       }
@@ -434,7 +469,15 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
 
       const result = await api.generateVideo(
         prompt, activeApiKey,
-        { model: selectedModel, aspectRatio, duration, quality, audioUrl, seed },
+        {
+          model: selectedModel,
+          aspectRatio,
+          duration,
+          quality,
+          audioUrl,
+          seed,
+          characterOrientation: isMotionControl ? characterOrientationRef.current : undefined,
+        },
         refImages.length > 0 ? refImages : undefined,
         refVideo,
       )
@@ -456,13 +499,15 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
       setLoading(false)
       reportNodeError(id, msg)
     }
-  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, activeProvider, selectedModel, aspectRatio, duration, quality, seed,
-      hasVideoRef, hasAudioRef, getNodes, getEdges, updateNodeData, startPolling])
+  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, isMotionControl, activeProvider,
+      selectedModel, aspectRatio, duration, quality, seed,
+      hasVideoRef, hasAudioRef, getNodes, getEdges, updateNodeData, startPolling, connectedImageCount])
 
   const setMode = useCallback((m: 't2v' | 'i2v' | 'multi-ref') => {
+    if (isMotionControl) return
     setModeOverride(m)
     updateNodeData(id, { modeOverride: m })
-  }, [id, updateNodeData])
+  }, [id, isMotionControl, updateNodeData])
 
   const navigateHistory = useCallback((delta: number) => {
     const newIdx = Math.max(0, Math.min(historyIds.length - 1, historyIndex + delta))
@@ -477,6 +522,8 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     duration, setDuration,
     quality, setQuality,
     seed, setSeed,
+    characterOrientation, setCharacterOrientation,
+    isMotionControl,
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,

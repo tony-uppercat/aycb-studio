@@ -71,7 +71,10 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
           <select className={styles.selectSmall} value={h.resolution}
             onChange={e => { h.markManualOverride(); h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
             title="Resolution">
-            {RESOLUTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {RESOLUTIONS
+              .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
+              .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
+            }
           </select>
           <div className={styles.batchToggle}>
             {[1, 2, 4].map(n => (

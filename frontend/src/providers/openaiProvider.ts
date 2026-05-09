@@ -18,7 +18,8 @@ const OPENAI_BASE = 'https://api.openai.com/v1'
  *  - total pixels in [655_360, 8_294_400]
  *  - aspect ratio ≤ 3:1
  *  Compute the largest size at the requested AR that fits the target MP
- *  bucket (1K ≈ 1.0 MP, 2K ≈ 2.4 MP). */
+ *  bucket (1K ≈ 1.05 MP, FHD ≈ 2.09 MP / 1920×1088 for 16:9, 2K ≈ 2.4 MP,
+ *  4K ≈ 8 MP clamped to 3840 max edge). */
 function computeSize(aspect?: string, resolution?: string): string {
   if (!aspect) return 'auto'
   const [a, b] = aspect.split(':').map(Number)
@@ -27,7 +28,22 @@ function computeSize(aspect?: string, resolution?: string): string {
   // AR > 3:1 not supported by the model — fall back to 'auto'
   if (ratio > 3 || ratio < 1 / 3) return 'auto'
 
-  const targetMp = resolution === '2K' ? 2.4 : 1.05
+  // FHD preset: 1080 isn't a multiple of 16, so 1088 is the closest valid edge.
+  // Caller can crop the 8px difference if exact 1920×1080 is required.
+  if (resolution === 'FHD') {
+    if (aspect === '16:9') return '1920x1088'
+    if (aspect === '9:16') return '1088x1920'
+    // Other ARs fall through to ~2.1 MP target below.
+  }
+
+  // Pre-2026-05-09: only '2K' was handled; '4K' silently fell to 1.05 MP target,
+  // generating ~1MP images while billing high quality. Now each bucket maps to
+  // its real target; 4K relies on the 3840 max-edge clamp below.
+  let targetMp: number
+  if (resolution === '4K') targetMp = 8.0
+  else if (resolution === '2K') targetMp = 2.4
+  else if (resolution === 'FHD') targetMp = 2.1
+  else targetMp = 1.05
   const targetPx = targetMp * 1_000_000
   let w = Math.round(Math.sqrt(targetPx * ratio) / 16) * 16
   let h = Math.round((w / ratio) / 16) * 16

@@ -110,7 +110,10 @@ export function estimateCost(
       'gemini-3.1-flash-image-preview': { '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
       'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
       // gpt-image-2 high-quality per OpenAI docs 2026-04-21; 1K=medium, 2K=high
-      'gpt-image-2':                    { '1K': 0.053, '2K': 0.211, '4K': 0.211, '': 0.211 },
+      // 4K bumped from 0.211 → 0.50 after fixing the silent 1K downgrade in
+      // openaiProvider.ts:computeSize — real 4K (3840×2160) burns ~4× the
+      // output tokens of 2K. FHD ≈ 1920×1088, slightly less than 2K bucket.
+      'gpt-image-2':                    { '1K': 0.053, 'FHD': 0.18, '2K': 0.211, '4K': 0.50, '': 0.211 },
       // Recraft V4 — flat per-image, no resolution tiers
       'recraftv4':                      { '': 0.04 },
       'recraftv4_pro':                  { '': 0.25 },

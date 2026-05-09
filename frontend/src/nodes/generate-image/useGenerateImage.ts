@@ -109,6 +109,7 @@ export const ASPECT_RATIOS = [
 export const RESOLUTIONS = [
   { value: '', label: 'Auto' },
   { value: '1K', label: '1K' },
+  { value: 'FHD', label: 'FHD' },
   { value: '2K', label: '2K' },
   { value: '4K', label: '4K' },
 ]
@@ -302,6 +303,16 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     setAspectRatio('')
     updateNodeData(id, { aspectRatio: '' })
   }, [selectedModel, modelInfo.aspect_ratios]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // FHD is OpenAI-only (gpt-image-2 size constraint maps to 1920×1088). When
+  // the model switches to a non-openai provider, reset to Auto so the
+  // dropdown selection matches what the active provider actually accepts.
+  useEffect(() => {
+    if (resolution !== 'FHD') return
+    if (modelInfo.provider === 'openai') return
+    setResolution('')
+    updateNodeData(id, { resolution: '' })
+  }, [selectedModel, modelInfo.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-adapt: when an image is connected to image-0 (or its source mediaId
   // changes), measure the input dimensions and pick the closest supported AR

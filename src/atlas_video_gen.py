@@ -99,6 +99,10 @@ async def submit_text_to_video(
 ) -> dict[str, Any]:
     """Submit T2V request."""
     info = get_model_info(model_id)
+    if _is_motion_control(info["model_id"] or ""):
+        raise AtlasVideoGenError(
+            "motion control requires both an image (subject) and a video (motion source)"
+        )
     endpoint = info["model_id"]
     if _is_kling(endpoint):
         payload: dict[str, Any] = {

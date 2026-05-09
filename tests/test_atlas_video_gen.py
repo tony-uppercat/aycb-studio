@@ -21,6 +21,17 @@ def test_models_dict_propagates_endpoint_ref2v():
 
 
 @pytest.mark.asyncio
+async def test_submit_text_to_video_rejects_motion_control_model():
+    from src.atlas_video_gen import AtlasVideoGenError, submit_text_to_video
+    with pytest.raises(AtlasVideoGenError, match="motion control"):
+        await submit_text_to_video(
+            api_key="k",
+            model_id="atlas-kling-motion-control",
+            prompt="walk",
+        )
+
+
+@pytest.mark.asyncio
 async def test_motion_control_payload_uses_image_video_orientation(httpx_mock):
     from src.atlas_video_gen import submit_motion_control
     httpx_mock.add_response(

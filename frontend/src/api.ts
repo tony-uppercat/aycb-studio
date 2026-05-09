@@ -308,7 +308,6 @@ export const api = {
       audioUrl?: string
       seed?: number
       characterOrientation?: 'image' | 'video'
-      negativePrompt?: string
     },
     refImages?: File[],
     refVideo?: File,
@@ -324,7 +323,6 @@ export const api = {
     if (options.audioUrl) fd.append('audio_url', options.audioUrl)
     fd.append('seed', String(options.seed ?? -1))
     if (options.characterOrientation) fd.append('character_orientation', options.characterOrientation)
-    if (options.negativePrompt) fd.append('negative_prompt', options.negativePrompt)
     refImages?.forEach(f => fd.append('ref_images', f))
     if (refVideo) fd.append('ref_video', refVideo)
     return post('/generate/video', fd)

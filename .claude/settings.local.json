@@ -6,7 +6,10 @@
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",
       "Bash(node -e ':*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git reset *)",
+      "Bash(git commit *)",
+      "Bash(grep -E \"\\\\.\\(py|ts|tsx\\)$\")"
     ]
   },
   "hooks": {

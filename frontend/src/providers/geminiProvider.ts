@@ -6,8 +6,14 @@ import { GoogleGenAI } from '@google/genai'
 import type { GenerateImageResult, UsageInfo } from '../types'
 import { registerImageProvider, registerLLMProvider, type ImageProvider, type ImageGenerationOptions, type LLMProvider } from './index'
 import { MODEL_PRICING } from '../utils/costEstimate'
+import { getCachedRegistry } from '../hooks/useModelRegistry'
 
-/** Map display names to Gemini model IDs (mirrors backend MODELS + IMAGE_MODELS) */
+/**
+ * Legacy display-name aliases — old callers could pass a human label
+ * like "Gemini 3.1 Pro" instead of an id. New code passes the id
+ * directly, but these aliases are kept so settings saved with the old
+ * naming still resolve. Unrelated to the registry (not duplicated data).
+ */
 const MODEL_MAP: Record<string, string> = {
   'Gemini 3.1 Pro': 'gemini-3.1-pro-preview',
   'Gemini 3.1 Flash-Lite': 'gemini-3.1-flash-lite-preview',
@@ -36,16 +42,32 @@ export async function fileToBase64(file: File): Promise<string> {
 
 // ── Gemini image provider (generateContent with IMAGE modality) ─────────────
 
-/** Official Google per-image pricing (at 1K default resolution) */
-const GEMINI_IMAGE_COST: Record<string, number> = {
+/**
+ * Official Google per-image pricing (fallback, used when the backend
+ * registry hasn't loaded yet — e.g. cold start or cloud mode without
+ * backend). Kept in sync with src/registry.py cost_per_call; a backend
+ * drift test alarms if src/registry.py diverges from the provider
+ * MODELS dicts.
+ */
+const GEMINI_IMAGE_COST_FALLBACK: Record<string, number> = {
   'gemini-3.1-flash-image-preview': 0.067,   // $0.045@0.5K, $0.067@1K, $0.101@2K, $0.151@4K
   'gemini-3-pro-image-preview': 0.134,        // $0.134@1K-2K, $0.240@4K
+}
+
+function imageCostFor(modelId: string): number | null {
+  const cached = getCachedRegistry()
+  if (cached) {
+    const entry = cached.find((m) => m.id === modelId)
+    if (entry?.cost_per_call != null) return entry.cost_per_call
+  }
+  return GEMINI_IMAGE_COST_FALLBACK[modelId] ?? null
 }
 
 /** Compute cost: fixed per-image for image gen, per-token for text/LLM */
 function computeGeminiCost(modelId: string, inputTokens: number, outputTokens: number): number {
   // Image generation: use official fixed per-image price
-  if (GEMINI_IMAGE_COST[modelId] && outputTokens > 0) return GEMINI_IMAGE_COST[modelId]
+  const perImage = imageCostFor(modelId)
+  if (perImage !== null && outputTokens > 0) return perImage
   // Text/LLM fallback: per-token rates
   const rates = MODEL_PRICING[modelId] ?? [0, 0]
   return (inputTokens / 1_000_000) * rates[0] + (outputTokens / 1_000_000) * rates[1]
@@ -79,7 +101,18 @@ const geminiImageProvider: ImageProvider = {
       ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
     }
     if (options?.useGrounding) {
-      config.tools = [{ googleSearch: {} }]
+      // Per Google docs (gemini-3.1-flash-image-preview), grounding requires
+      // explicit searchTypes (webSearch + imageSearch). Sending an empty
+      // `googleSearch: {}` was causing degraded/blurred output — the model
+      // appeared to fall back to a draft mode without proper search context.
+      config.tools = [{
+        googleSearch: {
+          searchTypes: {
+            webSearch: {},
+            imageSearch: {},
+          },
+        },
+      }]
     }
 
     const response = await ai.models.generateContent({

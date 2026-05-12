@@ -10,6 +10,14 @@ import type { Node, Edge } from '@xyflow/react'
 
 const MAX_HISTORY = 50
 
+/**
+ * Generation outputs that must survive undo/redo. Snapshots are taken before
+ * generation completes (or not at all for in-flight ops), so a later undo of
+ * an unrelated action would otherwise strip the user's image/video work.
+ * On restore, the node's CURRENT value for these keys overrides the snapshot.
+ */
+const PRESERVED_KEYS = ['mediaId', 'historyIds', 'frameIds', 'result', 'analysisHistory'] as const
+
 interface CanvasSnapshot {
   nodes: Node[]
   edges: Edge[]
@@ -65,14 +73,28 @@ export function useCanvasHistory(
   const restore = useCallback((index: number): void => {
     restoringRef.current = true
     idxRef.current = index
-    const { nodes: n, edges: e } = historyRef.current[index]
-    setNodes(n)
+    const { nodes: snapNodes, edges: e } = historyRef.current[index]
+    // Merge: restore positions/edges/settings from snapshot, but keep the
+    // current node's generation outputs (mediaId, historyIds, etc.) so that
+    // undoing an unrelated action doesn't wipe images the user just made.
+    const currentById = new Map(getNodes().map(n => [n.id, n]))
+    const merged = snapNodes.map(snap => {
+      const cur = currentById.get(snap.id)
+      if (!cur) return snap
+      const curData = cur.data as Record<string, unknown>
+      const data: Record<string, unknown> = { ...(snap.data as Record<string, unknown>) }
+      for (const key of PRESERVED_KEYS) {
+        if (key in curData) data[key] = curData[key]
+      }
+      return { ...snap, data }
+    })
+    setNodes(merged)
     setEdges(e)
     // Allow React Flow to settle, then unlock
     requestAnimationFrame(() => {
       requestAnimationFrame(() => { restoringRef.current = false })
     })
-  }, [setNodes, setEdges])
+  }, [setNodes, setEdges, getNodes])
 
   const undo = useCallback((): void => {
     if (idxRef.current > 0) restore(idxRef.current - 1)

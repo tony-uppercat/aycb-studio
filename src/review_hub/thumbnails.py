@@ -30,6 +30,19 @@ def generate_asset_thumbnail(source_path: Path, asset_id: int) -> str:
         img.convert("RGB").save(thumb_path, "JPEG", quality=80)
     return str(thumb_path)
 
+def generate_reference_thumbnail(source_path: Path, ref_id: int) -> str:
+    """Generate thumbnail for a reference in thumbnails/references/, return path string."""
+    ref_thumb_dir = THUMB_DIR / "references"
+    ref_thumb_dir.mkdir(parents=True, exist_ok=True)
+    thumb_path = ref_thumb_dir / f"{ref_id}.jpg"
+    with Image.open(source_path) as img:
+        ratio = THUMB_WIDTH / img.width
+        size = (THUMB_WIDTH, int(img.height * ratio))
+        img.thumbnail(size, Image.LANCZOS)
+        img.convert("RGB").save(thumb_path, "JPEG", quality=80)
+    return str(thumb_path)
+
+
 def get_image_dimensions(path: Path) -> tuple[int, int]:
     """Return (width, height)."""
     with Image.open(path) as img:

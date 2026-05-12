@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 import { usePromptLibrary } from './usePromptLibrary'
 import { PromptLibraryPanel } from './PromptLibraryPanel'
 import type { PromptEditorNodeData } from '../../types'
@@ -13,18 +13,13 @@ export function PromptEditorNode({ id, data, selected }: NodeProps) {
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
   const { openPreview } = useMediaPreview()
 
-  // Track upstream text for auto-update (supports per-pin outputPins from JsonParser)
+  // Track upstream text for auto-update. resolveSourceText walks subnet
+  // boundaries and bypass chains, and honors per-pin outputPins (JsonParser
+  // unpack) — the inline read here used to return '' for any subnet source.
   const upstreamText = useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'text-in')
     if (!edge) return ''
-    const src = state.nodes.find(n => n.id === edge.source)
-    const d = src?.data as Record<string, unknown> | undefined
-    // Check per-pin output data first (for dynamic outputs like JsonParser unpack)
-    const pins = d?.outputPins as Record<string, string> | undefined
-    if (pins && edge.sourceHandle && edge.sourceHandle in pins) {
-      return pins[edge.sourceHandle]
-    }
-    return String(d?.outputText ?? '')
+    return resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
   })
 
   const hasInput = useStore(state =>

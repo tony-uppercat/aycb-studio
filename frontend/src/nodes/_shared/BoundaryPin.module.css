@@ -1,0 +1,101 @@
+/* Slim boundary pin shared by subnet-input and subnet-output proxies.
+ *
+ * Visual style: thin pill on the left/right edge of the subnet editor flow,
+ * with the label centered and the React Flow Handle protruding outward.
+ * Selected state expands the pin into an inline editor (name + slot type). */
+
+.pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 80px;
+  max-width: 160px;
+  padding: 4px 10px;
+  background: var(--color-bg-secondary, #111113);
+  border: 1px solid var(--color-border, #27272a);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--color-text-secondary, #a1a1aa);
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pin[data-selected='true'] {
+  border-color: var(--color-accent, #F52776);
+  color: var(--color-text-primary, #fafafa);
+  background: rgba(245, 39, 118, 0.08);
+}
+
+.pin[data-direction='input'] {
+  padding-left: 14px;
+  justify-content: flex-start;
+}
+
+.pin[data-direction='output'] {
+  padding-right: 14px;
+  justify-content: flex-end;
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: var(--color-accent, #F52776) !important;
+  border: 1.5px solid var(--color-bg-primary, #0a0a0b) !important;
+}
+
+.editor {
+  position: absolute;
+  top: calc(100% + 4px);
+  background: var(--color-bg-secondary, #111113);
+  border: 1px solid var(--color-accent, #F52776);
+  border-radius: 4px;
+  padding: 6px 8px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.editor[data-direction='input'] { left: 0; }
+.editor[data-direction='output'] { right: 0; }
+
+.editorRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editorLabel {
+  font-size: 10px;
+  color: var(--color-text-secondary, #a1a1aa);
+  min-width: 32px;
+}
+
+.editorInput,
+.editorSelect {
+  flex: 1;
+  background: var(--color-bg-primary, #0a0a0b);
+  border: 1px solid var(--color-border, #27272a);
+  color: var(--color-text-primary, #fafafa);
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 2px;
+  font-family: inherit;
+}
+
+.editorInput:focus,
+.editorSelect:focus {
+  outline: none;
+  border-color: var(--color-accent, #F52776);
+}

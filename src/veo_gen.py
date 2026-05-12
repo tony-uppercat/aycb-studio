@@ -1,10 +1,10 @@
 """Video generation API client — Veo 3.1 via Google Gemini API.
 
-The file is named ``vertex_video_gen`` for historical reasons; the initial
-implementation used Vertex AI. Veo 3.1 is now invoked through the Gemini
-Developer API with a simple API key (``AYCB_GEMINI_KEY``) — no gcloud /
-ADC / GCP project required. See the companion ``src/vertex_client.py``
-which still powers Imagen edit via Vertex.
+Renamed from ``vertex_video_gen`` — the initial implementation used
+Vertex AI, but Veo 3.1 is now invoked through the Gemini Developer
+API with a plain ``AYCB_GEMINI_KEY`` (no gcloud / ADC / GCP project
+required). ``src/vertex_client.py`` still powers Imagen edit via
+Vertex and is unrelated.
 """
 
 from __future__ import annotations
@@ -16,35 +16,35 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import settings
+from src.registry import REGISTRY
 
 logger = logging.getLogger(__name__)
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry. This module's historical key is `vertex_model`
+# (the Gemini API model id); the registry calls it `provider_model_id`.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "vertex-veo-3.1": {
-        "name": "Veo 3.1",
-        "vertex_model": "veo-3.1-generate-preview",
-        "aspect_ratios": ["16:9", "9:16"],
-        "qualities": ["720p", "1080p"],
-        "min_duration": 4,
-        "max_duration": 8,
-        "default_duration": 8,
-        "cost_per_sec": {"720p": 0.40, "1080p": 0.40},
-        "max_ref_images": 3,
-    },
-    "vertex-veo-3.1-fast": {
-        "name": "Veo 3.1 Fast",
-        "vertex_model": "veo-3.1-fast-generate-preview",
-        "aspect_ratios": ["16:9", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 8,
-        "default_duration": 8,
-        "cost_per_sec": {"720p": 0.15},
-        "max_ref_images": 3,
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "vertex":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "vertex_model": m.provider_model_id,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 8,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+            "max_ref_images": m.max_ref_images,
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 10
 POLL_TIMEOUT = 600
@@ -77,11 +77,20 @@ def _build_image(image_bytes: bytes, filename: str) -> Any:
 _ALLOWED_DURATIONS = (4, 6, 8)
 
 
-def _snap_duration(duration: int, has_refs: bool) -> int:
-    """Gemini API only accepts 4, 6, or 8 seconds; refs/interpolation require 8."""
-    if has_refs:
+def _snap_duration(duration: int, has_refs: bool, quality: str = "720p") -> int:
+    """Gemini API only accepts 4, 6, or 8 seconds.
+    Refs/interpolation and 1080p/4k force 8s per official docs; in those
+    modes we override the caller value because the API demands it.
+    In pure T2V at 720p, refuse an invalid value loudly so the UI can
+    surface the constraint instead of silently rounding.
+    """
+    if has_refs or quality in ("1080p", "4k"):
         return 8
-    return min(_ALLOWED_DURATIONS, key=lambda d: abs(d - duration))
+    if duration not in _ALLOWED_DURATIONS:
+        raise VertexVideoGenError(
+            f"Veo duration must be one of {_ALLOWED_DURATIONS}; got {duration}s"
+        )
+    return duration
 
 
 def _build_config(
@@ -89,6 +98,7 @@ def _build_config(
     last_frame: Any | None = None,
     reference_images: list[Any] | None = None,
     has_image: bool = False,
+    seed: int = -1,
 ) -> Any:
     """Assemble a GenerateVideosConfig for Gemini API.
 
@@ -99,7 +109,7 @@ def _build_config(
     """
     from google.genai import types
     has_refs = has_image or last_frame is not None or bool(reference_images)
-    snapped = _snap_duration(duration, has_refs)
+    snapped = _snap_duration(duration, has_refs, quality)
     kwargs: dict[str, Any] = {
         "aspect_ratio": aspect_ratio,
         "duration_seconds": snapped,
@@ -111,6 +121,8 @@ def _build_config(
         kwargs["last_frame"] = last_frame
     if reference_images:
         kwargs["reference_images"] = reference_images
+    if seed is not None and seed >= 0:
+        kwargs["seed"] = seed
     return types.GenerateVideosConfig(**kwargs)
 
 
@@ -138,11 +150,12 @@ def _submit_sync(
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
     aspect_ratio: str = "16:9", duration: int = 8, quality: str = "720p",
+    seed: int = -1,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit a T2V request. `api_key` is ignored (Vertex uses GCP creds)."""
     info = get_model_info(model_id)
-    config = _build_config(aspect_ratio, duration, quality)
+    config = _build_config(aspect_ratio, duration, quality, seed=seed)
     op = await asyncio.to_thread(
         _submit_sync, api_key, info["vertex_model"], prompt, config, None,
     )
@@ -155,6 +168,7 @@ async def submit_with_refs(
     ref_video_bytes: tuple[str, bytes] | None = None,
     audio_url: str = "",
     aspect_ratio: str = "16:9", duration: int = 8, quality: str = "720p",
+    seed: int = -1,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit an I2V / multi-ref request.
@@ -174,7 +188,7 @@ async def submit_with_refs(
 
     if not ref_image_bytes:
         return await submit_text_to_video(
-            api_key, model_id, prompt, aspect_ratio, duration, quality,
+            api_key, model_id, prompt, aspect_ratio, duration, quality, seed,
         )
 
     info = get_model_info(model_id)
@@ -203,6 +217,7 @@ async def submit_with_refs(
         last_frame=last_frame,
         reference_images=reference_images,
         has_image=True,
+        seed=seed,
     )
 
     op = await asyncio.to_thread(
@@ -233,9 +248,12 @@ def _save_video_sync(client: Any, video: Any, request_id: str) -> str:
 
 
 def _get_result_sync(api_key: str, request_id: str) -> dict[str, Any]:
+    from google.genai import types
     client = _get_client(api_key)
+    # SDK expects an Operation object, not a string. Rehydrate from the name.
+    op_stub = types.GenerateVideosOperation(name=request_id)
     try:
-        op = client.operations.get(request_id)
+        op = client.operations.get(op_stub)
     except Exception as exc:
         raise VertexVideoGenError(f"Veo operation lookup failed: {exc}") from exc
 

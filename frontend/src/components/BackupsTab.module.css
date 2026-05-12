@@ -1,0 +1,49 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #1a1a1e;
+  border: 1px solid #2a2a2e;
+  border-radius: 6px;
+  padding: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.row:hover {
+  background: #25252a;
+}
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+}
+.timestamp {
+  color: #ccc;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.subline {
+  color: #666;
+  display: flex;
+  gap: 8px;
+}
+.counts {
+  color: #888;
+}
+.projectId {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: #555;
+  word-break: break-all;
+}

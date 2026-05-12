@@ -1,13 +1,48 @@
 import type { GenerateImageResult, UsageInfo } from '../types'
-import { registerImageProvider, type ImageProvider } from './index'
+import { registerImageProvider, type ImageProvider, type ImageGenerationOptions } from './index'
+import { getCachedRegistry } from '../hooks/useModelRegistry'
 
-/** BFL model ID mapping */
-const BFL_MODELS: Record<string, string> = {
+/** Flux 2 Klein dimensions per aspect ratio. Multiples of 32, ~1MP target. */
+const FLUX_DIMS: Record<string, { width: number; height: number }> = {
+  '1:1':  { width: 1024, height: 1024 },
+  '4:3':  { width: 1152, height: 896 },
+  '3:4':  { width: 896,  height: 1152 },
+  '16:9': { width: 1344, height: 768 },
+  '9:16': { width: 768,  height: 1344 },
+}
+
+function fluxDimsFor(aspectRatio?: string): { width: number; height: number } {
+  if (!aspectRatio) return FLUX_DIMS['1:1']
+  return FLUX_DIMS[aspectRatio] ?? FLUX_DIMS['1:1']
+}
+
+/**
+ * BFL API model id pass-through. The backend registry is the source of
+ * truth; this fallback is consulted only if the registry hasn't
+ * resolved (cold start, cloud mode). Kept in sync with
+ * src/registry.py — a backend drift test alarms on divergence.
+ */
+const BFL_MODELS_FALLBACK: Record<string, string> = {
   'flux-2-klein-4b': 'flux-2-klein-4b',
+  'flux-2-klein-9b': 'flux-2-klein-9b',
+}
+const FLUX_PRICING_FALLBACK: Record<string, number> = {
+  'flux-2-klein-4b': 0.014,
+  'flux-2-klein-9b': 0.015,
 }
 
 function resolveBflModel(id: string): string {
-  return BFL_MODELS[id] ?? id
+  // BFL uses the same id the registry publishes; pass-through is correct.
+  return BFL_MODELS_FALLBACK[id] ?? id
+}
+
+function fluxCostFor(modelId: string): number {
+  const cached = getCachedRegistry()
+  if (cached) {
+    const entry = cached.find((m) => m.id === modelId)
+    if (entry?.cost_per_call != null) return entry.cost_per_call
+  }
+  return FLUX_PRICING_FALLBACK[modelId] ?? 0
 }
 
 async function pollForResult(pollingUrl: string, maxAttempts = 60): Promise<string> {
@@ -30,8 +65,15 @@ async function pollForResult(pollingUrl: string, maxAttempts = 60): Promise<stri
 
 const fluxProvider: ImageProvider = {
   id: 'flux-cloud',
-  async generateImage(prompt: string, modelId: string, apiKey: string): Promise<GenerateImageResult> {
+  async generateImage(
+    prompt: string,
+    modelId: string,
+    apiKey: string,
+    _refs?: File[],
+    options?: ImageGenerationOptions,
+  ): Promise<GenerateImageResult> {
     const bflModel = resolveBflModel(modelId)
+    const { width, height } = fluxDimsFor(options?.aspectRatio)
 
     // Submit generation request to BFL API
     const response = await fetch(`https://api.bfl.ai/v1/${bflModel}`, {
@@ -42,8 +84,8 @@ const fluxProvider: ImageProvider = {
       },
       body: JSON.stringify({
         prompt,
-        width: 1024,
-        height: 1024,
+        width,
+        height,
         output_format: 'png',
       }),
     })
@@ -66,13 +108,9 @@ const fluxProvider: ImageProvider = {
       reader.onload = () => resolve((reader.result as string).split(',')[1])
       reader.readAsDataURL(blob)
     })
-    // Flux uses fixed per-image pricing (no token usage)
-    const FLUX_PRICING: Record<string, number> = {
-      'flux-2-klein-4b': 0.014,
-      'flux-2-klein-9b': 0.015,
-    }
-    const perImageCost = FLUX_PRICING[bflModel] ?? 0
-    const usage: UsageInfo = { input_tokens: 0, output_tokens: 0, cost_usd: perImageCost }
+    // Flux uses fixed per-image pricing (no token usage). Cost sourced
+    // from the registry when available, else the hardcoded fallback.
+    const usage: UsageInfo = { input_tokens: 0, output_tokens: 0, cost_usd: fluxCostFor(bflModel) }
     return { image_b64: base64, status: 'OK', usage }
   }
 }

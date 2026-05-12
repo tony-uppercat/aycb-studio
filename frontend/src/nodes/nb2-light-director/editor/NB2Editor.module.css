@@ -1,0 +1,352 @@
+/* NB2 Light Director editor — warm-dark palette.
+ *
+ * This module's palette is deliberately distinct from the app-wide
+ * design tokens (which are cool-dark with a pink accent). NB2 is a
+ * "creative tool" surface with its own amber + neon-green visual
+ * language; keeping its variables local avoids conflating the two
+ * palettes during app-wide theme changes.
+ *
+ * Values were transcribed verbatim from the previous inline styles
+ * so this migration is a zero-visual-change refactor.
+ */
+
+.root {
+  --nb2-bg: #18181b;
+  --nb2-bg-panel: #1a1a1d;
+  --nb2-bg-card: #1f1f23;
+  --nb2-bg-btn: #242428;
+  --nb2-fg-strong: #e8e4df;
+  --nb2-fg: #ddd;
+  --nb2-fg-muted: #b8a98a;
+  --nb2-fg-dim: #888;
+  --nb2-fg-dimmer: #666;
+  --nb2-fg-dimmest: #5a5752;
+  --nb2-fg-silent: #555;
+  --nb2-fg-whisper: #444;
+  --nb2-border: #2c2c30;
+  --nb2-border-soft: #2a2a2c;
+  --nb2-border-panel: #2e2e32;
+  --nb2-border-btn: #333338;
+  --nb2-border-card: #353539;
+  --nb2-border-subtle: #222;
+  --nb2-dot: #3a3a3a;
+  --nb2-amber: #e8a849;
+  --nb2-amber-alpha-15: #e8a84915;
+  --nb2-amber-alpha-18: #e8a84918;
+  --nb2-amber-alpha-35: #e8a84935;
+  --nb2-green: #39FF14;
+  --nb2-green-alpha-08: #39FF1408;
+  --nb2-green-alpha-18: #39FF1418;
+  --nb2-green-alpha-20: #39FF1420;
+  --nb2-green-alpha-30: #39FF1430;
+  --nb2-green-alpha-40: #39FF1440;
+
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--nb2-bg);
+  color: var(--nb2-fg-strong);
+  font-family: 'IBM Plex Mono', monospace;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--nb2-border);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.backBtn {
+  background: none;
+  border: 1px solid var(--nb2-border-subtle);
+  color: var(--nb2-fg-dim);
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.title {
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.modelBtn {
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--nb2-border-btn);
+  color: var(--nb2-fg-whisper);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.modelBtnActive {
+  font-weight: 700;
+  background: var(--nb2-amber-alpha-18);
+  border-color: var(--nb2-amber-alpha-35);
+  color: var(--nb2-amber);
+}
+
+.glbBtn {
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--nb2-border-btn);
+  color: var(--nb2-fg-whisper);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.glbBtnActive {
+  font-weight: 700;
+  background: var(--nb2-amber-alpha-18);
+  border-color: var(--nb2-amber-alpha-35);
+  color: var(--nb2-amber);
+}
+
+.glbInput {
+  display: none;
+}
+
+.resetBtn {
+  background: none;
+  border: 1px solid var(--nb2-border-btn);
+  color: var(--nb2-fg-whisper);
+  font-size: 8px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.viewport {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.viewportMount {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.sidebar {
+  width: 255px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--nb2-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diagramWrap {
+  padding: 8px 8px 2px;
+  border-bottom: 1px solid var(--nb2-border);
+}
+
+.panels {
+  flex: 1;
+  overflow-y: auto;
+  padding: 5px 6px;
+}
+
+.ambientCard {
+  background: var(--nb2-bg-card);
+  border: 1px solid var(--nb2-border-card);
+  border-radius: 7px;
+  padding: 9px 11px;
+  margin-bottom: 5px;
+}
+
+.ambientHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ambientHeaderOpen {
+  margin-bottom: 6px;
+}
+
+.ambientChevron {
+  font-size: 8px;
+  color: var(--nb2-fg-whisper);
+}
+
+.ambientDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nb2-dot);
+}
+
+.ambientTitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.promptBar {
+  border-top: 1px solid var(--nb2-border);
+  padding: 7px 6px;
+  flex-shrink: 0;
+}
+
+.promptBarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.promptBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.promptBarLabel {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--nb2-fg-dimmest);
+}
+
+.modeToggle {
+  display: flex;
+  gap: 0;
+}
+
+.modeBtn {
+  font-size: 7px;
+  font-weight: 700;
+  padding: 2px 6px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--nb2-fg-whisper);
+  border: 1px solid var(--nb2-border-panel);
+}
+
+.modeBtnLeft {
+  border-radius: 3px 0 0 3px;
+}
+
+.modeBtnRight {
+  border-radius: 0 3px 3px 0;
+}
+
+.modeBtnActiveText {
+  background: var(--nb2-border-panel);
+  color: var(--nb2-fg);
+  border-color: var(--nb2-border-soft);
+}
+
+.modeBtnActive3D {
+  background: var(--nb2-green-alpha-18);
+  color: var(--nb2-green);
+  border-color: var(--nb2-green-alpha-40);
+}
+
+.copyBtn {
+  background: var(--nb2-bg-btn);
+  border: 1px solid var(--nb2-border-btn);
+  color: var(--nb2-fg-dimmer);
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.copyBtnActive {
+  background: var(--nb2-amber-alpha-15);
+  border-color: var(--nb2-amber-alpha-35);
+  color: var(--nb2-amber);
+}
+
+.dualHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  padding: 4px 6px;
+  background: var(--nb2-green-alpha-08);
+  border: 1px solid var(--nb2-green-alpha-20);
+  border-radius: 4px;
+}
+
+.dualThumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  object-fit: cover;
+  border: 1px solid var(--nb2-green-alpha-30);
+}
+
+.dualLabel {
+  font-size: 8px;
+  color: var(--nb2-green);
+  font-weight: 700;
+}
+
+.dualDesc {
+  font-size: 7px;
+  color: var(--nb2-fg-silent);
+}
+
+.promptBox {
+  background: var(--nb2-bg-panel);
+  border: 1px solid var(--nb2-border);
+  border-radius: 4px;
+  padding: 7px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--nb2-fg-muted);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-style: italic;
+}
+
+:global(body.prv) .promptBox {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+:global(body.prv) :global([data-prv-show]) .promptBox {
+  filter: none; user-select: auto; pointer-events: auto;
+}

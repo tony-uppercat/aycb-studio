@@ -98,22 +98,26 @@ async def generate_video(
     quality: str = Form("720p"),
     api_key: str = Form(""),
     audio_url: str = Form(""),
+    seed: int = Form(-1),
+    character_orientation: str = Form("image"),
     ref_images: list[UploadFile] | None = File(default=None),
     ref_video: UploadFile | None = File(default=None),
 ):
     """Submit a video generation request via PiAPI, fal.ai, Atlas Cloud, or Vertex AI."""
     if model.startswith("vertex-"):
         return await _generate_video_vertex(
-            prompt, model, api_key, aspect_ratio, duration, quality, ref_images,
+            prompt, model, api_key, aspect_ratio, duration, quality, ref_images, seed,
         )
     if model.startswith("fal-"):
-        return await _generate_video_fal(prompt, model, api_key, aspect_ratio, duration, ref_images)
+        return await _generate_video_fal(prompt, model, api_key, aspect_ratio, duration, ref_images, seed)
     if model.startswith("atlas-"):
         return await _generate_video_atlas(
-            prompt, model, api_key, aspect_ratio, duration, audio_url, ref_images, ref_video,
+            prompt, model, api_key, aspect_ratio, duration, audio_url,
+            ref_images, ref_video, seed,
+            character_orientation=character_orientation,
         )
     return await _generate_video_piapi(
-        prompt, model, api_key, aspect_ratio, duration, quality, audio_url, ref_images, ref_video,
+        prompt, model, api_key, aspect_ratio, duration, quality, audio_url, ref_images, ref_video, seed,
     )
 
 
@@ -121,6 +125,7 @@ async def _generate_video_piapi(
     prompt: str, model: str, api_key: str, aspect_ratio: str,
     duration: int, quality: str, audio_url: str,
     ref_images: list[UploadFile] | None, ref_video: UploadFile | None,
+    seed: int = -1,
 ):
     from src.video_gen import VideoGenError, submit_text_to_video, submit_with_refs
 
@@ -145,11 +150,13 @@ async def _generate_video_piapi(
                 api_key=key, model_id=model, prompt=prompt,
                 ref_image_bytes=image_bytes or None, ref_video_bytes=video_bytes,
                 audio_url=audio_url, aspect_ratio=aspect_ratio, duration=duration, quality=quality,
+                seed=seed,
             )
         else:
             result = await submit_text_to_video(
                 api_key=key, model_id=model, prompt=prompt,
                 aspect_ratio=aspect_ratio, duration=duration, quality=quality,
+                seed=seed,
             )
         _log(f"Video submitted (PiAPI) — model={model}, request_id={result.get('request_id')}")
         return result
@@ -160,6 +167,7 @@ async def _generate_video_piapi(
 async def _generate_video_fal(
     prompt: str, model: str, api_key: str, aspect_ratio: str,
     duration: int, ref_images: list[UploadFile] | None,
+    seed: int = -1,
 ):
     from src.fal_video_gen import FalVideoGenError, submit_text_to_video as fal_t2v, submit_with_refs as fal_refs
 
@@ -177,11 +185,13 @@ async def _generate_video_fal(
             result = await fal_refs(
                 api_key=key, model_id=model, prompt=prompt,
                 ref_image_bytes=image_bytes, aspect_ratio=aspect_ratio, duration=duration,
+                seed=seed,
             )
         else:
             result = await fal_t2v(
                 api_key=key, model_id=model, prompt=prompt,
                 aspect_ratio=aspect_ratio, duration=duration,
+                seed=seed,
             )
         _log(f"Video submitted (fal) — model={model}, request_id={result.get('request_id')}")
         return result
@@ -193,6 +203,9 @@ async def _generate_video_atlas(
     prompt: str, model: str, api_key: str, aspect_ratio: str,
     duration: int, audio_url: str,
     ref_images: list[UploadFile] | None, ref_video: UploadFile | None,
+    seed: int = -1,
+    *,
+    character_orientation: str = "image",
 ):
     from src.atlas_video_gen import AtlasVideoGenError, submit_text_to_video as atlas_t2v, submit_with_refs as atlas_refs
 
@@ -217,11 +230,14 @@ async def _generate_video_atlas(
                 api_key=key, model_id=model, prompt=prompt,
                 ref_image_bytes=image_bytes or None, ref_video_bytes=video_bytes,
                 audio_url=audio_url, aspect_ratio=aspect_ratio, duration=duration,
+                seed=seed,
+                character_orientation=character_orientation,
             )
         else:
             result = await atlas_t2v(
                 api_key=key, model_id=model, prompt=prompt,
                 aspect_ratio=aspect_ratio, duration=duration,
+                seed=seed,
             )
         _log(f"Video submitted (Atlas) — model={model}, request_id={result.get('request_id')}")
         return result
@@ -233,8 +249,9 @@ async def _generate_video_vertex(
     prompt: str, model: str, api_key: str, aspect_ratio: str,
     duration: int, quality: str,
     ref_images: list[UploadFile] | None,
+    seed: int = -1,
 ):
-    from src.vertex_video_gen import (
+    from src.veo_gen import (
         VertexVideoGenError,
         submit_text_to_video as vertex_t2v,
         submit_with_refs as vertex_refs,
@@ -254,33 +271,39 @@ async def _generate_video_vertex(
                 api_key=key, model_id=model, prompt=prompt,
                 ref_image_bytes=image_bytes,
                 aspect_ratio=aspect_ratio, duration=duration, quality=quality,
+                seed=seed,
             )
         else:
             result = await vertex_t2v(
                 api_key=key, model_id=model, prompt=prompt,
                 aspect_ratio=aspect_ratio, duration=duration, quality=quality,
+                seed=seed,
             )
-        _log(f"Video submitted (Veo) — model={model}, request_id={result.get('request_id')}")
+        _log(f"Video submitted (Veo) — model={model}, request_id={result.get('request_id')}, refs={len(image_bytes)}")
         return result
     except ValueError as e:
+        _log(f"Veo ValueError: {e}")
         raise HTTPException(400, str(e))
     except VertexVideoGenError as e:
+        _log(f"Veo error: {e}")
         raise HTTPException(422, str(e))
 
 
-@router.get("/video/status/{request_id}")
+@router.get("/video/status/{request_id:path}")
 async def video_generation_status(
     request_id: str, api_key: str = "", provider: str = "piapi", endpoint: str = "",
 ):
     """Poll video generation status. Provider: 'piapi', 'fal', 'atlas', or 'vertex'."""
     if provider == "vertex":
-        from src.vertex_video_gen import VertexVideoGenError, get_result as vertex_get_result
+        from src.veo_gen import VertexVideoGenError, get_result as vertex_get_result
         key = _require_key(api_key, "gemini")
         try:
             return await vertex_get_result(key, request_id)
         except ValueError as e:
+            _log(f"Veo status ValueError: {e}")
             raise HTTPException(400, str(e))
         except VertexVideoGenError as e:
+            _log(f"Veo status error: {e}")
             raise HTTPException(422, str(e))
     if provider == "fal":
         from src.fal_video_gen import FalVideoGenError, get_result as fal_get_result

@@ -2,7 +2,7 @@ import { useReactFlow, useStore, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import { CopyButton } from '../../components/ui/CopyButton'
 import { ExpandableText } from '../_shared/ExpandableText'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 import type { ResultViewerNodeData } from '../../types'
 import styles from '../_shared/Node.module.css'
 
@@ -10,13 +10,15 @@ export function ResultViewerNode({ id, data, selected }: NodeProps) {
   const d = data as ResultViewerNodeData
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
 
-  // Re-render when upstream data changes
+  // Re-render when upstream data changes. resolveSourceText walks subnets so
+  // the signature actually changes when content INSIDE a subnet changes —
+  // reading src.data directly returned '' for any subnet source and froze
+  // the preview until the user explicitly Ran.
   useStore(state => {
     const edges = state.edges.filter(e => e.target === id)
-    return edges.map(e => {
-      const src = state.nodes.find(n => n.id === e.source)
-      return String((src?.data as Record<string, unknown>)?.outputText ?? '')
-    }).join('|')
+    return edges.map(e =>
+      resolveSourceText(e.source, e.sourceHandle ?? '', state.nodes, state.edges),
+    ).join('|')
   })
 
   const text = pullText(id, 'text-in', getNodes, getEdges) || (d.text ?? '')

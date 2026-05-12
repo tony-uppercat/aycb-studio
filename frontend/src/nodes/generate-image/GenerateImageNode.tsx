@@ -4,7 +4,7 @@ import { NodeShell } from '../_shared/NodeShell'
 import { CompareSlider } from '../_shared/CompareSlider'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { useGenerateImage, IMAGE_MODELS, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
+import { useGenerateImage, useImageModels, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
 import { priceTier } from '../_shared/types'
 import styles from '../_shared/Node.module.css'
 
@@ -13,6 +13,7 @@ type GenerateImageNodeType = Node<GenerateImageNodeData, 'generateImage'>
 export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImageNodeType>) {
   const { openPreview } = useMediaPreview()
   const h = useGenerateImage(id, data, selected)
+  const imageModels = useImageModels()
   const [compareMode, setCompareMode] = useState(false)
   const outputUrl = h.imageB64 ? `data:image/png;base64,${h.imageB64}` : h.historyPreview
   const canCompare = !!h.compareSourceUrl && !!outputUrl
@@ -26,9 +27,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
         ...h.imageSlots,
       ]}
-      outputSlots={[
-        { id: 'image-out', label: 'Image', type: 'image' },
-      ]}
+      outputSlots={h.outputSlots}
       onRun={h.run}
       running={h.loading}
       lastCost={h.lastCost}
@@ -42,10 +41,12 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         >
           {[
             { label: 'Google Gemini', filter: 'gemini' },
+            { label: 'OpenAI', filter: 'openai' },
+            { label: 'Recraft', filter: 'recraft' },
             { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
             { label: 'Local GPU', filter: 'local' },
           ].map(g => {
-            const items = IMAGE_MODELS.filter(m => m.provider === g.filter)
+            const items = imageModels.filter(m => m.provider === g.filter)
             return items.length > 0 ? (
               <optgroup key={g.label} label={g.label}>
                 {items.map(m => (
@@ -60,14 +61,20 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         )}
         <div className={styles.arResRow}>
           <select className={styles.selectSmall} value={h.aspectRatio}
-            onChange={e => { h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
+            onChange={e => { h.markManualOverride(); h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
             title="Aspect Ratio">
-            {ASPECT_RATIOS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+            {ASPECT_RATIOS
+              .filter(a => a.value === '' || h.modelInfo.aspect_ratios.length === 0 || h.modelInfo.aspect_ratios.includes(a.value))
+              .map(a => <option key={a.value} value={a.value}>{a.label}</option>)
+            }
           </select>
           <select className={styles.selectSmall} value={h.resolution}
-            onChange={e => { h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
+            onChange={e => { h.markManualOverride(); h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
             title="Resolution">
-            {RESOLUTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {RESOLUTIONS
+              .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
+              .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
+            }
           </select>
           <div className={styles.batchToggle}>
             {[1, 2, 4].map(n => (
@@ -139,13 +146,12 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                 style={{ cursor: 'pointer' }} />
             : <span className={styles.dropHint}>{h.activePrompt ? 'Ready — click Run' : 'Write a prompt or connect one'}</span>
           }
-          {canCompare && (
-            <button
-              className={`${styles.subtleToggle} ${styles.compareBtn}`}
-              onClick={() => setCompareMode(!compareMode)}
-              title={compareMode ? 'Show output' : 'Compare with source'}
-            >{compareMode ? 'IMG' : 'A/B'}</button>
-          )}
+          <button
+            className={`${styles.subtleToggle} ${styles.compareBtn}`}
+            onClick={() => canCompare && setCompareMode(!compareMode)}
+            disabled={!canCompare}
+            title={canCompare ? (compareMode ? 'Show output' : 'Compare with source') : 'Connect a ref or generate twice to enable A/B'}
+          >{compareMode && canCompare ? 'IMG' : 'A/B'}</button>
           {h.currentMediaId && (h.imageB64 || h.historyPreview) && (
             <button
               className={`${styles.favBtn} ${h.reviewStatuses[h.currentMediaId]?.favorite ? styles.favBtnActive : ''}`}

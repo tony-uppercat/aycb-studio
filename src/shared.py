@@ -70,13 +70,28 @@ def _safe_video_suffix(filename: str | None) -> str:
 
 
 def _sanitize_filename(name: str | None) -> str:
-    """Sanitize a filename for use in Content-Disposition headers."""
+    """Sanitize a filename for disk writes and Content-Disposition headers.
+
+    Replaces path separators, quotes, and control chars with underscore;
+    collapses '..' so no caller can escape its target directory.
+    """
     if not name:
         return "file"
-    # Remove path separators, quotes, control chars
     clean = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', '_', name)
-    # Limit length
+    clean = clean.replace("..", "_")
     return clean[:200] or "file"
+
+
+def _sanitize_stem(stem: str | None) -> str:
+    """Sanitize a stem for URL path parameters — alphanumeric + _ and - only.
+
+    Stricter than _sanitize_filename: used for `/api/bridge/*` endpoints
+    that accept a media stem from the client and must produce a value
+    safe for both filesystem globs and URL paths.
+    """
+    if not stem:
+        return ""
+    return re.sub(r"[^a-zA-Z0-9_\-]", "", stem)
 
 
 # ── Model map ────────────────────────────────────────────────────────────────
@@ -125,25 +140,11 @@ def _estimate_cost(model_id: str, usage: dict | None) -> dict | None:
     }
 
 
-def _pil_to_b64(pil: PILImage.Image, depth16: bool = True) -> str:
-    """Convert PIL image to base64 PNG. If depth16=True, save as 16-bit per channel."""
-    import cv2
-    import numpy as np
+def _pil_to_b64(pil: PILImage.Image) -> str:
+    """Convert PIL image to base64 PNG (8-bit)."""
     buf = io.BytesIO()
-    if depth16:
-        arr = np.array(pil)
-        if arr.dtype == np.uint8:
-            arr16 = arr.astype(np.uint16) * 257  # scale 0-255 → 0-65535
-        else:
-            arr16 = arr.astype(np.uint16)
-        # Use cv2 to write 16-bit PNG since PIL doesn't support it natively
-        if arr16.ndim == 3 and arr16.shape[2] >= 3:
-            arr16 = cv2.cvtColor(arr16, cv2.COLOR_RGB2BGR)
-        _, encoded = cv2.imencode('.png', arr16)
-        return base64.b64encode(encoded.tobytes()).decode()
-    else:
-        pil.save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode()
+    pil.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def _require_key(api_key: str, provider: str) -> str:
@@ -242,6 +243,24 @@ class SessionReportPayload(BaseModel):
 
 # ── Bridge helper ───────────────────────────────────────────────────────────
 
+def _resolve_bridge_target(project_name: str, stem_prefix: str) -> tuple[Path, str, str]:
+    """Return ``(target_dir, stem, generated_at_iso_z)`` for a bridge save.
+
+    Shared between `_save_to_bridge` (images) and `_save_video_to_bridge`
+    (videos) so the folder-sanitize + timestamp-stem + ISO conversion
+    logic lives in one place.
+    """
+    if project_name.strip():
+        folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
+    else:
+        folder = time.strftime("%Y-%m-%d")
+    target_dir = settings.media_dir / folder
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"{stem_prefix}_{int(time.time() * 1000)}"
+    generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return target_dir, stem, generated_at
+
+
 def _save_to_bridge(
     img_bytes: bytes | None = None,
     prompt: str = "",
@@ -255,16 +274,10 @@ def _save_to_bridge(
 ) -> dict | None:
     """Save image with embedded PNG tEXt metadata to shared/Media/ for Review Hub."""
     try:
-        if project_name.strip():
-            folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
-        else:
-            folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.media_dir / folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"generated_{int(time.time() * 1000)}"
+        target_dir, stem, generated_at = _resolve_bridge_target(project_name, "generated")
+        folder = target_dir.name
         img_path = target_dir / f"{stem}.png"
 
-        generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         meta = {
             "source": "aycb",
             "project": project_name.strip() or None,
@@ -310,18 +323,12 @@ def _save_video_to_bridge(
 ) -> dict | None:
     """Save video with sidecar .meta.json to shared/Media/ for Review Hub."""
     try:
-        if project_name.strip():
-            folder = re.sub(r'[<>:"/\\|?*]', '_', project_name.strip())[:80]
-        else:
-            folder = time.strftime("%Y-%m-%d")
-        target_dir = settings.media_dir / folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"video_{int(time.time() * 1000)}"
+        target_dir, stem, generated_at = _resolve_bridge_target(project_name, "video")
+        folder = target_dir.name
         video_path = target_dir / f"{stem}.mp4"
 
         video_path.write_bytes(video_bytes)
 
-        generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         meta = {
             "source": "aycb",
             "project": project_name.strip() or None,

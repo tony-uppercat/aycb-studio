@@ -1,0 +1,483 @@
+"""Single source of truth for all model metadata.
+
+Replaces the 13 duplicated registry sites flagged in v2 audit finding C3.
+Backend providers (video_gen, fal_video_gen, atlas_video_gen,
+veo_gen, image_edit, shared) and the frontend (through the
+/api/registry endpoint) all read from this one place.
+
+Migration is incremental — during the rollover the provider modules keep
+their own MODELS dicts and this file is kept consistent with them. Each
+provider will drop its local dict in a follow-up PR (Phase 2 PR 7-9).
+The `test_registry.py` suite guards against silent drift during that
+window.
+
+Pricing conventions:
+- cost_per_call: flat USD per invocation (Gemini image, Flux image)
+- cost_per_token: (input_per_1M, output_per_1M) in USD (chat models)
+- cost_per_sec: {quality: USD_per_second} (video models)
+Exactly one pricing field is populated per model; None for local/free.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field, asdict
+from typing import Literal
+
+Provider = Literal[
+    "gemini",
+    "claude",
+    "openai",
+    "recraft",
+    "imagen",
+    "flux",
+    "local",
+    "ollama",
+    "piapi",
+    "fal",
+    "atlas",
+    "vertex",
+]
+
+Capability = Literal["text", "image", "edit", "video"]
+
+
+@dataclass(frozen=True)
+class Model:
+    id: str
+    name: str
+    provider: Provider
+    capability: Capability
+    # Exactly one of these is populated; the rest are None.
+    cost_per_call: float | None = None
+    cost_per_token: tuple[float, float] | None = None
+    cost_per_sec: dict[str, float] | None = None
+    # Capabilities — empty tuple if unused for this model.
+    aspect_ratios: tuple[str, ...] = ()
+    allowed_durations: tuple[int, ...] = ()
+    default_duration: int = 5
+    qualities: tuple[str, ...] = ()
+    max_ref_images: int = 0
+    deprecated: bool = False
+    # Display copy consumed by the frontend dropdowns. Kept here so the
+    # backend registry truly is the single source of truth for model
+    # metadata, not just the pricing / capabilities subset.
+    tooltip: str | None = None
+    # Provider-specific endpoint hints — opaque to callers outside the
+    # matching provider module. Kept in the registry so the provider
+    # module can look up its own URL without needing a parallel dict.
+    endpoint_t2v: str | None = None
+    endpoint_i2v: str | None = None
+    endpoint_ref2v: str | None = None
+    provider_model_id: str | None = None  # e.g. the Gemini-API model id
+    task_type: str | None = None  # PiAPI task_type
+
+
+# ── Text / LLM ──────────────────────────────────────────────────────────
+
+_TEXT_MODELS: tuple[Model, ...] = (
+    Model(
+        id="gemini-3.1-pro-preview",
+        name="Gemini 3.1 Pro",
+        provider="gemini",
+        capability="text",
+        cost_per_token=(2.00, 12.00),
+    ),
+    Model(
+        id="gemini-3.1-flash-lite-preview",
+        name="Gemini 3.1 Flash-Lite",
+        provider="gemini",
+        capability="text",
+        cost_per_token=(0.25, 1.50),
+    ),
+    Model(
+        id="gemini-3-flash-preview",
+        name="Gemini 3 Flash",
+        provider="gemini",
+        capability="text",
+        cost_per_token=(0.50, 3.00),
+    ),
+    Model(
+        id="gemini-2.5-flash",
+        name="Gemini 2.5 Flash",
+        provider="gemini",
+        capability="text",
+        cost_per_token=(0.30, 2.50),
+        deprecated=True,
+    ),
+    Model(
+        id="gemini-2.5-pro",
+        name="Gemini 2.5 Pro",
+        provider="gemini",
+        capability="text",
+        cost_per_token=(1.25, 10.00),
+        deprecated=True,
+    ),
+    Model(
+        id="claude-sonnet-4-6-20250620",
+        name="Claude Sonnet 4.6",
+        provider="claude",
+        capability="text",
+        cost_per_token=(3.00, 15.00),
+    ),
+    Model(
+        id="claude-opus-4-6-20250620",
+        name="Claude Opus 4.6",
+        provider="claude",
+        capability="text",
+        cost_per_token=(15.00, 75.00),
+    ),
+    Model(
+        id="claude-haiku-4-5-20251001",
+        name="Claude Haiku 4.5",
+        provider="claude",
+        capability="text",
+        cost_per_token=(0.80, 4.00),
+    ),
+)
+
+
+# ── Image generation ────────────────────────────────────────────────────
+
+_IMAGE_MODELS: tuple[Model, ...] = (
+    Model(
+        id="gemini-3.1-flash-image-preview",
+        name="Nano Banana 2",
+        provider="gemini",
+        capability="image",
+        cost_per_call=0.067,
+        aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4",
+                       "16:9", "9:16", "21:9", "4:1", "1:4", "8:1", "1:8"),
+        qualities=("1K", "2K", "4K"),
+        tooltip="Gemini 3.1 Flash — fast T\u2192I / I\u2192I, 0.5K-4K, extended aspect ratios",
+    ),
+    Model(
+        id="gemini-3-pro-image-preview",
+        name="Nano Banana Pro",
+        provider="gemini",
+        capability="image",
+        cost_per_call=0.134,
+        aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16", "21:9"),
+        qualities=("1K", "2K", "4K"),
+        tooltip="Gemini 3 Pro — best quality, text rendering, 1K-4K",
+    ),
+    # Recraft V4 (external.api.recraft.ai)
+    Model(
+        id="recraftv4",
+        name="Recraft V4",
+        provider="recraft",
+        capability="image",
+        cost_per_call=0.04,
+        aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"),
+        tooltip="Recraft V4 — fast raster, 1MP, $0.04/image",
+    ),
+    Model(
+        id="recraftv4_pro",
+        name="Recraft V4 Pro",
+        provider="recraft",
+        capability="image",
+        cost_per_call=0.25,
+        aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"),
+        tooltip="Recraft V4 Pro — high-quality raster, 4MP, $0.25/image",
+    ),
+    Model(
+        id="recraftv4_vector",
+        name="Recraft V4 Vector",
+        provider="recraft",
+        capability="image",
+        cost_per_call=0.08,
+        aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"),
+        tooltip="Recraft V4 Vector — SVG output (raster preview), $0.08/image",
+    ),
+    Model(
+        id="recraftv4_pro_vector",
+        name="Recraft V4 Pro Vector",
+        provider="recraft",
+        capability="image",
+        cost_per_call=0.30,
+        aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"),
+        tooltip="Recraft V4 Pro Vector — high-quality SVG (raster preview), $0.30/image",
+    ),
+    Model(
+        id="gpt-image-2",
+        name="GPT Image 2",
+        provider="openai",
+        capability="image",
+        cost_per_call=0.211,
+        aspect_ratios=("1:1", "3:2", "2:3", "16:9", "9:16", "21:9"),
+        qualities=("1K", "2K"),
+        tooltip="OpenAI GPT Image 2 — multi-ref edit, high text fidelity (1K med / 2K high)",
+    ),
+    Model(
+        id="flux-2-klein-4b",
+        name="Flux 2 Klein 4B",
+        provider="flux",
+        capability="image",
+        cost_per_call=0.014,
+        aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16"),
+        tooltip="Black Forest Labs 4B via BFL API",
+    ),
+    Model(
+        id="flux-2-klein-9b",
+        name="Flux 2 Klein 9B",
+        provider="flux",
+        capability="image",
+        cost_per_call=0.015,
+        aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16"),
+        tooltip="Black Forest Labs 9B via BFL API",
+    ),
+    Model(
+        id="local/flux-2-klein-4b",
+        name="Flux 2 Klein 4B (Local)",
+        provider="local",
+        capability="image",
+        aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16"),
+        tooltip="Run on your GPU",
+    ),
+    Model(
+        id="local/flux-2-klein-9b",
+        name="Flux 2 Klein 9B (Local)",
+        provider="local",
+        capability="image",
+        aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16"),
+        tooltip="Run on your GPU (24GB+ VRAM)",
+    ),
+)
+
+
+# ── Image edit ──────────────────────────────────────────────────────────
+
+_EDIT_MODELS: tuple[Model, ...] = (
+    Model(
+        id="imagen-3.0-capability-001",
+        name="Imagen 3 (Vertex AI)",
+        provider="imagen",
+        capability="edit",
+        cost_per_call=0.02,
+    ),
+)
+
+
+# ── Video generation ────────────────────────────────────────────────────
+
+_VIDEO_MODELS: tuple[Model, ...] = (
+    # PiAPI
+    Model(
+        id="kling-3.0-omni",
+        name="Kling 3.0 Omni",
+        provider="piapi",
+        capability="video",
+        cost_per_sec={"720p": 0.10, "1080p": 0.15},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("720p", "1080p"),
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="PiAPI — Kling 3.0 Omni, 720p/1080p",
+        provider_model_id="kling",
+        task_type="omni_video_generation",
+    ),
+    Model(
+        id="seedance-2.0",
+        name="Seedance 2.0",
+        provider="piapi",
+        capability="video",
+        cost_per_sec={"standard": 0.15},
+        aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        qualities=("standard",),
+        allowed_durations=tuple(range(4, 16)),
+        tooltip="PiAPI — T2V/multi-ref, 4-15s",
+        provider_model_id="seedance",
+        task_type="seedance-2",
+    ),
+    Model(
+        id="seedance-2.0-fast",
+        name="Seedance 2.0 Fast",
+        provider="piapi",
+        capability="video",
+        cost_per_sec={"standard": 0.10},
+        aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        qualities=("standard",),
+        allowed_durations=tuple(range(4, 16)),
+        tooltip="PiAPI — fast, lower cost",
+        provider_model_id="seedance",
+        task_type="seedance-2-fast",
+    ),
+    # fal.ai
+    Model(
+        id="fal-kling-v3-std",
+        name="Kling 3.0 Omni Std (fal)",
+        provider="fal",
+        capability="video",
+        cost_per_sec={"720p": 0.084},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="fal.ai — Kling 3.0 Omni Standard, 3-15s, fast",
+        endpoint_t2v="fal-ai/kling-video/v3/standard/text-to-video",
+        endpoint_i2v="fal-ai/kling-video/v3/standard/image-to-video",
+    ),
+    Model(
+        id="fal-kling-v3-pro",
+        name="Kling 3.0 Omni Pro (fal)",
+        provider="fal",
+        capability="video",
+        cost_per_sec={"1080p": 0.112},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("1080p",),
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="fal.ai — Kling 3.0 Omni Pro, 3-15s, best quality",
+        endpoint_t2v="fal-ai/kling-video/v3/pro/text-to-video",
+        endpoint_i2v="fal-ai/kling-video/v3/pro/image-to-video",
+    ),
+    Model(
+        id="fal-seedance-2.0",
+        name="Seedance 2.0 (fal)",
+        provider="fal",
+        capability="video",
+        cost_per_sec={"720p": 0.30},
+        aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(4, 16)),
+        tooltip="fal.ai — Seedance 2.0, 4-15s, I2V",
+        endpoint_t2v="bytedance/seedance-2.0/text-to-video",
+        endpoint_i2v="bytedance/seedance-2.0/image-to-video",
+    ),
+    # Atlas Cloud
+    Model(
+        id="atlas-seedance-2.0-fast",
+        name="Seedance 2.0 Fast (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.18},
+        aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(4, 16)),
+        tooltip="Atlas Cloud — Seedance 2.0 Fast",
+        endpoint_t2v="bytedance/seedance-2.0-fast/text-to-video",
+        endpoint_i2v="bytedance/seedance-2.0-fast/image-to-video",
+    ),
+    Model(
+        id="atlas-seedance-2.0",
+        name="Seedance 2.0 (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.25},
+        aspect_ratios=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(4, 16)),
+        tooltip="Atlas Cloud — full quality Seedance 2.0",
+        endpoint_t2v="bytedance/seedance-2.0/text-to-video",
+        endpoint_i2v="bytedance/seedance-2.0/image-to-video",
+    ),
+    Model(
+        id="atlas-kling-v3-std",
+        name="Kling 3.0 Std (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.071},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("720p",),
+        allowed_durations=(5, 10),
+        tooltip="Atlas Cloud — Kling 3.0 Std, 5/10s, cheapest Kling tier",
+        endpoint_t2v="kwaivgi/kling-v3.0-std/text-to-video",
+        endpoint_i2v="kwaivgi/kling-v3.0-std/image-to-video",
+    ),
+    Model(
+        id="atlas-kling-v3-pro",
+        name="Kling 3.0 Omni Pro (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.095},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="Atlas Cloud — Kling 3.0 Omni Pro (O3), 3-15s, multi-ref + lip-sync",
+        endpoint_t2v="kwaivgi/kling-video-o3-pro/text-to-video",
+        endpoint_i2v="kwaivgi/kling-video-o3-pro/image-to-video",
+        endpoint_ref2v="kwaivgi/kling-video-o3-pro/reference-to-video",
+    ),
+    Model(
+        id="atlas-kling-motion-control",
+        name="Kling Motion Control (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.112},
+        aspect_ratios=("9:16", "16:9", "1:1"),
+        qualities=("720p",),
+        allowed_durations=(5, 10, 15, 30),
+        tooltip="Atlas Cloud — Kling 2.6 Pro motion transfer (image + ref video)",
+        endpoint_t2v="kwaivgi/kling-v2.6-pro/motion-control",
+    ),
+    Model(
+        id="atlas-kling-omni-std",
+        name="Kling 3.0 Omni Std (Atlas)",
+        provider="atlas",
+        capability="video",
+        cost_per_sec={"720p": 0.071},
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(3, 16)),
+        tooltip="Atlas Cloud — Kling 3.0 Omni Std (O3), 3-15s",
+        endpoint_t2v="kwaivgi/kling-video-o3-std/text-to-video",
+        endpoint_i2v="kwaivgi/kling-video-o3-std/image-to-video",
+    ),
+    # Vertex / Veo — default duration is 8 (API forces 8 for refs / HD anyway).
+    Model(
+        id="vertex-veo-3.1",
+        name="Veo 3.1",
+        provider="vertex",
+        capability="video",
+        cost_per_sec={"720p": 0.40, "1080p": 0.40},
+        aspect_ratios=("16:9", "9:16"),
+        qualities=("720p", "1080p"),
+        allowed_durations=(4, 6, 8),
+        default_duration=8,
+        max_ref_images=3,
+        tooltip="Google Vertex — Veo 3.1, native audio, up to 3 refs, 4-8s",
+        provider_model_id="veo-3.1-generate-preview",
+    ),
+    Model(
+        id="vertex-veo-3.1-fast",
+        name="Veo 3.1 Fast",
+        provider="vertex",
+        capability="video",
+        cost_per_sec={"720p": 0.15},
+        aspect_ratios=("16:9", "9:16"),
+        qualities=("720p",),
+        allowed_durations=(4, 6, 8),
+        default_duration=8,
+        max_ref_images=3,
+        tooltip="Google Vertex — Veo 3.1 Fast, 4-8s",
+        provider_model_id="veo-3.1-fast-generate-preview",
+    ),
+)
+
+
+# The Gemini image model also works for editing; it appears under both
+# image and edit capabilities. We keep a single canonical entry under
+# "image" and expose an alias for edit callers rather than duplicating.
+_EDIT_ALIASES: tuple[str, ...] = ("gemini-3.1-flash-image-preview",)
+
+
+REGISTRY: dict[str, Model] = {
+    m.id: m for m in (*_TEXT_MODELS, *_IMAGE_MODELS, *_EDIT_MODELS, *_VIDEO_MODELS)
+}
+
+
+def get(model_id: str) -> Model | None:
+    return REGISTRY.get(model_id)
+
+
+def by_capability(cap: Capability) -> list[Model]:
+    matches = [m for m in REGISTRY.values() if m.capability == cap]
+    if cap == "edit":
+        matches.extend(REGISTRY[mid] for mid in _EDIT_ALIASES if mid in REGISTRY)
+    return matches
+
+
+def by_provider(prov: Provider) -> list[Model]:
+    return [m for m in REGISTRY.values() if m.provider == prov]
+
+
+def to_dict(model: Model) -> dict:
+    """Serialize to JSON-safe dict for the /api/registry endpoint."""
+    d = asdict(model)
+    # tuples become lists naturally via asdict; nothing else to fix.
+    return d

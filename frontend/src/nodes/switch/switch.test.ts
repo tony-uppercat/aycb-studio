@@ -11,12 +11,12 @@ describe('switch manifest', () => {
 
   it('has correct inputs and outputs', () => {
     expect(manifest.inputs).toHaveLength(1)
-    expect(manifest.inputs[0]).toEqual({ type: 'media', handleId: 'media-in' })
+    expect(manifest.inputs[0]).toEqual({ type: 'text', handleId: 'text-in' })
     expect(manifest.outputs).toHaveLength(1)
-    expect(manifest.outputs[0]).toEqual({ type: 'media', handleId: 'media-out' })
+    expect(manifest.outputs[0]).toEqual({ type: 'text', handleId: 'text-out' })
   })
 
   it('has correct defaultData', () => {
-    expect(manifest.defaultData).toEqual({ selectedIndex: 0 })
+    expect(manifest.defaultData).toEqual({ activeChannel: 0 })
   })
 })

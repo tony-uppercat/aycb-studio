@@ -161,9 +161,13 @@ export function NodeShell({
 
 
   const isRunning = running || cascadeRunning
+  const prvExempt = customName?.toLowerCase().includes('here')
 
   return (
-    <div className={`${styles.shell} ${selected ? styles.selected : ''} ${isBypassed ? styles.bypassed : ''} ${isCascadeActive ? styles.cascadeActive : ''}`}>
+    <div
+      className={`${styles.shell} ${selected ? styles.selected : ''} ${isBypassed ? styles.bypassed : ''} ${isCascadeActive ? styles.cascadeActive : ''}`}
+      {...(prvExempt ? { 'data-prv-show': '' } : {})}
+    >
       <NodeResizer
         minWidth={180}
         minHeight={80}
@@ -272,11 +276,11 @@ export function NodeShell({
       {onRun && (
         <div className={styles.footer}>
           {lastCost !== undefined && lastCost > 0 ? (
-            <span className={styles.costBadge} title="Actual cost">
+            <span className={styles.costBadge} title="Actual cost" data-s>
               ${lastCost < 0.01 ? lastCost.toFixed(4) : lastCost.toFixed(3)}
             </span>
           ) : estimatedCost ? (
-            <span className={styles.costEstimate} title="Estimated cost">
+            <span className={styles.costEstimate} title="Estimated cost" data-s>
               {estimatedCost}
             </span>
           ) : null}

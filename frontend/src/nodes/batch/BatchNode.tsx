@@ -28,21 +28,25 @@ export function BatchNode({ id, selected }: NodeProps) {
   const [selectedCells, setSelectedCells] = useState<Set<number>>(new Set())
   const thumbUrlsRef = useRef<string[]>([])
 
-  // Read all edges connected to our input handle (like Switch — multiple edges allowed)
-  const connectedSources = useStore(state => {
+  // Derive a stable primitive key that changes only when the set of connected
+  // sources or their payloads change. Returning an object/array from useStore
+  // would re-render this node on every drag frame (new ref each call, no eq).
+  const connectedSourcesKey = useStore(state => {
     const edges = state.edges.filter(e => e.target === id && e.targetHandle === 'media-in')
-    return edges.map(e => {
+    if (edges.length === 0) return ''
+    const parts: string[] = []
+    for (const e of edges) {
       const src = state.nodes.find(n => n.id === e.source)
       const d = src?.data as Record<string, unknown> | undefined
-      return {
-        sourceId: e.source,
-        hasMedia: !!(d?.mediaId),
-        hasText: !!(d?.outputText || d?.text || d?.prompt),
-        mediaId: d?.mediaId as string | undefined,
-        text: String(d?.outputText ?? d?.text ?? d?.prompt ?? ''),
-      }
-    })
+      const mediaId = (d?.mediaId as string | undefined) ?? ''
+      const text = String(d?.outputText ?? d?.text ?? d?.prompt ?? '').slice(0, 20)
+      parts.push(`${e.source}:${mediaId}:${text}`)
+    }
+    return parts.join('|')
   })
+  const connectedSourcesCount = useStore(state =>
+    state.edges.filter(e => e.target === id && e.targetHandle === 'media-in').length,
+  )
 
   // Collect items from all connected sources
   const collectItems = useCallback(async () => {
@@ -100,26 +104,25 @@ export function BatchNode({ id, selected }: NodeProps) {
   }, [id, getNodes, getEdges, updateNodeData])
 
   // Auto-collect when connections change
-  const connectedSourcesKey = connectedSources.map(s => `${s.sourceId}:${s.mediaId}:${s.text.slice(0, 20)}`).join('|')
   useEffect(() => {
-    if (connectedSources.length > 0) {
+    if (connectedSourcesCount > 0) {
       collectItems()
     } else {
       setItems([])
     }
-  }, [connectedSources.length, connectedSourcesKey, collectItems])
+  }, [connectedSourcesCount, connectedSourcesKey, collectItems])
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => { thumbUrlsRef.current.forEach(u => URL.revokeObjectURL(u)) }
   }, [])
 
-  const allEdges = useStore(state => state.edges)
-
   const run = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
+      // Read edges imperatively — no subscription needed, only evaluated on click
+      const allEdges = getEdges()
       // Find all direct source nodes and run them in PARALLEL
       const sourceEdges = allEdges.filter(e => e.target === id && e.targetHandle === 'media-in')
       const sourceIds = [...new Set(sourceEdges.map(e => e.source))]
@@ -136,7 +139,7 @@ export function BatchNode({ id, selected }: NodeProps) {
 
       // Sum costs from all upstream source nodes
       const costs = useCanvasStore.getState().costs
-      const sourceEdgesFinal = allEdges.filter(e => e.target === id && e.targetHandle === 'media-in')
+      const sourceEdgesFinal = getEdges().filter(e => e.target === id && e.targetHandle === 'media-in')
       const srcIds = new Set(sourceEdgesFinal.map(e => e.source))
       const totalCost = costs
         .filter(c => srcIds.has(c.nodeId))
@@ -148,7 +151,7 @@ export function BatchNode({ id, selected }: NodeProps) {
     } finally {
       setLoading(false)
     }
-  }, [id, allEdges, collectItems])
+  }, [id, getEdges, collectItems])
 
   const inputSlots: SlotDef[] = [
     { id: 'media-in', label: 'Items', type: 'image', wide: true },

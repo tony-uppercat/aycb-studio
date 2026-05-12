@@ -3,7 +3,7 @@ import type { NodeManifest } from '../_shared/types'
 const manifest: NodeManifest = {
   type: 'subnet-input',
   label: 'Subnet Input',
-  icon: 'CornerRightDown',
+  icon: '📥',
   category: 'utility',
   description: 'Proxy input pin for a subnet — forwards data from the parent level',
   defaultData: {

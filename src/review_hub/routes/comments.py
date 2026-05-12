@@ -51,9 +51,25 @@ async def add_comment(body: CommentBody):
             box_height=body.box_height,
             parent_id=body.parent_id,
         )
-        return {"id": new_id}
     finally:
         await db.close()
+    comment_data = {
+        "id": new_id,
+        "media_id": body.media_id,
+        "author": body.author,
+        "content": body.content,
+        "x_position": body.x_position,
+        "y_position": body.y_position,
+        "annotation_type": body.annotation_type,
+        "parent_id": body.parent_id,
+    }
+    from src.review_hub.app import sio
+    try:
+        await sio.emit("comment_new", comment_data, room="review")
+    except Exception as e:
+        from src.shared import _log
+        _log(f"Socket emit comment_new failed: {e}")
+    return {"id": new_id}
 
 
 @router.delete("/comments/{comment_id}")
@@ -61,6 +77,12 @@ async def delete_comment(comment_id: int):
     db = await get_db()
     try:
         await q.delete_comment(db, comment_id)
-        return {"ok": True}
     finally:
         await db.close()
+    from src.review_hub.app import sio
+    try:
+        await sio.emit("comment_delete", {"id": comment_id}, room="review")
+    except Exception as e:
+        from src.shared import _log
+        _log(f"Socket emit comment_delete failed: {e}")
+    return {"ok": True}

@@ -109,7 +109,7 @@ export default function DirectorySidebar({
                   onClick={() => on_select_dir(dir.name)}
                 >
                   <span className="rh-dir-icon">&#9646;</span>
-                  <span className="rh-dir-name">{dir.name}</span>
+                  <span className="rh-dir-name" data-s>{dir.name}</span>
                   {dir.count != null && (
                     <span className="rh-dir-count">{dir.count}</span>
                   )}
@@ -123,7 +123,7 @@ export default function DirectorySidebar({
                     onClick={() => on_select_dir(sub.path)}
                   >
                     <span className="rh-dir-icon">&#9643;</span>
-                    <span className="rh-dir-name">{sub.name}</span>
+                    <span className="rh-dir-name" data-s>{sub.name}</span>
                     {sub.count != null && (
                       <span className="rh-dir-count">{sub.count}</span>
                     )}

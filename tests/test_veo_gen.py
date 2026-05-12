@@ -1,10 +1,10 @@
-"""Tests for src/vertex_video_gen.py — Google Veo 3.1 via Gemini API."""
+"""Tests for src/veo_gen.py — Google Veo 3.1 via Gemini API."""
 import pytest
 
 
 class TestGetModelInfo:
     def test_veo_3_1(self):
-        from src.vertex_video_gen import get_model_info
+        from src.veo_gen import get_model_info
         info = get_model_info("vertex-veo-3.1")
         assert info["vertex_model"] == "veo-3.1-generate-preview"
         assert info["aspect_ratios"] == ["16:9", "9:16"]
@@ -15,19 +15,19 @@ class TestGetModelInfo:
         assert info["max_ref_images"] == 3
 
     def test_veo_3_1_fast(self):
-        from src.vertex_video_gen import get_model_info
+        from src.veo_gen import get_model_info
         info = get_model_info("vertex-veo-3.1-fast")
         assert info["vertex_model"] == "veo-3.1-fast-generate-preview"
         assert info["qualities"] == ["720p"]
         assert info["cost_per_sec"]["720p"] == 0.15
 
     def test_unknown_model(self):
-        from src.vertex_video_gen import get_model_info, VertexVideoGenError
+        from src.veo_gen import get_model_info, VertexVideoGenError
         with pytest.raises(VertexVideoGenError, match="Unknown Vertex model"):
             get_model_info("vertex-nope")
 
     def test_all_models_have_required_fields(self):
-        from src.vertex_video_gen import MODELS
+        from src.veo_gen import MODELS
         required = {"name", "vertex_model", "aspect_ratios", "qualities",
                     "min_duration", "max_duration", "default_duration",
                     "cost_per_sec", "max_ref_images"}
@@ -51,13 +51,13 @@ def _fake_operation(name="projects/p/locations/us/operations/abc"):
 
 class TestSubmitTextToVideo:
     def test_builds_config_and_returns_request_id(self):
-        from src.vertex_video_gen import submit_text_to_video
+        from src.veo_gen import submit_text_to_video
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             result = asyncio.run(submit_text_to_video(
                 api_key="", model_id="vertex-veo-3.1",
                 prompt="a cat", aspect_ratio="16:9", duration=8, quality="720p",
@@ -76,32 +76,48 @@ class TestSubmitTextToVideo:
         # Use "allow_adult" always — works in every region including EU
         assert cfg.person_generation == "allow_adult"
 
-    def test_snaps_invalid_duration_to_nearest_allowed(self):
-        """Gemini API only accepts 4/6/8s; 5s must snap to 4 or 6."""
-        from src.vertex_video_gen import submit_text_to_video
+    def test_invalid_duration_raises_loudly(self):
+        """Gemini API only accepts 4/6/8s in T2V. Invalid values must raise
+        VertexVideoGenError so the frontend surfaces the constraint instead
+        of silently snapping (previous buggy behavior: 5s → 4s without the
+        UI ever learning)."""
+        from src.veo_gen import submit_text_to_video, VertexVideoGenError
 
-        op = _fake_operation()
-        client = MagicMock()
-        client.models.generate_videos.return_value = op
-
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with pytest.raises(VertexVideoGenError, match="duration must be one of"):
             asyncio.run(submit_text_to_video(
                 api_key="", model_id="vertex-veo-3.1",
                 prompt="x", aspect_ratio="16:9", duration=5, quality="720p",
             ))
 
-        cfg = client.models.generate_videos.call_args.kwargs["config"]
-        assert cfg.duration_seconds in (4, 6)
-
-    def test_t2v_omits_reference_images_field(self):
-        """Empty reference_images must be omitted, not sent as []."""
-        from src.vertex_video_gen import submit_text_to_video
+    def test_refs_force_8s_regardless_of_duration(self):
+        """Image/interp/refs paths force 8s per API docs — this override is
+        intentional because the API itself refuses anything else in those
+        modes. Verify it still works after the _snap_duration rewrite."""
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
+            asyncio.run(submit_with_refs(
+                api_key="", model_id="vertex-veo-3.1", prompt="x",
+                ref_image_bytes=[("a.png", b"A")],
+                aspect_ratio="16:9", duration=4, quality="720p",
+            ))
+
+        cfg = client.models.generate_videos.call_args.kwargs["config"]
+        assert cfg.duration_seconds == 8
+
+    def test_t2v_omits_reference_images_field(self):
+        """Empty reference_images must be omitted, not sent as []."""
+        from src.veo_gen import submit_text_to_video
+
+        op = _fake_operation()
+        client = MagicMock()
+        client.models.generate_videos.return_value = op
+
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_text_to_video(
                 api_key="", model_id="vertex-veo-3.1",
                 prompt="x", aspect_ratio="16:9", duration=8, quality="720p",
@@ -115,13 +131,13 @@ class TestSubmitTextToVideo:
 class TestSubmitWithRefs:
     def test_single_image_sets_image_only(self):
         """1 image -> I2V first frame, no last_frame, no reference_images."""
-        from src.vertex_video_gen import submit_with_refs
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1-fast", prompt="go",
                 ref_image_bytes=[("a.png", b"\x89PNG\r\n")],
@@ -139,13 +155,13 @@ class TestSubmitWithRefs:
         assert cfg.duration_seconds == 8
 
     def test_two_images_sets_image_and_last_frame(self):
-        from src.vertex_video_gen import submit_with_refs
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="morph",
                 ref_image_bytes=[("a.png", b"A"), ("b.png", b"B")],
@@ -161,13 +177,13 @@ class TestSubmitWithRefs:
 
     def test_three_images_uses_reference_images(self):
         """3+ images -> first image as frame, all three as reference_images."""
-        from src.vertex_video_gen import submit_with_refs
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="scene",
                 ref_image_bytes=[("a.png", b"A"), ("b.png", b"B"), ("c.png", b"C")],
@@ -179,13 +195,13 @@ class TestSubmitWithRefs:
         assert len(cfg.reference_images) == 3
 
     def test_more_than_three_images_truncated(self):
-        from src.vertex_video_gen import submit_with_refs
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="scene",
                 ref_image_bytes=[("a.png", b"A"), ("b.png", b"B"),
@@ -199,20 +215,20 @@ class TestSubmitWithRefs:
     def test_video_ref_and_audio_ignored_with_warning(self, caplog):
         """ref_video_bytes and audio_url are logged as ignored."""
         import logging
-        from src.vertex_video_gen import submit_with_refs
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        caplog.set_level(logging.WARNING, logger="src.vertex_video_gen")
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        caplog.set_level(logging.WARNING, logger="src.veo_gen")
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="x",
                 ref_image_bytes=None,
                 ref_video_bytes=("r.mp4", b"V"),
                 audio_url="https://a.mp3",
-                aspect_ratio="16:9", duration=5, quality="720p",
+                aspect_ratio="16:9", duration=8, quality="720p",
             ))
 
         text = " ".join(r.message for r in caplog.records)
@@ -220,17 +236,17 @@ class TestSubmitWithRefs:
         assert "audio" in text.lower()
 
     def test_no_refs_delegates_to_text_to_video(self):
-        from src.vertex_video_gen import submit_with_refs
+        from src.veo_gen import submit_with_refs
 
         op = _fake_operation()
         client = MagicMock()
         client.models.generate_videos.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             asyncio.run(submit_with_refs(
                 api_key="", model_id="vertex-veo-3.1", prompt="x",
                 ref_image_bytes=None,
-                aspect_ratio="16:9", duration=5, quality="720p",
+                aspect_ratio="16:9", duration=8, quality="720p",
             ))
 
         kwargs = client.models.generate_videos.call_args.kwargs
@@ -244,7 +260,7 @@ from pathlib import Path
 
 class TestGetResult:
     def test_still_running(self):
-        from src.vertex_video_gen import get_result
+        from src.veo_gen import get_result
 
         op = MagicMock()
         op.done = False
@@ -252,7 +268,7 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             result = asyncio.run(get_result(
                 api_key="", request_id="projects/p/locations/us/operations/abc",
             ))
@@ -265,7 +281,7 @@ class TestGetResult:
         }
 
     def test_done_with_error(self):
-        from src.vertex_video_gen import get_result
+        from src.veo_gen import get_result
 
         op = MagicMock()
         op.done = True
@@ -273,7 +289,7 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             result = asyncio.run(get_result(api_key="", request_id="rid"))
 
         assert result["status"] == "failed"
@@ -281,7 +297,7 @@ class TestGetResult:
         assert result["url"] == ""
 
     def test_done_saves_bytes_and_returns_url(self, tmp_path, monkeypatch):
-        from src import vertex_video_gen
+        from src import veo_gen
         from config.settings import settings
 
         monkeypatch.setattr(settings, "shared_root", tmp_path)
@@ -307,8 +323,8 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
-            result = asyncio.run(vertex_video_gen.get_result(
+        with patch("src.veo_gen._get_client", return_value=client):
+            result = asyncio.run(veo_gen.get_result(
                 api_key="",
                 request_id="projects/p/locations/us/operations/ABC-XYZ",
             ))
@@ -321,7 +337,7 @@ class TestGetResult:
         client.files.download.assert_called_once_with(file=video)
 
     def test_done_without_generated_videos(self):
-        from src.vertex_video_gen import get_result, VertexVideoGenError
+        from src.veo_gen import get_result, VertexVideoGenError
 
         response = MagicMock()
         response.generated_videos = []
@@ -333,6 +349,6 @@ class TestGetResult:
         client = MagicMock()
         client.operations.get.return_value = op
 
-        with patch("src.vertex_video_gen._get_client", return_value=client):
+        with patch("src.veo_gen._get_client", return_value=client):
             with pytest.raises(VertexVideoGenError, match="no video"):
                 asyncio.run(get_result(api_key="", request_id="rid"))

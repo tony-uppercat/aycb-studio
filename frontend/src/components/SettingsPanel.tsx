@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSettings } from './SettingsContext'
 import { useCanvasStore } from '../stores/canvasStore'
 import { MODELS } from '../presets'
+import { BackupsTab } from './BackupsTab'
 import styles from './SettingsPanel.module.css'
 
-type Tab = 'api' | 'local' | 'defaults' | 'paths' | 'backend'
+type Tab = 'api' | 'local' | 'defaults' | 'paths' | 'backend' | 'backups'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'api', label: 'API Keys' },
@@ -12,6 +13,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'defaults', label: 'Defaults' },
   { id: 'paths', label: 'Paths' },
   { id: 'backend', label: 'Backend' },
+  { id: 'backups', label: 'Backups' },
 ]
 
 interface Props {
@@ -35,6 +37,8 @@ export function SettingsPanel({ open, onClose }: Props) {
   const {
     apiKey, setApiKey,
     anthropicKey, setAnthropicKey,
+    openaiApiKey, setOpenaiApiKey,
+    recraftApiKey, setRecraftApiKey,
     bflApiKey, setBflApiKey,
     piApiKey, setPiApiKey,
     falApiKey, setFalApiKey,
@@ -221,6 +225,28 @@ export function SettingsPanel({ open, onClose }: Props) {
                 hint="For Claude Opus, Sonnet, and Haiku models."
                 linkUrl="https://console.anthropic.com/settings/keys"
                 linkText="Get your key from Anthropic Console"
+              />
+              <ApiKeyField
+                label="OpenAI API Key"
+                value={openaiApiKey}
+                onChange={setOpenaiApiKey}
+                placeholder="Enter your OpenAI API key (for GPT Image 2)"
+                statusOk="Key configured"
+                statusEmpty="No key (GPT Image 2 disabled)"
+                hint="For gpt-image-2 image generation. Requires Org Verification in the OpenAI developer console."
+                linkUrl="https://platform.openai.com/api-keys"
+                linkText="Get your key from OpenAI Platform"
+              />
+              <ApiKeyField
+                label="Recraft API Key"
+                value={recraftApiKey}
+                onChange={setRecraftApiKey}
+                placeholder="Enter your Recraft API key (for Recraft V4)"
+                statusOk="Key configured"
+                statusEmpty="No key (Recraft models disabled)"
+                hint="For Recraft V4 raster and vector image generation."
+                linkUrl="https://www.recraft.ai/docs/api-reference/getting-started"
+                linkText="Get your key from Recraft"
               />
               <ApiKeyField
                 label="BFL API Key"
@@ -450,6 +476,9 @@ export function SettingsPanel({ open, onClose }: Props) {
               </div>
             </>
           )}
+
+          {/* ===== Backups Tab ===== */}
+          {activeTab === 'backups' && <BackupsTab />}
 
           {/* ===== Backend Tab ===== */}
           {activeTab === 'backend' && (

@@ -10,47 +10,38 @@ from typing import Any
 
 import httpx
 
+from src.registry import REGISTRY
+
 logger = logging.getLogger(__name__)
 
 QUEUE_URL = "https://queue.fal.run"
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry.REGISTRY at import time so there is a single
+# source of truth. The dict shape matches what callers used before the
+# C3 migration so no consumer changes were needed.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "fal-kling-v3-std": {
-        "name": "Kling 3.0 Omni Std (fal)",
-        "endpoint_t2v": "fal-ai/kling-video/v3/standard/text-to-video",
-        "endpoint_i2v": "fal-ai/kling-video/v3/standard/image-to-video",
-        "aspect_ratios": ["16:9", "9:16", "1:1"],
-        "qualities": ["720p"],
-        "min_duration": 3,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.07},
-    },
-    "fal-kling-v3-pro": {
-        "name": "Kling 3.0 Omni Pro (fal)",
-        "endpoint_t2v": "fal-ai/kling-video/v3/pro/text-to-video",
-        "endpoint_i2v": "fal-ai/kling-video/v3/pro/image-to-video",
-        "aspect_ratios": ["16:9", "9:16", "1:1"],
-        "qualities": ["1080p"],
-        "min_duration": 3,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"1080p": 0.10},
-    },
-    "fal-seedance-2.0": {
-        "name": "Seedance 2.0 (fal)",
-        "endpoint_t2v": "bytedance/seedance-2.0/text-to-video",
-        "endpoint_i2v": "bytedance/seedance-2.0/image-to-video",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.30},
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "fal":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "endpoint_t2v": m.endpoint_t2v,
+            "endpoint_i2v": m.endpoint_i2v,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 15,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 5
 POLL_TIMEOUT = 600
@@ -84,7 +75,7 @@ def _image_to_data_uri(file_bytes: bytes, ext: str = ".png") -> str:
 
 # ── Submit ──────────────────────────────────────────────────────────────────
 
-def _base_payload(model_id: str, prompt: str, duration: int, aspect_ratio: str) -> dict[str, Any]:
+def _base_payload(model_id: str, prompt: str, duration: int, aspect_ratio: str, seed: int = -1) -> dict[str, Any]:
     """Build common payload fields. Kling uses cfg_scale/negative_prompt, Seedance does not."""
     payload: dict[str, Any] = {
         "prompt": prompt,
@@ -95,35 +86,39 @@ def _base_payload(model_id: str, prompt: str, duration: int, aspect_ratio: str) 
     if model_id.startswith("fal-kling"):
         payload["negative_prompt"] = "blur, distort, and low quality"
         payload["cfg_scale"] = 0.5
+    if seed is not None and seed >= 0:
+        payload["seed"] = seed
     return payload
 
 
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit a T2V request. Returns {request_id, status_url, response_url}."""
     info = get_model_info(model_id)
-    payload = _base_payload(model_id, prompt, duration, aspect_ratio)
+    payload = _base_payload(model_id, prompt, duration, aspect_ratio, seed)
     return await _submit(api_key, info["endpoint_t2v"], info["name"], payload)
 
 
 async def submit_with_refs(
     api_key: str, model_id: str, prompt: str,
     ref_image_bytes: list[tuple[str, bytes]] | None = None,
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit I2V request. Images are sent as data URIs (no upload needed)."""
     info = get_model_info(model_id)
 
     if not ref_image_bytes:
-        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration)
+        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration, seed)
 
     start_name, start_data = ref_image_bytes[0]
     start_ext = "." + start_name.rsplit(".", 1)[-1] if "." in start_name else ".png"
     start_uri = _image_to_data_uri(start_data, start_ext)
 
-    payload = _base_payload(model_id, prompt, duration, aspect_ratio)
+    payload = _base_payload(model_id, prompt, duration, aspect_ratio, seed)
 
     # Kling uses start_image_url, Seedance uses image_url
     if model_id.startswith("fal-kling"):

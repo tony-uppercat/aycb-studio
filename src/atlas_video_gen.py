@@ -10,38 +10,39 @@ from typing import Any
 
 import httpx
 
+from src.registry import REGISTRY
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.atlascloud.ai/api/v1"
 
 # ── Model registry ──────────────────────────────────────────────────────────
+# Derived from src.registry. Atlas stores its T2V / I2V endpoints under
+# registry fields endpoint_t2v / endpoint_i2v; this module's historical
+# keys are `model_id` / `model_id_i2v` so we rename at build time.
 
-MODELS: dict[str, dict[str, Any]] = {
-    "atlas-seedance-2.0-fast": {
-        "name": "Seedance 2.0 Fast (Atlas)",
-        "model_id": "bytedance/seedance-2.0-fast/text-to-video",
-        "model_id_i2v": "bytedance/seedance-2.0/image-to-video",
-        "model_id_ref": "bytedance/seedance-2.0/reference-to-video",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.18},
-    },
-    "atlas-seedance-2.0": {
-        "name": "Seedance 2.0 (Atlas)",
-        "model_id": "bytedance/seedance-2.0/text-to-video",
-        "model_id_i2v": "bytedance/seedance-2.0/image-to-video",
-        "model_id_ref": "bytedance/seedance-2.0/reference-to-video",
-        "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-        "qualities": ["720p"],
-        "min_duration": 4,
-        "max_duration": 15,
-        "default_duration": 5,
-        "cost_per_sec": {"720p": 0.25},
-    },
-}
+
+def _build_models_dict() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for m in REGISTRY.values():
+        if m.provider != "atlas":
+            continue
+        out[m.id] = {
+            "name": m.name,
+            "model_id": m.endpoint_t2v,
+            "model_id_i2v": m.endpoint_i2v,
+            "model_id_ref2v": m.endpoint_ref2v,
+            "aspect_ratios": list(m.aspect_ratios),
+            "qualities": list(m.qualities),
+            "min_duration": min(m.allowed_durations) if m.allowed_durations else 4,
+            "max_duration": max(m.allowed_durations) if m.allowed_durations else 15,
+            "default_duration": m.default_duration,
+            "cost_per_sec": m.cost_per_sec or {},
+        }
+    return out
+
+
+MODELS: dict[str, dict[str, Any]] = _build_models_dict()
 
 POLL_INTERVAL = 3
 POLL_TIMEOUT = 600
@@ -77,20 +78,50 @@ def _to_data_uri(file_bytes: bytes, ext: str = ".png") -> str:
 
 # ── Submit ──────────────────────────────────────────────────────────────────
 
+def _is_kling(model_endpoint: str) -> bool:
+    """Atlas hosts both Seedance (ByteDance) and Kling (Kuaishou). Each
+    family expects a different payload schema — Seedance uses
+    image_url/ratio/resolution/generate_audio, Kling uses image/aspect_ratio
+    and rejects the Seedance-specific keys with a 400."""
+    return "kling" in model_endpoint.lower()
+
+
+def _is_motion_control(model_endpoint: str) -> bool:
+    """Atlas Kling 2.6 Pro motion-control model — separate payload schema
+    requiring both `image` (subject) and `video` (motion source)."""
+    return "motion-control" in model_endpoint.lower()
+
+
 async def submit_text_to_video(
     api_key: str, model_id: str, prompt: str,
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
     """Submit T2V request."""
     info = get_model_info(model_id)
-    payload: dict[str, Any] = {
-        "model": info["model_id"],
-        "prompt": prompt,
-        "duration": duration,
-        "resolution": "720p",
-        "ratio": aspect_ratio,
-        "generate_audio": False,
-    }
+    if _is_motion_control(info["model_id"] or ""):
+        raise AtlasVideoGenError(
+            "motion control requires both an image (subject) and a video (motion source)"
+        )
+    endpoint = info["model_id"]
+    if _is_kling(endpoint):
+        payload: dict[str, Any] = {
+            "model": endpoint,
+            "prompt": prompt,
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
+        }
+    else:
+        payload = {
+            "model": endpoint,
+            "prompt": prompt,
+            "duration": duration,
+            "resolution": "720p",
+            "ratio": aspect_ratio,
+            "generate_audio": False,
+        }
+    if seed is not None and seed >= 0:
+        payload["seed"] = seed
     return await _submit(api_key, info["name"], payload)
 
 
@@ -99,60 +130,145 @@ async def submit_with_refs(
     ref_image_bytes: list[tuple[str, bytes]] | None = None,
     ref_video_bytes: tuple[str, bytes] | None = None,
     audio_url: str = "",
-    aspect_ratio: str = "16:9", duration: int = 5, **_kwargs: Any,
+    aspect_ratio: str = "16:9", duration: int = 5,
+    seed: int = -1, **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Submit with references. Uses I2V for single image, reference-to-video for multi."""
+    """Submit I2V request. Atlas only supports first image as start keyframe."""
     info = get_model_info(model_id)
-    n_images = len(ref_image_bytes) if ref_image_bytes else 0
-    has_video = ref_video_bytes is not None
-    has_audio = bool(audio_url)
 
-    if not ref_image_bytes and not has_video and not has_audio:
-        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration)
+    # Motion-control dispatch — separate payload schema, requires both inputs.
+    endpoint_t2v = info["model_id"] or ""
+    if _is_motion_control(endpoint_t2v):
+        if not ref_image_bytes or not ref_video_bytes:
+            raise AtlasVideoGenError(
+                "motion control requires both an image (subject) and a video (motion source)"
+            )
+        return await submit_motion_control(
+            api_key=api_key,
+            model_id=model_id,
+            prompt=prompt,
+            subject_image_bytes=ref_image_bytes[0],
+            motion_video_bytes=ref_video_bytes,
+            character_orientation=_kwargs.get("character_orientation", "image"),
+            duration=duration,
+            negative_prompt=_kwargs.get("negative_prompt", ""),
+            keep_original_sound=_kwargs.get("keep_original_sound", False),
+        )
 
-    # Single image → I2V, multi refs → reference-to-video
-    if n_images <= 1 and not has_video and not has_audio:
-        name, data = ref_image_bytes[0]
-        ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
+    if not ref_image_bytes:
+        return await submit_text_to_video(api_key, model_id, prompt, aspect_ratio, duration, seed)
+
+    # Multi-ref dispatch — Omni Pro reference-to-video.
+    endpoint_ref2v = info.get("model_id_ref2v")
+    if len(ref_image_bytes) >= 2 and endpoint_ref2v:
+        capped = ref_image_bytes[:4]
+        images_uris: list[str] = []
+        for name, data in capped:
+            ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
+            images_uris.append(_to_data_uri(data, ext))
+        if ref_video_bytes:
+            logger.warning(
+                "Atlas %s reference-to-video does not accept video refs; ignored",
+                info["name"],
+            )
+        if audio_url:
+            logger.warning("Atlas %s does not support audio refs; ignored", info["name"])
         payload: dict[str, Any] = {
-            "model": info["model_id_i2v"],
+            "model": endpoint_ref2v,
             "prompt": prompt,
-            "image_url": _to_data_uri(data, ext),
+            "images": images_uris,
             "duration": duration,
-            "resolution": "720p",
-            "ratio": aspect_ratio,
-            "generate_audio": False,
+            "aspect_ratio": aspect_ratio,
+        }
+        if seed is not None and seed >= 0:
+            payload["seed"] = seed
+        return await _submit(api_key, info["name"], payload)
+
+    # Single-image dispatch (existing kling-vs-seedance branching).
+    if len(ref_image_bytes) > 1:
+        logger.warning(
+            "Atlas I2V uses only the first image as start keyframe; %d extra ignored",
+            len(ref_image_bytes) - 1,
+        )
+    if ref_video_bytes:
+        logger.warning("Atlas %s does not support video references; ignored", info["name"])
+    if audio_url:
+        logger.warning("Atlas %s does not support audio references; ignored", info["name"])
+
+    name, data = ref_image_bytes[0]
+    ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
+    image_data_uri = _to_data_uri(data, ext)
+    endpoint = info["model_id_i2v"]
+    if _is_kling(endpoint):
+        # Kling I2V on Atlas: `image` (not image_url), `aspect_ratio`, no
+        # resolution/ratio/generate_audio fields. Sending Seedance-style keys
+        # triggers HTTP 400 "specified when no first image and not video editing".
+        payload: dict[str, Any] = {
+            "model": endpoint,
+            "prompt": prompt,
+            "image": image_data_uri,
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
         }
     else:
-        # Multi-ref mode
-        ref_images = []
-        if ref_image_bytes:
-            for name, data in ref_image_bytes[:9]:
-                ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
-                ref_images.append(_to_data_uri(data, ext))
-
-        ref_videos = []
-        if ref_video_bytes:
-            vname, vdata = ref_video_bytes
-            vext = "." + vname.rsplit(".", 1)[-1] if "." in vname else ".mp4"
-            ref_videos.append(_to_data_uri(vdata, vext))
-
         payload = {
-            "model": info["model_id_ref"],
+            "model": endpoint,
             "prompt": prompt,
+            "image_url": image_data_uri,
             "duration": duration,
             "resolution": "720p",
             "ratio": aspect_ratio,
             "generate_audio": False,
         }
-        if ref_images:
-            payload["reference_images"] = ref_images
-        if ref_videos:
-            payload["reference_videos"] = ref_videos
-        # Audio URL passed directly (no conversion needed if already a URL)
-        if audio_url:
-            payload["reference_audio"] = [audio_url]
+    if seed is not None and seed >= 0:
+        payload["seed"] = seed
+    return await _submit(api_key, info["name"], payload)
 
+
+async def submit_motion_control(
+    api_key: str, model_id: str, prompt: str,
+    subject_image_bytes: tuple[str, bytes],
+    motion_video_bytes: tuple[str, bytes],
+    character_orientation: str = "image",
+    duration: int = 5,
+    negative_prompt: str = "",
+    keep_original_sound: bool = False,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    """Submit a Kling 2.6 Pro motion-control request.
+
+    Schema is intentionally minimal — Atlas's motion-control endpoint
+    rejects every Seedance/Kling-i2v key (ratio, resolution, image_url,
+    generate_audio, seed). Only `image`, `video`, `character_orientation`,
+    `prompt`, `duration`, and the two optional fields below are accepted.
+    """
+    info = get_model_info(model_id)
+    endpoint = info["model_id"]
+    if not _is_motion_control(endpoint):
+        raise AtlasVideoGenError(
+            f"{model_id} is not a motion-control model (endpoint={endpoint})"
+        )
+    if character_orientation not in ("image", "video"):
+        raise AtlasVideoGenError(
+            f"character_orientation must be 'image' or 'video', got {character_orientation!r}"
+        )
+
+    img_name, img_data = subject_image_bytes
+    vid_name, vid_data = motion_video_bytes
+    img_ext = "." + img_name.rsplit(".", 1)[-1] if "." in img_name else ".png"
+    vid_ext = "." + vid_name.rsplit(".", 1)[-1] if "." in vid_name else ".mp4"
+
+    payload: dict[str, Any] = {
+        "model": endpoint,
+        "image": _to_data_uri(img_data, img_ext),
+        "video": _to_data_uri(vid_data, vid_ext),
+        "character_orientation": character_orientation,
+        "prompt": prompt,
+        "duration": duration,
+        "keep_original_sound": keep_original_sound,
+    }
+    if negative_prompt:
+        payload["negative_prompt"] = negative_prompt
     return await _submit(api_key, info["name"], payload)
 
 

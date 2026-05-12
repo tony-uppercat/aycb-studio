@@ -10,11 +10,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { NODE_CATALOG, CATEGORY_LABELS, type NodeManifest } from '../../nodes/index'
-import { loadMedia } from '../../mediaStore'
-import { serializeNodes } from '../../hooks/useCanvasPersistence'
 import { saveUserTemplate, findTemplateByName, deleteUserTemplate } from '../../presets'
-import { triggerDownload, downloadFile } from '../../utils/downloadManager'
+import { triggerDownload } from '../../utils/downloadManager'
+import {
+  downloadMediaFiles,
+  saveMediaToAssets,
+  downloadNodesFull,
+  collectCollageImages,
+} from '../../services/canvasExport'
+import { stripNodeData, keepNodeContent } from '../../services/templateData'
 import type { CollageImage } from '../CollageEditor'
+import type { LayoutMode } from '../../utils/imageMergeRender'
 import styles from './CanvasContextMenu.module.css'
 
 /* ── Types ── */
@@ -43,23 +49,14 @@ export interface Props {
   onGroup?: () => void
   onUngroup?: () => void
   onOpenCollage?: (images: CollageImage[]) => void
+  onMerge?: (layout: LayoutMode, imageNodes: Node[]) => void
+  onUnpack?: (nodes: Node[]) => void
   onDeleteEdge?: (edgeId: string) => void
   /** Position in flow coordinates (for add-node placement) */
   flowPosition?: { x: number; y: number }
 }
 
 /* ── Helpers ── */
-
-function arrayBufferToBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
-  let binary = ''
-  const chunkSize = 8192
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-    binary += String.fromCharCode.apply(null, chunk as unknown as number[])
-  }
-  return btoa(binary)
-}
 
 function collectMediaIds(nodes: Node[]): string[] {
   const ids = new Set<string>()
@@ -82,33 +79,6 @@ function collectMediaIds(nodes: Node[]): string[] {
 function getInternalEdges(nodes: Node[], allEdges: Edge[]): Edge[] {
   const nodeIds = new Set(nodes.map(n => n.id))
   return allEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
-}
-
-function stripNodeData(data: Record<string, unknown>): Record<string, unknown> {
-  const KEEP_KEYS = new Set([
-    'selectedModel', 'model', 'doEmbed', 'nFrames', 'effect',
-    'cannyThreshold1', 'cannyThreshold2', 'separator', 'jsonPath',
-    'activeChannel', 'label', 'collapsed', 'systemPrompt',
-    'aspectRatio', 'resolution', '_customName', '_bypassed',
-    'imageSize', 'maxFrames', 'extractionMode', 'cutSensitivity', 'color',
-    'autoUpdate', 'showThinking', 'excludedKeys', 'outputLimit', 'parseMode',
-    'selections',
-  ])
-  const clean: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(data)) {
-    if (KEEP_KEYS.has(k)) clean[k] = v
-  }
-  return clean
-}
-
-function keepNodeContent(data: Record<string, unknown>): Record<string, unknown> {
-  const clean: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(data)) {
-    if (v instanceof File) continue
-    if (typeof v === 'string' && v.startsWith('blob:')) continue
-    clean[k] = v
-  }
-  return clean
 }
 
 /* ── Submenu Wrapper ── */
@@ -201,7 +171,7 @@ export function CanvasContextMenu({
   x, y, target, allEdges, onClose,
   onAddNode, onPaste, onSelectAll, onFitView,
   onDuplicate, onCopy, onDelete, onBypass, onGroup, onUngroup,
-  onOpenCollage, onDeleteEdge, flowPosition,
+  onOpenCollage, onMerge, onUnpack, onDeleteEdge, flowPosition,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [showNodeExportChoice, setShowNodeExportChoice] = useState(false)
@@ -233,6 +203,11 @@ export function CanvasContextMenu({
   const canCollage = imageNodes.length >= 2
   const canSaveTemplate = nodeCount >= 2
   const hasGroups = selectedNodes.some(n => n.type === 'group')
+  const unpackCount = selectedNodes.reduce((sum, n) => {
+    const hids = (n.data as Record<string, unknown>).historyIds as string[] | undefined
+    return sum + (hids?.length ?? 0)
+  }, 0)
+  const canUnpack = unpackCount > 0
 
   // ── Action handlers ──
 
@@ -243,6 +218,7 @@ export function CanvasContextMenu({
 
   const handleBypass = useCallback(() => { onBypass?.(selectedNodes); onClose() }, [onBypass, selectedNodes, onClose])
   const handleDuplicate = useCallback(() => { onDuplicate?.(selectedNodes); onClose() }, [onDuplicate, selectedNodes, onClose])
+  const handleUnpack = useCallback(() => { onUnpack?.(selectedNodes); onClose() }, [onUnpack, selectedNodes, onClose])
   const handleCopy = useCallback(() => { onCopy?.(selectedNodes); onClose() }, [onCopy, selectedNodes, onClose])
 
   const handleDelete = useCallback(() => {
@@ -265,53 +241,22 @@ export function CanvasContextMenu({
   // ── Download Media ──
   async function handleDownloadMedia() {
     setBusy('media')
-    try {
-      for (const mid of mediaIds) {
-        try {
-          const file = await loadMedia(mid)
-          if (!file) continue
-          downloadFile(file, { filename: file.name || `${mid}.png` })
-        } catch { /* skip broken entries */ }
-      }
-    } finally {
-      setBusy(null)
-      onClose()
-    }
+    try { await downloadMediaFiles(mediaIds) }
+    finally { setBusy(null); onClose() }
+  }
+
+  // ── Save to Assets ──
+  async function handleSaveToAssets() {
+    setBusy('assets')
+    try { await saveMediaToAssets(mediaIds) }
+    finally { setBusy(null); onClose() }
   }
 
   // ── Download Nodes Full ──
   async function handleDownloadNodesFull() {
     setBusy('nodes-full')
-    try {
-      const internalEdges = getInternalEdges(selectedNodes, allEdges)
-      const serialized = serializeNodes(selectedNodes)
-      const mediaItems: Array<{ id: string; name: string; type: string; dataB64: string }> = []
-      for (const mid of mediaIds) {
-        try {
-          const file = await loadMedia(mid)
-          if (!file) continue
-          const buf = await file.arrayBuffer()
-          mediaItems.push({ id: mid, name: file.name, type: file.type, dataB64: arrayBufferToBase64(buf) })
-        } catch { /* skip */ }
-      }
-      const payload = {
-        version: 1,
-        timestamp: new Date().toISOString(),
-        canvas: {
-          nodes: serialized,
-          edges: internalEdges.map(e => ({
-            id: e.id, source: e.source, target: e.target,
-            sourceHandle: e.sourceHandle, targetHandle: e.targetHandle,
-          })),
-        },
-        settings: { model: 'Gemini 3 Flash', doEmbed: false },
-        media: mediaItems,
-      }
-      triggerDownload(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `nodes-${Date.now()}.geminishot.json`)
-    } finally {
-      setBusy(null)
-      onClose()
-    }
+    try { await downloadNodesFull(selectedNodes, allEdges, mediaIds) }
+    finally { setBusy(null); onClose() }
   }
 
   // ── Download Nodes Clean ──
@@ -394,22 +339,19 @@ export function CanvasContextMenu({
     setTimeout(() => { setTemplateSaved(false); onClose() }, 1200)
   }
 
+  // ── Quick Merge (right-click → pick layout → new image node) ──
+  const handleMerge = useCallback((layout: LayoutMode) => {
+    if (!onMerge || imageNodes.length < 2) return
+    onMerge(layout, imageNodes)
+    onClose()
+  }, [onMerge, imageNodes, onClose])
+
   // ── Create Collage ──
   async function handleCreateCollage() {
     if (!canCollage || !onOpenCollage) return
     setBusy('collage')
     try {
-      const collageImages: CollageImage[] = []
-      for (const node of imageNodes) {
-        const d = node.data as Record<string, unknown>
-        const mediaId = d.mediaId as string
-        try {
-          const file = await loadMedia(mediaId)
-          if (!file) continue
-          const url = URL.createObjectURL(file)
-          collageImages.push({ id: node.id, url, name: file.name || `image-${node.id}` })
-        } catch { /* skip */ }
-      }
+      const collageImages = await collectCollageImages(imageNodes)
       if (collageImages.length >= 2) onOpenCollage(collageImages)
     } finally {
       setBusy(null)
@@ -444,6 +386,9 @@ export function CanvasContextMenu({
 
             <Item icon="⏩" label="Bypass" shortcut="B" onClick={handleBypass} />
             <Item icon="⊕" label="Duplicate" shortcut="Ctrl+D" onClick={handleDuplicate} />
+            {canUnpack && (
+              <Item icon="⊟" label="Unpack History" shortcut="U" badge={unpackCount} onClick={handleUnpack} />
+            )}
             <Item icon="📋" label="Copy" shortcut="Ctrl+C" onClick={handleCopy} />
             <Item icon="🗑" label="Delete" shortcut="Del" danger onClick={handleDelete} />
 
@@ -466,6 +411,34 @@ export function CanvasContextMenu({
                 disabled={busy !== null}
                 onClick={handleDownloadMedia}
               />
+            )}
+            {hasMedia && (
+              <Item
+                icon="📂"
+                label={busy === 'assets' ? 'Saving...' : 'Save to Assets'}
+                badge={mediaIds.length}
+                disabled={busy !== null}
+                onClick={handleSaveToAssets}
+              />
+            )}
+            {canCollage && onMerge && (
+              <SubMenu label="Merge" icon="🧩" menuX={menuX}>
+                <button className={styles.item} onClick={() => handleMerge('grid')}>
+                  <span className={styles.icon}>⊞</span>
+                  <span className={styles.label}>Grid</span>
+                  <span className={styles.badge}>{imageNodes.length}</span>
+                </button>
+                <button className={styles.item} onClick={() => handleMerge('horizontal')}>
+                  <span className={styles.icon}>▭</span>
+                  <span className={styles.label}>Horizontal</span>
+                  <span className={styles.badge}>{imageNodes.length}</span>
+                </button>
+                <button className={styles.item} onClick={() => handleMerge('vertical')}>
+                  <span className={styles.icon}>▯</span>
+                  <span className={styles.label}>Vertical</span>
+                  <span className={styles.badge}>{imageNodes.length}</span>
+                </button>
+              </SubMenu>
             )}
             {canCollage && onOpenCollage && (
               <Item

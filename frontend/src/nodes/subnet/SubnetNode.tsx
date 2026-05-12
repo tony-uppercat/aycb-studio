@@ -1,10 +1,17 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
-import { Handle, Position, NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import { memo, useCallback, useEffect, useRef } from 'react'
+import { Handle, Position, NodeResizer, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react'
 import { ChevronDown, ChevronRight, Box } from 'lucide-react'
 import type { Node, Edge, Viewport } from '@xyflow/react'
 import styles from './SubnetNode.module.css'
-import { buildSubnetPins, type SubnetPin } from './useSubnetPins'
+import { buildSubnetPins, type SubnetPin } from './subnetPins'
 import { useSubnetPathStore } from '../../stores/subnetPathStore'
+
+/** Sentinel handle ids used for the "drop here to add" slots at the
+ *  bottom of each direction. onConnect in FlowCanvas watches for these
+ *  and auto-commits: spawns a backing proxy inside sub_graph with the
+ *  slot_type inferred from the other end of the edge. */
+export const PENDING_IN_HANDLE_ID = '__pending_in__'
+export const PENDING_OUT_HANDLE_ID = '__pending_out__'
 
 export interface SubnetNodeData {
   name: string
@@ -74,11 +81,12 @@ export function toggleCollapsed(
 function SubnetNodeComponent({ id, data, selected }: NodeProps) {
   const d = data as unknown as SubnetNodeData
   const { updateNodeData } = useReactFlow()
+  const updateNodeInternals = useUpdateNodeInternals()
 
   const sub_nodes = d.sub_graph?.nodes ?? []
   const child_count = sub_nodes.length
-  const external_inputs = useMemo(() => d.external_inputs ?? [], [d.external_inputs])
-  const external_outputs = useMemo(() => d.external_outputs ?? [], [d.external_outputs])
+  const external_inputs = d.external_inputs ?? []
+  const external_outputs = d.external_outputs ?? []
 
   // Refresh pins whenever the sub_graph's nodes change. The current pins are
   // read via a ref (updated every render) so the effect dep array stays
@@ -90,6 +98,13 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
     const patch = computePinPatch(sub_nodes, pins_ref.current.inputs, pins_ref.current.outputs)
     if (patch) updateNodeData(id, patch)
   }, [sub_nodes, id, updateNodeData])
+
+  // Notify React Flow when the handle set changes — without this its handle
+  // registry stays stale after pending-pin auto-commit, breaking edges that
+  // target/source the freshly materialized pin.
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [external_inputs.length, external_outputs.length, id, updateNodeInternals])
 
   const handleRenameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,7 +136,9 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
     e.stopPropagation()
   }, [])
 
-  const borderColor = d.color ?? '#F52776'
+  // Falls back to the app-wide accent token so theme changes flow through
+  // automatically; only user-customized subnet colors are inlined verbatim.
+  const borderColor = d.color ?? 'var(--color-accent)'
 
   return (
     <div
@@ -169,21 +186,31 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
           {child_count} {child_count === 1 ? 'node' : 'nodes'}
         </span>
         <div className={styles.pinList}>
-          {external_inputs.length === 0 && external_outputs.length === 0 && (
-            <span className={styles.empty}>No pins</span>
-          )}
           {external_inputs.map((pin) => (
             <div key={`in-${pin.handle_id}`} className={styles.pinRow}>
               <span className={styles.pinDot} />
               {pin.name}
             </div>
           ))}
+          {/* Pending input — always below the last committed input.
+              Generic until an edge drops on it; commitPendingPin then
+              materializes a real proxy with the inferred slot_type. */}
+          <div className={`${styles.pinRow} ${styles.pinRowPending}`}>
+            <span className={styles.pinDot} style={{ background: 'transparent', border: '1.5px dashed rgba(245,39,118,0.55)' }} />
+            input...
+          </div>
           {external_outputs.map((pin) => (
             <div key={`out-${pin.handle_id}`} className={`${styles.pinRow} ${styles.pinRowOut}`}>
               {pin.name}
               <span className={styles.pinDot} />
             </div>
           ))}
+          {/* Pending output — same idea, mirrored. Always present so the
+              user has a generic slot to drop an outgoing edge on. */}
+          <div className={`${styles.pinRow} ${styles.pinRowOut} ${styles.pinRowPending}`}>
+            output...
+            <span className={styles.pinDot} style={{ background: 'transparent', border: '1.5px dashed rgba(245,39,118,0.55)' }} />
+          </div>
         </div>
       </div>
 
@@ -197,6 +224,17 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
           style={{ top: 40 + i * 18 }}
         />
       ))}
+      {/* Pending input handle. ID is the sentinel PENDING_IN_HANDLE_ID
+          consumed by the auto-commit hook in FlowCanvas onConnect. Always
+          rendered so the user always has a generic slot to drop on. */}
+      <Handle
+        key="pending-in"
+        type="target"
+        position={Position.Left}
+        id={PENDING_IN_HANDLE_ID}
+        className={styles.inputHandlePending}
+        style={{ top: 40 + external_inputs.length * 18 }}
+      />
       {external_outputs.map((pin, i) => (
         <Handle
           key={`handle-out-${pin.handle_id}`}
@@ -207,6 +245,14 @@ function SubnetNodeComponent({ id, data, selected }: NodeProps) {
           style={{ top: 40 + i * 18 }}
         />
       ))}
+      <Handle
+        key="pending-out"
+        type="source"
+        position={Position.Right}
+        id={PENDING_OUT_HANDLE_ID}
+        className={styles.outputHandlePending}
+        style={{ top: 40 + external_outputs.length * 18 }}
+      />
     </div>
   )
 }

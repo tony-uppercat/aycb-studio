@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useStore } from '@xyflow/react';
+import { useReactFlow, useStore } from '@xyflow/react';
 import { api } from '../../api';
 import { listMedia } from '../../mediaStore';
 import type { MediaEntry } from '../../mediaStore';
@@ -143,8 +143,11 @@ export function ConsolePanel({ open, onToggle }: Props) {
   }, [storeCosts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Feedback tab ──────────────────────────────────────────────────────────────
-  // Only subscribe to the selected node — avoids re-rendering on every position change during drag
-  const selectedNode = useStore(s => s.nodes.find(n => n.selected) ?? null)
+  // Subscribe to just the selected node's id (primitive) so ConsolePanel doesn't
+  // re-render on every drag frame when the selected node object ref changes.
+  // The full node is fetched imperatively at submit time.
+  const selectedNodeId = useStore(s => s.nodes.find(n => n.selected)?.id ?? null)
+  const { getNodes } = useReactFlow()
   const defaultFbWidth = () => { try { return Number(localStorage.getItem(STORAGE_KEYS.FEEDBACK_WIDTH)) || 320 } catch { return 320 } }
   const [fbWidth, setFbWidth] = useState(defaultFbWidth)
   const fbWidthRef = useRef(fbWidth)
@@ -187,7 +190,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
     const isUrgent = fbText.trimStart().startsWith('!!!')
     const cleanText = isUrgent ? fbText.trimStart().slice(3).trim() : fbText.trim()
     if (!cleanText) return;
-    const selected = selectedNode;
+    const selected = selectedNodeId ? getNodes().find(n => n.id === selectedNodeId) ?? null : null;
     const entry: FeedbackEntry = {
       id: `fb_${Date.now()}`,
       text: cleanText,
@@ -225,7 +228,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
         body: JSON.stringify(entry),
       }).catch(() => { /* backend may be down */ })
     }
-  }, [fbText, fbCategory, selectedNode, feedbackEntries]);
+  }, [fbText, fbCategory, selectedNodeId, getNodes, feedbackEntries]);
 
   const [reportStatus, setReportStatus] = useState<string>('');
 
@@ -335,7 +338,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                 <span className={styles.badge}>{errCount}</span>
               )}
               {tab === 'costs' && costCount > 0 && (
-                <span className={styles.costBadgeTab}>${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}</span>
+                <span className={styles.costBadgeTab} data-s>${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}</span>
               )}
             </button>
           ))}
@@ -488,8 +491,8 @@ export function ConsolePanel({ open, onToggle }: Props) {
                             <span className={styles.costTime}>{shortTime(entry.timestamp)}</span>
                             <span className={styles.costNode}>{entry.nodeName}</span>
                             <span className={styles.costModel}>{entry.model}</span>
-                            <span className={styles.costTokens}>{entry.inputTokens}+{entry.outputTokens}</span>
-                            <span className={styles.costUsd}>${entry.costUsd < 0.01 ? entry.costUsd.toFixed(4) : entry.costUsd.toFixed(3)}</span>
+                            <span className={styles.costTokens} data-s>{entry.inputTokens}+{entry.outputTokens}</span>
+                            <span className={styles.costUsd} data-s>${entry.costUsd < 0.01 ? entry.costUsd.toFixed(4) : entry.costUsd.toFixed(3)}</span>
                           </>
                       }
                     </div>
@@ -500,7 +503,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                     <button className={styles.fbExportBtn} onClick={() => {
                       downloadJSON(storeCosts, `costs_${new Date().toISOString().slice(0, 10)}.json`);
                     }} title="Export costs JSON">Export</button>
-                    <span className={styles.costTotal}>
+                    <span className={styles.costTotal} data-s>
                       Total: ${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}
                     </span>
                   </div>
@@ -597,7 +600,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                       value={fbText}
                       onChange={e => setFbText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitFeedback() } }}
-                      placeholder={selectedNode ? 'Feedback on selected node...' : 'Write feedback...'}
+                      placeholder={selectedNodeId ? 'Feedback on selected node...' : 'Write feedback...'}
                     />
                     <button className={styles.fbSendBtn} onClick={submitFeedback} disabled={!fbText.trim()}>Send</button>
                   </div>

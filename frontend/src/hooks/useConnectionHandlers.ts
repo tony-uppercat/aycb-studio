@@ -4,6 +4,7 @@ import { useCanvasStore } from '../stores/canvasStore'
 import { getNextNodeId } from './useCanvasDragDrop'
 import { getHandleType } from './useDataPropagation'
 import { NODE_CATALOG, type NodeManifest, type SlotType, areSlotsCompatible, findHandleForSlot } from '../nodes/index'
+import { commitPendingPin } from '../nodes/subnet/subnetPins'
 import { edgeStyle } from '../utils/edgeStyles'
 
 type PendingConnection = {
@@ -25,6 +26,41 @@ interface UseConnectionHandlersParams {
 
 // Node types that allow multiple incoming edges on the same input handle
 export const MULTI_INPUT_NODE_TYPES = new Set(['switch', 'batch'])
+
+/**
+ * Resolve the slot type of a handle taking subnet boundary into account.
+ *
+ * Subnet pins use handle ids of the form `in-{rand}` / `out-{rand}` where the
+ * prefix encodes direction, NOT slot type. `getHandleType` would split on '-'
+ * and return 'in'/'out' which doesn't match any real slot type, breaking
+ * `isValidConnection` (drag rejected) and `onConnectStart` (pendingConnection
+ * carries a useless slotType so AddNodeMenu can't filter compatible nodes).
+ *
+ * For subnet pins, look up the actual slot_type from the subnet's
+ * `external_inputs` / `external_outputs` array. For everything else, fall
+ * back to the prefix-based `getHandleType` heuristic.
+ */
+export function getEffectiveSlotType(
+  nodeId: string | null | undefined,
+  handleId: string | null | undefined,
+  handleType: 'source' | 'target',
+  nodes: Node[],
+): string {
+  if (!handleId) return ''
+  const prefix = getHandleType(handleId)
+  if ((prefix === 'in' || prefix === 'out') && nodeId) {
+    const node = nodes.find(n => n.id === nodeId)
+    if (node?.type === 'subnet') {
+      const data = node.data as Record<string, unknown>
+      const pins = (handleType === 'source'
+        ? data.external_outputs
+        : data.external_inputs) as Array<{ handle_id: string; slot_type: string }> | undefined
+      const pin = pins?.find(p => p.handle_id === handleId)
+      if (pin) return pin.slot_type
+    }
+  }
+  return prefix
+}
 
 /**
  * Remove existing edges on a target handle if the node doesn't allow multi-input.
@@ -53,7 +89,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
 
   const onConnectStart = useCallback((_: unknown, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
     if (params.nodeId && params.handleId && params.handleType) {
-      const slotType = getHandleType(params.handleId)
+      const slotType = getEffectiveSlotType(params.nodeId, params.handleId, params.handleType, getNodes())
       const pending: NonNullable<PendingConnection> = {
         nodeId: params.nodeId,
         handleId: params.handleId,
@@ -64,7 +100,7 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
       pendingRef.current = pending
       setPendingConnection(pending)
     }
-  }, [])
+  }, [getNodes])
 
   const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
     const pending = pendingRef.current
@@ -214,8 +250,45 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
   const onConnect = useCallback(
     (connection: Connection) => {
       connectionMadeRef.current = true
-      const currentNodes = getNodes()
+      let currentNodes = getNodes()
       const currentEdges = getEdges()
+
+      // ── Pending subnet pin auto-commit ──────────────────────────────────
+      // If the user dropped an edge onto a subnet's "__pending_in__" or
+      // "__pending_out__" sentinel handle, materialize a real proxy inside
+      // the subnet's sub_graph and rewrite the connection to use the new
+      // real handle_id. The pending pin then re-spawns one row below on
+      // the next render.
+      const PENDING_IN = '__pending_in__'
+      const PENDING_OUT = '__pending_out__'
+      if (connection.targetHandle === PENDING_IN && connection.target) {
+        const subnet = currentNodes.find(n => n.id === connection.target)
+        if (subnet?.type === 'subnet') {
+          const slot_type = (getEffectiveSlotType(connection.source, connection.sourceHandle, 'source', currentNodes) || 'text') as SlotType
+          const { updatedSubGraph, newHandleId } = commitPendingPin(subnet, 'in', slot_type)
+          setNodes(ns => ns.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n))
+          currentNodes = currentNodes.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n)
+          connection = { ...connection, targetHandle: newHandleId }
+        }
+      } else if (connection.sourceHandle === PENDING_OUT && connection.source) {
+        const subnet = currentNodes.find(n => n.id === connection.source)
+        if (subnet?.type === 'subnet') {
+          const slot_type = (getEffectiveSlotType(connection.target, connection.targetHandle, 'target', currentNodes) || 'text') as SlotType
+          const { updatedSubGraph, newHandleId } = commitPendingPin(subnet, 'out', slot_type)
+          setNodes(ns => ns.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n))
+          currentNodes = currentNodes.map(n => n.id === subnet.id
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), sub_graph: updatedSubGraph } }
+            : n)
+          connection = { ...connection, sourceHandle: newHandleId }
+        }
+      }
+
       const targetNode = currentNodes.find(n => n.id === connection.target)
       const targetHandle = connection.targetHandle ?? ''
       const isMediaPin = targetHandle.startsWith('media-')
@@ -276,12 +349,21 @@ export function useConnectionHandlers(params: UseConnectionHandlersParams) {
       // Batch node accepts any input type and multiple edges
       if (targetType === 'batch') return true
 
+      // Subnet "pending" pins accept any type — slot_type is inferred
+      // from the other end of the connection at auto-commit time in
+      // onConnect above.
+      if (connection.targetHandle === '__pending_in__' ||
+          connection.sourceHandle === '__pending_out__') {
+        return true
+      }
+
       // We allow connections to occupied input pins so onConnect can replace the old edge.
       // Blocking here would prevent replacement (isValidConnection=false → onConnect never fires).
 
+      const nodes = getNodes()
       return areSlotsCompatible(
-        getHandleType(connection.sourceHandle),
-        getHandleType(connection.targetHandle),
+        getEffectiveSlotType(connection.source, connection.sourceHandle, 'source', nodes),
+        getEffectiveSlotType(connection.target, connection.targetHandle, 'target', nodes),
       )
     },
     [getNodes]

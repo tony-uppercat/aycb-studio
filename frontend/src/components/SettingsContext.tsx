@@ -4,6 +4,8 @@ import { STORAGE_KEYS } from '../storage/keys'
 interface Settings {
   apiKey: string
   anthropicKey: string
+  openaiApiKey: string
+  recraftApiKey: string
   hfApiKey: string
   bflApiKey: string
   piApiKey: string
@@ -20,6 +22,8 @@ interface Settings {
 interface SettingsCtx extends Settings {
   setApiKey: (k: string) => void
   setAnthropicKey: (k: string) => void
+  setOpenaiApiKey: (k: string) => void
+  setRecraftApiKey: (k: string) => void
   setHfApiKey: (k: string) => void
   setBflApiKey: (k: string) => void
   setPiApiKey: (k: string) => void
@@ -34,7 +38,7 @@ interface SettingsCtx extends Settings {
 }
 
 const LS_KEY = STORAGE_KEYS.SETTINGS
-const DEFAULTS: Settings = { apiKey: '', anthropicKey: '', hfApiKey: '', bflApiKey: '', piApiKey: '', falApiKey: '', atlasApiKey: '', localServerUrl: '', ollamaUrl: 'http://localhost:11434', model: 'Gemini 3.1 Pro', doEmbed: false, gcpProject: '', gcpLocation: 'us-central1' }
+const DEFAULTS: Settings = { apiKey: '', anthropicKey: '', openaiApiKey: '', recraftApiKey: '', hfApiKey: '', bflApiKey: '', piApiKey: '', falApiKey: '', atlasApiKey: '', localServerUrl: '', ollamaUrl: 'http://localhost:11434', model: 'Gemini 3.1 Pro', doEmbed: false, gcpProject: '', gcpLocation: 'us-central1' }
 
 function load(): Settings {
   try {
@@ -48,6 +52,8 @@ const Ctx = createContext<SettingsCtx>({
   ...DEFAULTS,
   setApiKey: () => {},
   setAnthropicKey: () => {},
+  setOpenaiApiKey: () => {},
+  setRecraftApiKey: () => {},
   setHfApiKey: () => {},
   setBflApiKey: () => {},
   setPiApiKey: () => {},
@@ -72,6 +78,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     ...settings,
     setApiKey: (k) => setSettings(s => ({ ...s, apiKey: k })),
     setAnthropicKey: (k) => setSettings(s => ({ ...s, anthropicKey: k })),
+    setOpenaiApiKey: (k) => setSettings(s => ({ ...s, openaiApiKey: k })),
+    setRecraftApiKey: (k) => setSettings(s => ({ ...s, recraftApiKey: k })),
     setHfApiKey: (k) => setSettings(s => ({ ...s, hfApiKey: k })),
     setBflApiKey: (k) => setSettings(s => ({ ...s, bflApiKey: k })),
     setPiApiKey: (k) => setSettings(s => ({ ...s, piApiKey: k })),

@@ -1,5 +1,12 @@
 import { useCallback, useState } from 'react'
 import { useDrawingStore } from '../stores/drawingStore'
+import { useUserStore } from '../stores/userStore'
+import { rhApi } from '../services/api'
+import { toast } from '../stores/toastStore'
+
+interface DrawingToolbarProps {
+  mediaId: number
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -20,13 +27,14 @@ const TOOLS = [
 
 // ─── DrawingToolbar ───────────────────────────────────────────────────────────
 
-export default function DrawingToolbar() {
+export default function DrawingToolbar({ mediaId }: DrawingToolbarProps) {
   const {
     current_tool, color, stroke_width, opacity,
     strokes, undo_stack, drawing_visible,
     setTool, setColor, setStrokeWidth, setOpacity,
     toggleVisibility, undo, redo, clearAll, toggleDrawingMode,
   } = useDrawingStore()
+  const user_name = useUserStore(s => s.user_name) || 'Anonymous'
 
   const [clear_confirm, setClearConfirm] = useState(false)
 
@@ -41,12 +49,21 @@ export default function DrawingToolbar() {
     }
   }, [clear_confirm, clearAll])
 
-  const handleSave = useCallback(() => {
-    const win = window as Record<string, unknown>
-    if (typeof win.__drawingCanvasSave === 'function') {
-      ;(win.__drawingCanvasSave as () => void)()
+  // Save current strokes. Reads strokes imperatively so the handler
+  // identity doesn't change on every stroke — keeping click latency flat
+  // even during an active pen session.
+  const handleSave = useCallback(async () => {
+    const all = useDrawingStore.getState().strokes
+    try {
+      await rhApi.saveDrawing({
+        media_id: mediaId, author: user_name,
+        strokes_json: JSON.stringify(all),
+      })
+      toast.success('Drawing saved')
+    } catch (err) {
+      toast.error(`Drawing save failed: ${err instanceof Error ? err.message : err}`)
     }
-  }, [])
+  }, [mediaId, user_name])
 
   const handleOpacity = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -38,10 +38,13 @@ import { SaveIndicator } from '../SaveIndicator'
 import { ProjectSwitcher } from '../project/ProjectSwitcher'
 import { CanvasContextMenu, type ContextMenuTarget } from './CanvasContextMenu'
 import { SubnetEditor } from './SubnetEditor'
+import { canvasClipboard } from '../../stores/clipboardStore'
 import { setRootTree, resetRootTree } from '../../hooks/rootTreeGetter'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
 import { CollageEditor } from '../CollageEditor'
 import type { CollageImage } from '../CollageEditor'
+import { runQuickMerge } from '../../services/quickMerge'
+import type { LayoutMode } from '../../utils/imageMergeRender'
 import { useActiveProject } from '../../hooks/useActiveProject'
 import { useBackendHealth } from '../../hooks/useBackendHealth'
 import styles from './FlowCanvas.module.css'
@@ -60,9 +63,10 @@ function FlowCanvasInner() {
   const storagePanelOpen = useCanvasStore(s => s.storagePanelOpen)
   const fullscreenBrowserOpen = useCanvasStore(s => s.fullscreenBrowserOpen)
   const toggleFullscreenBrowser = useCanvasStore(s => s.toggleFullscreenBrowser)
+  const [privacy, setPrivacy] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: ContextMenuTarget; flowPos?: { x: number; y: number } } | null>(null)
-  const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
+  const clipboardRef = canvasClipboard  // shared across main canvas + subnet editor
   const [collageOpen, setCollageOpen] = useState(false)
   const [collageImages, setCollageImages] = useState<CollageImage[]>([])
   // Track blob URLs created for collage so we can revoke them on close
@@ -93,9 +97,21 @@ function FlowCanvasInner() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftKeyRef.current = true }
     const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftKeyRef.current = false }
+    // Window blur (Alt+Tab) drops the keyup for Shift, leaving shiftKeyRef
+    // stuck true and causing onSelectionChange to re-apply a stale snapshot
+    // on subsequent clicks. Reset on focus loss.
+    const onBlur = () => {
+      shiftKeyRef.current = false
+      preSelectionNodeIdsRef.current = new Set()
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
-    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp) }
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
   }, [])
 
   const onSelectionStart = useCallback(() => {
@@ -125,7 +141,38 @@ function FlowCanvasInner() {
     }
   }, [setNodes])
 
+  // Clear the snapshot once the rect-select drag ends. Without this, a stale
+  // snapshot persists and onSelectionChange re-applies it on the next
+  // shift-click, making previously-rect-selected nodes stick "on".
+  const onSelectionEnd = useCallback(() => {
+    preSelectionNodeIdsRef.current = new Set()
+  }, [])
+
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // ── Prevent middle-mouse autoscroll + accidental zoom while panning ──
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    let midDown = false
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 1) { e.preventDefault(); midDown = true }
+    }
+    const onUp = (e: MouseEvent) => {
+      if (e.button === 1) midDown = false
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (midDown) { e.preventDefault(); e.stopPropagation() }
+    }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mouseup', onUp)
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mouseup', onUp)
+      el.removeEventListener('wheel', onWheel)
+    }
+  }, [])
 
   const { onDragOver, onDrop } = useCanvasDragDrop()
   const { snapshot, undo, redo, resetHistory, onDragStop: historyDragStop } = useCanvasHistory(
@@ -287,7 +334,7 @@ function FlowCanvasInner() {
       setCtxMenu({
         x: event.clientX,
         y: event.clientY,
-        target: { kind: 'pane', canPaste: clipboardRef.current !== null },
+        target: { kind: 'pane', canPaste: canvasClipboard.current !== null },
         flowPos,
       })
     },
@@ -306,7 +353,7 @@ function FlowCanvasInner() {
   // ── Context menu action callbacks ──
   const {
     ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxDuplicate,
-    ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup,
+    ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
   } = useCanvasContextMenuActions({ getNodes, getEdges, setNodes, setEdges, snapshot, clipboardRef, fitView })
 
   function handleClearCanvas(): void {
@@ -415,6 +462,44 @@ function FlowCanvasInner() {
     }
   }, [])
 
+  // ── Quick Merge (right-click → Merge → pick layout) ──
+  const handleQuickMerge = useCallback(async (layout: LayoutMode, imageNodes: Node[]) => {
+    const mediaIds = imageNodes
+      .map(n => (n.data as Record<string, unknown>).mediaId)
+      .filter((m): m is string => typeof m === 'string' && m.length > 0)
+    if (mediaIds.length < 2) return
+
+    let result: { mediaId: string }
+    try {
+      result = await runQuickMerge({ mediaIds, layout })
+    } catch (err) {
+      console.warn('[AYCB] Quick merge failed:', err)
+      return
+    }
+
+    // Place new node to the right of the selection's bounding box.
+    let maxRight = -Infinity
+    let centerY = 0
+    for (const n of imageNodes) {
+      const w = n.measured?.width ?? (n.style?.width as number) ?? 240
+      const right = (n.position?.x ?? 0) + w
+      if (right > maxRight) maxRight = right
+      centerY += n.position?.y ?? 0
+    }
+    centerY = centerY / imageNodes.length
+    const newNode: Node = {
+      id: getNextNodeId('imageUpload'),
+      type: 'imageUpload',
+      position: { x: maxRight + 60, y: centerY },
+      data: { mediaId: result.mediaId },
+      selected: true,
+    }
+
+    const postNodes = [...getNodes().map(n => ({ ...n, selected: false })), newNode]
+    snapshot(postNodes, getEdges())
+    setNodes(postNodes)
+  }, [getNodes, getEdges, setNodes, snapshot])
+
   const handleCollageExport = useCallback(async (blob: Blob) => {
     // Save blob as a File to mediaStore and create a new ImageUploadNode at viewport center
     const filename = `collage-${Date.now()}.png`
@@ -514,6 +599,15 @@ function FlowCanvasInner() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="12" x2="12" y2="18"/><polyline points="9,15 12,12 15,15"/></svg>
           </button>
           {exportStatus && <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 2 }}>{exportStatus}</span>}
+          <button
+            className={styles.iconBtn}
+            onClick={() => { document.body.classList.toggle('prv'); setPrivacy(p => !p) }}
+            title="Privacy mode — hide sensitive info"
+            aria-label="Privacy mode"
+            style={privacy ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : undefined}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M1 1l22 22"/>{!privacy && <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg>
+          </button>
           <a
             href="/review"
             className={styles.iconBtn}
@@ -610,6 +704,7 @@ function FlowCanvasInner() {
           onEdgeContextMenu={handleEdgeContextMenu}
           onSelectionStart={onSelectionStart}
           onSelectionChange={onSelectionChange}
+          onSelectionEnd={onSelectionEnd}
 
           selectionOnDrag={true}
           selectionMode={SelectionMode.Partial}
@@ -664,6 +759,8 @@ function FlowCanvasInner() {
           onGroup={ctxGroup}
           onUngroup={ctxUngroup}
           onOpenCollage={handleOpenCollage}
+          onMerge={handleQuickMerge}
+          onUnpack={ctxUnpack}
           onDeleteEdge={ctxDeleteEdge}
           flowPosition={ctxMenu.flowPos}
         />

@@ -35,5 +35,30 @@
       "enhancer"
     ],
     "created_at": "2026-04-12 00:13:30"
+  },
+  {
+    "id": "e5e90200-6e39-44fc-8e12-739f9bb83dc4",
+    "name": "Denoise_v1",
+    "text": "Ultra-high-resolution 4K enhancement based strictly on the provided reference image. Absolute \nf\nidelity toriginal facial anatomy, proportions, and identity. Preserve expression, gaze, pose, \ncamera angle, framing, and perspective with zero deviation. Clothing, hair, skin, and background \nelements must remain unchanged instructure, placement, and design.Recover fine-grain detail \nwith naturalelashes, abricines,lweave, seams, and material edges without introducing stylzation. \nMaintain original color science, white bal-weavesms elationshipsexacty as captured.Lighting \ndrection, ntensity, contrast, and shadow behaviormust match the source image precisely, with \nonly improved clarity and expanded dynamic range. No relight-ing, no reshaping. Remove any \ngrain.Apply controlled sharpening and high-frequency detail reconstruction. Remove \ncompression artifacts andnoise while retaining authentic texture. No smoothing, no plastic skin, \nno artificial gloss. Facial features mustremain consistent across the entire image with coherent \nanatomy and clean, stable edges.Negative constraints: no warping, no facial drift, no added or \nmissing anatomy, no altered hands, no distor-tions, no perspective shift, no text or graphics, no \nhallucinated detail, no stylized rendering. Output must readas a true-to-life, photorealistic \nupscale that matches the reference exactly, only clearer, sharper, and higherresoution. Generate at \nthe original scale",
+    "tags": [
+      "denoise"
+    ],
+    "created_at": "2026-04-13 07:30:46"
+  },
+  {
+    "id": "36c6f0f0-bab8-47a9-9759-d51f15fa806f",
+    "name": "swap_bg_gpt2",
+    "text": "Image 1: subject reference. The subject, pose, and camera framing.\nImage 2: scene reference. Everything else — environment, foreground, lighting.\n\nInstruction:\nPlace the subject from Image 1 into the scene from Image 2. Keep the exact pose and the camera framing from Image 1. Rebuild the scene around the subject so the whole frame shares one viewpoint and one horizon. Light the subject to match Image 2's direction, color, and contrast. Preserve the subject, pose, and framing from Image 1; preserve the scene, foreground, and lighting from Image 2. No double horizon, no mismatched lighting, no watermark.",
+    "tags": [],
+    "created_at": "2026-05-08 15:11:08"
+  },
+  {
+    "id": "33f4a8cc-fbe5-46da-a8c9-c5e29b4ef0a3",
+    "name": "make_sure_01",
+    "text": "[]. Use the provided image as reference. keep real proportion perfect. Make sure the pose, acting, micro-expression, framing. lighting and camera match the original image.\n",
+    "tags": [
+      "utility"
+    ],
+    "created_at": "2026-05-10 04:31:57"
   }
 ]

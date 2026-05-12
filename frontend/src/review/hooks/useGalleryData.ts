@@ -51,13 +51,23 @@ export function useGalleryData(activeDirectory: string | null) {
     return () => { ctrl.abort() }
   }, [loadMedia, loadDirs, mediaVersion])
 
-  // Socket listeners for silent refresh
+  // Socket listeners for silent refresh. Debounced at 500ms so a burst
+  // of comment/favorite events from multiple users coalesces into one
+  // refetch instead of hammering /api/rh/media N times per burst.
   useEffect(() => {
-    const silentRefresh = () => void loadMedia()
+    let pending: ReturnType<typeof setTimeout> | null = null
+    const silentRefresh = () => {
+      if (pending) clearTimeout(pending)
+      pending = setTimeout(() => {
+        pending = null
+        void loadMedia()
+      }, 500)
+    }
     onEvent('media_update', silentRefresh)
     onEvent('favorite_toggle', silentRefresh)
     onEvent('comment_new', silentRefresh)
     return () => {
+      if (pending) clearTimeout(pending)
       offEvent('media_update', silentRefresh)
       offEvent('favorite_toggle', silentRefresh)
       offEvent('comment_new', silentRefresh)

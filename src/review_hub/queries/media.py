@@ -3,14 +3,7 @@ from __future__ import annotations
 
 import aiosqlite
 
-# ── helpers ──────────────────────────────────────────────────────────
-def _row_to_dict(row) -> dict | None:
-    if row is None:
-        return None
-    return dict(row)
-
-def _rows_to_list(rows) -> list[dict]:
-    return [dict(r) for r in rows]
+from ._helpers import _row_to_dict, _rows_to_list
 
 
 # ── queries ──────────────────────────────────────────────────────────
@@ -27,11 +20,32 @@ async def list_media(
     sort = sort if sort in _ALLOWED_SORT else "created_at"
     order = order.upper() if order.upper() in _ALLOWED_ORDER else "DESC"
 
+    base = """
+        SELECT m.*,
+               COALESCE(f.fav_count, 0)     AS is_favorite,
+               COALESCE(c.comment_count, 0)  AS comment_count,
+               COALESCE(d.drawing_count, 0)  AS drawing_count,
+               f.status
+        FROM media m
+        LEFT JOIN (
+            SELECT media_id, COUNT(*) AS fav_count,
+                   MAX(status) AS status
+            FROM favorites GROUP BY media_id
+        ) f ON f.media_id = m.id
+        LEFT JOIN (
+            SELECT media_id, COUNT(*) AS comment_count
+            FROM comments GROUP BY media_id
+        ) c ON c.media_id = m.id
+        LEFT JOIN (
+            SELECT media_id, COUNT(*) AS drawing_count
+            FROM drawings GROUP BY media_id
+        ) d ON d.media_id = m.id
+    """
     if directory is not None:
-        sql = f"SELECT * FROM media WHERE directory=? ORDER BY {sort} {order}"
+        sql = f"{base} WHERE m.directory=? ORDER BY m.{sort} {order}"
         cursor = await db.execute(sql, (directory,))
     else:
-        sql = f"SELECT * FROM media ORDER BY {sort} {order}"
+        sql = f"{base} ORDER BY m.{sort} {order}"
         cursor = await db.execute(sql)
     return _rows_to_list(await cursor.fetchall())
 

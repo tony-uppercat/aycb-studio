@@ -4,16 +4,21 @@ import styles from './media/MediaBrowser.module.css'
 export interface ReferenceItem {
   id: number
   filename: string
-  uploaded_by: string
-  tags: string[]
-  width: number
-  height: number
+  uploaded_by: string | null
+  tags: string | null
+  width: number | null
+  height: number | null
 }
 
 interface Props {
   open: boolean
   onDragStart: (ref: ReferenceItem, e: React.DragEvent) => void
   onDragEnd: () => void
+}
+
+function parseTags(raw: string | null): string[] {
+  if (!raw) return []
+  try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [raw] } catch { return raw.split(',').map(s => s.trim()).filter(Boolean) }
 }
 
 export function ReferencesTab({ open, onDragStart, onDragEnd }: Props) {
@@ -48,7 +53,7 @@ export function ReferencesTab({ open, onDragStart, onDragEnd }: Props) {
   const filtered = search.trim()
     ? references.filter(r =>
         r.filename.toLowerCase().includes(search.toLowerCase()) ||
-        r.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+        parseTags(r.tags).some(t => t.toLowerCase().includes(search.toLowerCase()))
       )
     : references
 
@@ -83,7 +88,7 @@ export function ReferencesTab({ open, onDragStart, onDragEnd }: Props) {
           >
             <div className={styles.thumbWrap}>
               <img
-                src={`/api/bridge/references/${ref.id}/thumbnail`}
+                src={`/api/bridge/references/${ref.id}/image`}
                 alt={ref.filename}
                 className={styles.thumb}
               />
@@ -96,13 +101,13 @@ export function ReferencesTab({ open, onDragStart, onDragEnd }: Props) {
               </div>
             </div>
             <span className={styles.itemName} title={ref.filename}>{ref.filename}</span>
-            {ref.tags.length > 0 && (
+            {(() => { const t = parseTags(ref.tags); return t.length > 0 ? (
               <div className={styles.tagRow}>
-                {ref.tags.map(tag => (
+                {t.map(tag => (
                   <span key={tag} className={styles.tagPill}>{tag}</span>
                 ))}
               </div>
-            )}
+            ) : null })()}
           </div>
         ))}
       </div>
@@ -122,7 +127,7 @@ export function ReferencesTab({ open, onDragStart, onDragEnd }: Props) {
               <div className={styles.galleryInfo}>
                 <span>{ref.filename}</span>
                 {ref.uploaded_by && <span>{ref.uploaded_by}</span>}
-                {ref.tags.length > 0 && <span>{ref.tags.join(', ')}</span>}
+                {(() => { const t = parseTags(ref.tags); return t.length > 0 ? <span>{t.join(', ')}</span> : null })()}
               </div>
               <button className={styles.galleryClose} onClick={() => setViewId(null)}>&#x2715;</button>
             </div>

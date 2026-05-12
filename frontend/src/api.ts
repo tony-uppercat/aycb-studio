@@ -1,18 +1,17 @@
 import type { AnalyzeImageResult, AnalyzeVideoResult, GenerateImageResult, ImageEditResult, HistoryEntry, UsageInfo } from './types'
 import { useCanvasStore } from './stores/canvasStore'
 import './providers/geminiProvider'
+import './providers/openaiProvider'
+import './providers/recraftProvider'
 import './providers/fluxProvider'
 import './providers/localProvider'
 import './providers/ollamaProvider'
 import { getImageProvider, getLLMProvider } from './providers/index'
 import { registerBridgeStem } from './utils/reviewStatus'
 import { STORAGE_KEYS } from './storage/keys'
+import { isBackendAvailable } from './utils/runtime'
 
 const BASE = '/api'
-
-function isBackendAvailable(): boolean {
-  return location.port === '5100' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-}
 
 function recordRequest(method: string, path: string, status: number, duration: number) {
   try {
@@ -33,19 +32,37 @@ function backendError(context: string): Error {
   return new Error(`${context}: backend not responding. Start the backend on port 5101`)
 }
 
-async function post<T>(path: string, body: FormData): Promise<T> {
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+
+/**
+ * Unified backend request — single place to apply:
+ *  - backend-availability gate (cloud mode falls through)
+ *  - request timing + network panel logging
+ *  - 502 mapping to the "backend down" error
+ *  - JSON content-type check (guards against Vite dev proxy HTML fallback)
+ *  - FastAPI error-detail extraction on !ok
+ *
+ * Previously this logic was inlined three times in post/get/put with
+ * small drift (GET/PUT threw r.statusText; POST parsed the JSON detail).
+ * Unifying means GET/PUT now also surface backend error details.
+ */
+async function request<T>(
+  path: string,
+  method: HttpMethod,
+  init?: RequestInit,
+): Promise<T> {
   if (!isBackendAvailable()) throw backendError(path)
-  const t0 = Date.now();
+  const t0 = Date.now()
   let r: Response
   try {
-    r = await fetch(`${BASE}${path}`, { method: 'POST', body })
+    r = await fetch(`${BASE}${path}`, { method, ...init })
   } catch {
     throw backendError(path)
   }
-  recordRequest('POST', path, r.status, Date.now() - t0);
+  recordRequest(method, path, r.status, Date.now() - t0)
   if (r.status === 502) throw backendError(path)
-  const contentType = r.headers.get('content-type') ?? ''
-  if (!contentType.includes('application/json')) throw backendError(path)
+  const ct = r.headers.get('content-type') ?? ''
+  if (!ct.includes('application/json')) throw backendError(path)
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }))
     throw new Error(err.detail ?? 'Request failed')
@@ -53,43 +70,17 @@ async function post<T>(path: string, body: FormData): Promise<T> {
   return r.json()
 }
 
-async function get<T>(path: string): Promise<T> {
-  if (!isBackendAvailable()) throw backendError(path)
-  const t0 = Date.now();
-  let r: Response
-  try {
-    r = await fetch(`${BASE}${path}`)
-  } catch {
-    throw backendError(path)
-  }
-  recordRequest('GET', path, r.status, Date.now() - t0);
-  if (r.status === 502) throw backendError(path)
-  const ct = r.headers.get('content-type') ?? ''
-  if (!ct.includes('application/json')) throw backendError(path)
-  if (!r.ok) throw new Error(r.statusText)
-  return r.json()
-}
+const post = <T>(path: string, body: FormData): Promise<T> =>
+  request<T>(path, 'POST', { body })
 
-async function put<T>(path: string, body: unknown): Promise<T> {
-  if (!isBackendAvailable()) throw backendError(path)
-  const t0 = Date.now();
-  let r: Response
-  try {
-    r = await fetch(`${BASE}${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  } catch {
-    throw backendError(path)
-  }
-  recordRequest('PUT', path, r.status, Date.now() - t0);
-  if (r.status === 502) throw backendError(path)
-  const ct = r.headers.get('content-type') ?? ''
-  if (!ct.includes('application/json')) throw backendError(path)
-  if (!r.ok) throw new Error(r.statusText)
-  return r.json()
-}
+const get = <T>(path: string): Promise<T> =>
+  request<T>(path, 'GET')
+
+const put = <T>(path: string, body: unknown): Promise<T> =>
+  request<T>(path, 'PUT', {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 
 /**
  * Send a generated image to Review Hub via backend bridge and register the
@@ -129,6 +120,30 @@ export async function bridgeMedia(
     }
   } catch { /* silent */ }
   return null
+}
+
+/**
+ * Save an image from the canvas to shared/Assets/ via backend bridge.
+ * The scanner will auto-index it into the Review Hub DB.
+ */
+export async function saveToAssets(
+  file: File,
+  directory?: string,
+  filename?: string,
+): Promise<boolean> {
+  if (!isBackendAvailable()) return false
+  try {
+    const fd = new FormData()
+    fd.append('image_file', file, file.name)
+    if (directory) fd.append('directory', directory)
+    if (filename) fd.append('filename', filename)
+    const resp = await fetch(`${BASE}/bridge/assets`, { method: 'POST', body: fd })
+    if (resp.ok) {
+      const data = await resp.json().catch(() => null)
+      return data?.status === 'ok'
+    }
+  } catch { /* silent */ }
+  return false
 }
 
 /**
@@ -281,11 +296,19 @@ export const api = {
     return post('/effects/depth', fd)
   },
 
-  /** Submit a video generation request via PiAPI (Kling / Seedance). Returns {request_id}. */
+  /** Submit a video generation request via PiAPI / fal.ai / Atlas / Veo. Returns {request_id}. */
   generateVideo(
     prompt: string,
     apiKey: string,
-    options: { model?: string; aspectRatio?: string; duration?: number; quality?: string; audioUrl?: string },
+    options: {
+      model?: string
+      aspectRatio?: string
+      duration?: number
+      quality?: string
+      audioUrl?: string
+      seed?: number
+      characterOrientation?: 'image' | 'video'
+    },
     refImages?: File[],
     refVideo?: File,
   ): Promise<import('./types').GenerateVideoResult> {
@@ -298,6 +321,8 @@ export const api = {
     fd.append('duration', String(options.duration ?? 5))
     fd.append('quality', options.quality ?? '720p')
     if (options.audioUrl) fd.append('audio_url', options.audioUrl)
+    fd.append('seed', String(options.seed ?? -1))
+    if (options.characterOrientation) fd.append('character_orientation', options.characterOrientation)
     refImages?.forEach(f => fd.append('ref_images', f))
     if (refVideo) fd.append('ref_video', refVideo)
     return post('/generate/video', fd)

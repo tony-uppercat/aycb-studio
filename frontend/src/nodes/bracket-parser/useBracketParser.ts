@@ -3,7 +3,7 @@ import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
 import { extractBrackets, getUniqueNames, extractJsonDefinitions, rebuildTemplate } from './bracketParserUtils'
 import { getNextNodeId } from '../../hooks/useCanvasDragDrop'
-import { pullText } from '../../hooks/useDataPropagation'
+import { pullText, resolveSourceText } from '../../hooks/useDataPropagation'
 import type { BracketParserNodeData } from '../../types'
 
 export type OutputMode = 'items' | 'template'
@@ -12,30 +12,23 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
   const { updateNodeData, addNodes, addEdges, getNode, getNodes, getEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
 
-  // Subscribe to upstream changes (text-in)
+  // Subscribe to upstream changes (text-in). Walks subnets via
+  // resolveSourceText so sub_graph inner edits trigger re-render.
   useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'text-in')
     if (!edge) return ''
-    const src = state.nodes.find(n => n.id === edge.source)
-    return String((src?.data as Record<string, unknown>)?.outputText ?? '')
+    return resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
   })
 
-  // Real-time subscription to all bracket-{key}-in input pins
+  // Real-time subscription to all bracket-{key}-in input pins. Subnet-aware
+  // via resolveSourceText (the per-pin outputPins lookup is part of it).
   const bracketPinValuesJson = useStore(state => {
     const result: Record<string, string> = {}
     for (const edge of state.edges) {
       if (edge.target !== id) continue
       if (!edge.targetHandle?.startsWith('text-bk-') || !edge.targetHandle.endsWith('-in')) continue
       const key = edge.targetHandle.slice(8, -3) // strip 'text-bk-' (8) and '-in' (3)
-      const src = state.nodes.find(n => n.id === edge.source)
-      if (!src) continue
-      const d = src.data as Record<string, unknown>
-      const outputPins = d.outputPins as Record<string, string> | undefined
-      if (outputPins && edge.sourceHandle && edge.sourceHandle in outputPins) {
-        result[key] = outputPins[edge.sourceHandle]
-      } else {
-        result[key] = (d.outputText as string) || (d.text as string) || (d.prompt as string) || (d.result as string) || ''
-      }
+      result[key] = resolveSourceText(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
     }
     return JSON.stringify(result)
   })
@@ -55,24 +48,24 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
 
   // State
   const [outputMode, setOutputMode] = useState<OutputMode>(
-    (data.output_mode as OutputMode) ?? 'template'
+    (data.outputMode as OutputMode) ?? 'template'
   )
   const [excludedKeys, setExcludedKeys] = useState<Set<string>>(
-    new Set(data.excluded_keys ?? [])
+    new Set(data.excludedKeys ?? [])
   )
   const [outputLimit, setOutputLimit] = useState<number>(
-    typeof data.output_limit === 'number' ? data.output_limit : 0
+    typeof data.outputLimit === 'number' ? data.outputLimit : 0
   )
   const [overrides, setOverrides] = useState<Record<string, string>>(
     (data.overrides as Record<string, string>) ?? {}
   )
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const escapedRef = useRef(false)
-  const [pinsCollapsed, setPinsCollapsed] = useState(data.pins_collapsed === true)
-  const [previewCollapsed, setPreviewCollapsed] = useState(data.preview_collapsed === true)
-  const [textCollapsed, setTextCollapsed] = useState(data.text_collapsed === true)
+  const [pinsCollapsed, setPinsCollapsed] = useState(data.pinsCollapsed === true)
+  const [previewCollapsed, setPreviewCollapsed] = useState(data.previewCollapsed === true)
+  const [textCollapsed, setTextCollapsed] = useState(data.textCollapsed === true)
   const [outputOverride, setOutputOverride] = useState<string | null>(
-    typeof data.output_override === 'string' ? data.output_override : null
+    typeof data.outputOverride === 'string' ? data.outputOverride : null
   )
   const [editingOutput, setEditingOutput] = useState(false)
   const outputTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -184,19 +177,20 @@ export function useBracketParser(id: string, data: BracketParserNodeData) {
     updateNodeInternals(id)
   }, [outputSlots.length, bracketInputSlots.length, pinsCollapsed, id, updateNodeInternals])
 
-  // Sync output to node data (skip if unchanged)
-  const prevOutputRef = useRef('')
-  const prevPinsRef = useRef('')
+  // Sync output to node data (skip if unchanged). The signature MUST
+  // include the visibility toggles — they don't affect effectiveOutput
+  // or outputPins, so guarding only on those values silently dropped
+  // persistence and the collapsed state vanished on reload.
+  const prevSyncRef = useRef('')
   useEffect(() => {
-    const pinsJson = JSON.stringify(outputPins)
-    if (prevOutputRef.current === effectiveOutput && prevPinsRef.current === pinsJson) return
-    prevOutputRef.current = effectiveOutput
-    prevPinsRef.current = pinsJson
+    const sig = JSON.stringify([effectiveOutput, outputPins, pinsCollapsed, previewCollapsed, textCollapsed])
+    if (prevSyncRef.current === sig) return
+    prevSyncRef.current = sig
     updateNodeData(id, {
-      outputText: effectiveOutput, outputPins, output_mode: outputMode, overrides,
-      excluded_keys: [...excludedKeys], output_limit: outputLimit,
-      output_override: outputOverride, pins_collapsed: pinsCollapsed,
-      preview_collapsed: previewCollapsed, text_collapsed: textCollapsed,
+      outputText: effectiveOutput, outputPins, outputMode, overrides,
+      excludedKeys: [...excludedKeys], outputLimit,
+      outputOverride, pinsCollapsed,
+      previewCollapsed, textCollapsed,
     })
   }, [effectiveOutput, outputMode, overrides, excludedKeys, outputLimit, outputPins, id, updateNodeData, outputOverride, pinsCollapsed, previewCollapsed, textCollapsed])
 

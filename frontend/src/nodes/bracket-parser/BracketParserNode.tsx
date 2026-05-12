@@ -229,7 +229,7 @@ export function BracketParserNode({ id, data, selected }: NodeProps<BracketParse
               className={`${styles.subtleToggle} ${h.pinsCollapsed ? '' : styles.subtleToggleOn}`}
               onClick={() => {
                 h.setPinsCollapsed(v => !v)
-                h.updateNodeData(id, { pins_collapsed: !h.pinsCollapsed })
+                h.updateNodeData(id, { pinsCollapsed: !h.pinsCollapsed })
                 h.updateNodeInternals(id)
               }}
               title={h.pinsCollapsed ? 'Expand output pins' : 'Collapse output pins'}

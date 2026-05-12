@@ -1,8 +1,9 @@
 import { memo, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
+import { Lock, Dices } from 'lucide-react'
 import { NodeShell } from '../_shared/NodeShell'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { useGenerateVideo, VIDEO_MODELS } from './useGenerateVideo'
+import { useGenerateVideo, VIDEO_MODELS, useVideoModels } from './useGenerateVideo'
 import { priceTier } from '../_shared/types'
 import type { GenerateVideoNodeData } from '../../types'
 import styles from '../_shared/Node.module.css'
@@ -21,10 +22,13 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     { id: 'vertex', label: 'Veo' },
     { id: 'piapi', label: 'PiAPI' },
   ]
+  // Initial provider derived from the fallback const — stable across
+  // first render; the dropdown itself populates from the live registry.
   const [activeProvider, setActiveProvider] = useState(
     () => VIDEO_MODELS.find(m => m.id === (d.selectedModel ?? 'atlas-seedance-2.0'))?.provider ?? 'atlas'
   )
-  const filteredModels = VIDEO_MODELS.filter(m => m.provider === activeProvider)
+  const videoModels = useVideoModels()
+  const filteredModels = videoModels.filter(m => m.provider === activeProvider)
 
   const {
     localPrompt, setLocalPrompt,
@@ -32,6 +36,9 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     aspectRatio, setAspectRatio,
     duration, setDuration,
     quality, setQuality,
+    seed, setSeed,
+    characterOrientation, setCharacterOrientation,
+    isMotionControl,
     loading, error, status, videoUrl, requestId,
     pollElapsed,
     modelInfo,
@@ -58,9 +65,11 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
       icon="\u{1F39E}"
       inputSlots={[
         { id: 'prompt-in', label: 'Prompt', type: 'prompt' },
-        ...imageSlots,
-        { id: 'video-ref', label: 'Video Ref', type: 'video' },
-        { id: 'audio-ref', label: 'Audio URL', type: 'text' },
+        ...(isMotionControl
+          ? [{ id: 'image-0', label: 'Subject', type: 'image' as const }]
+          : imageSlots),
+        { id: 'video-ref', label: isMotionControl ? 'Motion (required)' : 'Video Ref', type: 'video' as const },
+        { id: 'audio-ref', label: 'Audio URL', type: 'text' as const },
       ]}
       outputSlots={[
         { id: 'video-out', label: 'Video', type: 'video' },
@@ -80,7 +89,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
               className={`${nodeStyles.providerBtn} ${activeProvider === p.id ? nodeStyles.providerBtnActive : ''}`}
               onClick={() => {
                 setActiveProvider(p.id)
-                const first = VIDEO_MODELS.find(m => m.provider === p.id)
+                const first = videoModels.find(m => m.provider === p.id)
                 if (first && modelInfo.provider !== p.id) {
                   setSelectedModel(first.id)
                   updateNodeData(id, { selectedModel: first.id })
@@ -106,6 +115,26 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
           ))}
         </select>
 
+        {isMotionControl && (
+          <div className={nodeStyles.controlsRow}>
+            <div className={nodeStyles.controlGroup}>
+              <span className={nodeStyles.controlLabel}>Frame</span>
+              <select
+                className={nodeStyles.selectSmall}
+                value={characterOrientation}
+                onChange={e => {
+                  const v = e.target.value as 'image' | 'video'
+                  setCharacterOrientation(v)
+                  updateNodeData(id, { characterOrientation: v })
+                }}
+              >
+                <option value="image">Subject</option>
+                <option value="video">Motion video</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Prompt textarea (only when no prompt connected) */}
         {!hasPromptEdge && (
           <textarea
@@ -128,22 +157,18 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
         )}
 
         {/* Mode indicator */}
-        <div className={nodeStyles.controlsRow}>
-          <div className={nodeStyles.modeToggle}>
-            <button className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}
-              onClick={() => setMode('t2v')}>
-              T2V
-            </button>
-            <button className={`${nodeStyles.modeBtn} ${mode === 'i2v' ? nodeStyles.modeBtnActive : ''}`}
-              onClick={() => setMode('i2v')}>
-              I2V
-            </button>
-            <button className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}
-              onClick={() => setMode('multi-ref')}>
-              Multi-Ref
-            </button>
+        {!isMotionControl && (
+          <div className={nodeStyles.controlsRow}>
+            <div className={nodeStyles.modeToggle}>
+              <button className={`${nodeStyles.modeBtn} ${mode === 't2v' ? nodeStyles.modeBtnActive : ''}`}
+                onClick={() => setMode('t2v')}>T2V</button>
+              <button className={`${nodeStyles.modeBtn} ${mode === 'i2v' ? nodeStyles.modeBtnActive : ''}`}
+                onClick={() => setMode('i2v')}>I2V</button>
+              <button className={`${nodeStyles.modeBtn} ${mode === 'multi-ref' ? nodeStyles.modeBtnActive : ''}`}
+                onClick={() => setMode('multi-ref')}>Multi-Ref</button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Aspect Ratio + Quality */}
         <div className={nodeStyles.controlsRow}>
@@ -198,6 +223,37 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
             }}
           />
           <span className={nodeStyles.sliderValue}>{duration}s</span>
+        </div>
+
+        {/* Seed */}
+        <div className={nodeStyles.seedRow}>
+          <span className={nodeStyles.controlLabel}>Seed</span>
+          <input
+            type="number"
+            className={`${nodeStyles.seedInput} nodrag nowheel nokey`}
+            placeholder="Random"
+            value={seed >= 0 ? seed : ''}
+            onChange={e => {
+              const raw = e.target.value.trim()
+              const v = raw === '' ? -1 : Math.max(0, Math.floor(Number(raw) || 0))
+              setSeed(v)
+              updateNodeData(id, { seed: v })
+            }}
+          />
+          <button
+            className={`${nodeStyles.seedBtn} ${seed >= 0 ? nodeStyles.seedBtnLocked : ''}`}
+            title={seed >= 0 ? 'Locked — click to unlock (random)' : 'Unlocked — click to lock current random seed'}
+            onClick={() => {
+              if (seed >= 0) {
+                setSeed(-1)
+                updateNodeData(id, { seed: -1 })
+              } else {
+                const v = Math.floor(Math.random() * 2147483647)
+                setSeed(v)
+                updateNodeData(id, { seed: v })
+              }
+            }}
+          >{seed >= 0 ? <Lock size={12} strokeWidth={1.5} /> : <Dices size={12} strokeWidth={1.5} />}</button>
         </div>
 
         {/* Status bar */}

@@ -206,6 +206,41 @@ export function useCanvasPersistence(nodes: Node[], edges: Edge[], activeProject
 }
 
 /**
+ * Rewrite legacy handle ids on a single edge.
+ *
+ * Renamed handles past the rename leave dangling references in saved canvases —
+ * React Flow logs error #008 every render until they're fixed.
+ *
+ *  - `prompt-out` → `text-out`   (text-input output rename)
+ *  - `image-out-1` → `image-out` (generate-image / image-fx single-output rename)
+ */
+function migrateEdge(e: Edge): Edge {
+  let next = e
+  if (next.sourceHandle === 'prompt-out') next = { ...next, sourceHandle: 'text-out' }
+  if (next.sourceHandle === 'image-out-1') next = { ...next, sourceHandle: 'image-out' }
+  return next
+}
+
+/**
+ * Recursively migrate a node's nested sub_graph (subnet container only).
+ * Top-level nodes pass through unchanged.
+ */
+function migrateNodeSubGraph(n: Node): Node {
+  if (n.type !== 'subnet') return n
+  const data = (n.data ?? {}) as Record<string, unknown>
+  const sg = data.sub_graph as { nodes?: Node[]; edges?: Edge[]; viewport?: unknown } | undefined
+  if (!sg) return n
+  const inner_nodes = Array.isArray(sg.nodes) ? sg.nodes.map(migrateNodeSubGraph) : []
+  const inner_edges = Array.isArray(sg.edges)
+    ? sg.edges.map((e) => applyEdgeColor(migrateEdge(e)))
+    : []
+  return {
+    ...n,
+    data: { ...data, sub_graph: { ...sg, nodes: inner_nodes, edges: inner_edges } },
+  }
+}
+
+/**
  * Load canvas from IndexedDB project store.
  * Also runs migration from localStorage → IndexedDB on first use.
  * Returns null if no project found (caller handles the default).
@@ -228,10 +263,10 @@ export async function loadCanvasAsync(): Promise<PersistedCanvas | null> {
     if (project?.canvas) {
       const canvas = project.canvas
       if (Array.isArray(canvas.edges)) {
-        canvas.edges = canvas.edges.map((e: Edge) => {
-          const migrated = e.sourceHandle === 'prompt-out' ? { ...e, sourceHandle: 'text-out' } : e
-          return applyEdgeColor(migrated)
-        })
+        canvas.edges = canvas.edges.map((e: Edge) => applyEdgeColor(migrateEdge(e)))
+      }
+      if (Array.isArray(canvas.nodes)) {
+        canvas.nodes = canvas.nodes.map(migrateNodeSubGraph)
       }
       return canvas
     }

@@ -34,9 +34,12 @@ interface Meta {
 
 /* ── Helpers ── */
 
-/** Format a USD cost: sub-cent as ¢, otherwise as $. */
-function fmtCost(n: number): string {
-  return n < 0.01 ? `${(n * 100).toFixed(2)}¢` : `$${n.toFixed(4)}`
+/** Format a USD cost: sub-cent as ¢, otherwise as $. Coerces strings —
+ *  legacy meta entries can store cost_usd as a raw PNG chunk string. */
+function fmtCost(n: number | string): string {
+  const num = typeof n === 'number' ? n : parseFloat(n)
+  if (!Number.isFinite(num)) return ''
+  return num < 0.01 ? `${(num * 100).toFixed(2)}¢` : `$${num.toFixed(4)}`
 }
 
 /** Renders a dt/dd pair; returns null if value is nullish. */
@@ -97,7 +100,11 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
         cost_usd: chunks.cost_usd ? parseFloat(chunks.cost_usd) : undefined,
       }
       if (Object.values(data).some(v => v != null)) {
-        saveMediaMeta(entry.id, chunks)
+        // Persist the parsed `data` (cost_usd as number), not the raw PNG
+        // chunks where every value is a string. Reading back the raw chunks
+        // and calling fmtCost(stringValue) used to throw "n.toFixed is not
+        // a function" in the fullscreen browser.
+        saveMediaMeta(entry.id, data as Record<string, unknown>)
         setMetaResult(prev => prev.id === entry.id ? { ...prev, data } : prev)
       }
     }).catch(() => { /* not a PNG or fetch failed */ })
@@ -146,7 +153,7 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
           <h3 className={s.sectionTitle}>File</h3>
           <dl className={s.dl}>
             <DL l="Name" v={entry.filename} />
-            <DL l="Project" v={entry.project} />
+            <dt>Project</dt>{entry.project && <dd data-s>{entry.project}</dd>}
             <DL l="Size" v={formatSize(entry.size)} />
             <DL l="Type" v={entry.type} />
             {currentDim && <DL l="Resolution" v={`${currentDim.w} × ${currentDim.h}`} />}
@@ -162,7 +169,7 @@ export function MediaInfoPanel({ entry, src, reviewStatus: rev, onClose, onFavor
               <DL l="Model" v={meta.model_name ?? meta.model} />
               <DL l="Aspect" v={meta.aspect_ratio} />
               <DL l="Size" v={meta.image_size} />
-              {meta.cost_usd != null && <DL l="Cost" v={fmtCost(meta.cost_usd)} />}
+              {meta.cost_usd != null && <><dt>Cost</dt><dd data-s>{fmtCost(meta.cost_usd)}</dd></>}
               {meta.prompt && (
                 <div className={s.promptWrap}>
                   <div className={s.promptLabel}>Prompt</div>

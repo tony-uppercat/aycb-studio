@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
 import { NodeShell } from '../_shared/NodeShell'
 import { api } from '../../api'
-import { pullMedia } from '../../hooks/useDataPropagation'
+import { pullMedia, resolveSourceMediaId } from '../../hooks/useDataPropagation'
 import { saveMediaForProject, generateMediaId } from '../../mediaStore'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { useSettings } from '../../components/SettingsContext'
@@ -17,12 +17,12 @@ export function ImageFxNode({ id, data, selected }: NodeProps<ImageFxNodeType>) 
   const { apiKey } = useSettings()
   const { openPreview } = useMediaPreview()
 
-  // Subscribe to upstream changes
+  // Subscribe to upstream changes. Walks subnets via resolveSourceMediaId so
+  // sub_graph inner Image edits trigger re-render here.
   useStore(state => {
     const edge = state.edges.find(e => e.target === id && e.targetHandle === 'image-in')
     if (!edge) return ''
-    const src = state.nodes.find(n => n.id === edge.source)
-    return String((src?.data as Record<string, unknown>)?.mediaId ?? '')
+    return resolveSourceMediaId(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges) ?? ''
   })
 
   const [effect, setEffect] = useState<string>(data.effect ?? 'none')

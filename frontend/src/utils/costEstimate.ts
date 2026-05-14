@@ -91,6 +91,7 @@ export function estimateCost(
   videoDurationSec: number = 0,
   nFrames: number = 1,
   resolution: string = '',
+  thinking: boolean = false,
 ): CostEstimate {
   const inputTokens =
     estimateTextTokens(promptText) +
@@ -107,7 +108,7 @@ export function estimateCost(
   // so we expose resolution-aware maps and let the caller pass the right imageCount for input refs.
   if (operation === 'generate_image') {
     const FIXED_IMAGE_COST: Record<string, Record<string, number>> = {
-      'gemini-3.1-flash-image-preview': { '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
+      'gemini-3.1-flash-image-preview': { '0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
       'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
       // gpt-image-2 high-quality per OpenAI docs 2026-04-21; 1K=medium, 2K=high
       // 4K bumped from 0.211 → 0.50 after fixing the silent 1K downgrade in
@@ -137,7 +138,9 @@ export function estimateCost(
           ? PER_REF_AVG[pricingModelId] * imageCount
           : (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50)
       }
-      return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: imgCost + inputRefCost, model: modelId }
+      const rawCost = imgCost + inputRefCost
+      const thinkingFactor = thinking ? 1.3 : 1
+      return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: rawCost * thinkingFactor, model: modelId }
     }
   }
 

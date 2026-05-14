@@ -22,3 +22,18 @@ describe('generate-image manifest', () => {
     expect(manifest.defaultData.prompt).toBe('')
   })
 })
+
+describe('generate-image node integration', () => {
+  it('exposes thinking and setThinking from the hook', async () => {
+    // Sanity check that the useGenerateImage return shape contains the new fields.
+    const mod = await import('./useGenerateImage')
+    const hookFnSource = mod.useGenerateImage.toString()
+    expect(hookFnSource).toContain('thinking')
+    expect(hookFnSource).toContain('setThinking')
+  })
+
+  it('RESOLUTIONS includes 0.5K', async () => {
+    const { RESOLUTIONS } = await import('./useGenerateImage')
+    expect(RESOLUTIONS.some(r => r.value === '0.5K')).toBe(true)
+  })
+})

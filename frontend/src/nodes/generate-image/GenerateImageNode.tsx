@@ -73,6 +73,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             title="Resolution">
             {RESOLUTIONS
               .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
+              .filter(r => r.value !== '0.5K' || h.modelInfo.id === 'gemini-3.1-flash-image-preview')
               .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
             }
           </select>
@@ -91,6 +92,13 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               onClick={() => { h.setUseGrounding(!h.useGrounding); h.updateNodeData(id, { useGrounding: !h.useGrounding }) }}
               title="Search Grounding — uses Google Search for real-time data before generating"
             >GND</button>
+          )}
+          {h.modelInfo.provider === 'gemini' && (
+            <button
+              className={`${styles.batchBtn} ${h.thinking ? styles.batchBtnActive : ''}`}
+              onClick={() => { h.setThinking(!h.thinking); h.updateNodeData(id, { thinking: !h.thinking }) }}
+              title="Thinking HIGH — composition refinement on, costo +"
+            >THK</button>
           )}
           <button
             className={`${styles.batchBtn} ${h.editMode ? styles.batchBtnActive : ''}`}

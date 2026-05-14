@@ -76,39 +76,46 @@ function computeGeminiCost(modelId: string, inputTokens: number, outputTokens: n
 const geminiImageProvider: ImageProvider = {
   id: 'gemini',
   async generateImage(prompt: string, modelNameOrId: string, apiKey: string, refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
-    const ai = new GoogleGenAI({ apiKey })
     const modelId = resolveModel(modelNameOrId)
 
-    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
-      { text: prompt },
-    ]
-
+    // Build parts: text prompt + optional inline_data per ref.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parts: any[] = [{ text: prompt }]
     if (refs) {
       for (const ref of refs) {
         const b64 = await fileToBase64(ref)
-        parts.push({ inlineData: { mimeType: ref.type || 'image/png', data: b64 } })
+        parts.push({ inline_data: { mime_type: ref.type || 'image/png', data: b64 } })
       }
     }
 
     // Map 0.5K → 512 (SDK literal); other buckets pass through.
     const mappedSize = options?.imageSize === '0.5K' ? '512' : options?.imageSize
 
-    // Build imageConfig for resolution and aspect ratio control
     const imageConfig: Record<string, string> = {}
     if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
     if (mappedSize) imageConfig.imageSize = mappedSize
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const config: Record<string, any> = {
+    const generationConfig: Record<string, any> = {
       responseModalities: ['IMAGE', 'TEXT'],
       ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
     }
+    // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
+    // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
+    if (modelId === 'gemini-3.1-flash-image-preview' && options?.thinking !== false) {
+      generationConfig.thinkingConfig = {
+        includeThoughts: true,
+        thinkingLevel: 'HIGH',
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: Record<string, any> = {
+      contents: [{ role: 'user', parts }],
+      generationConfig,
+    }
     if (options?.useGrounding) {
-      // Per Google docs (gemini-3.1-flash-image-preview), grounding requires
-      // explicit searchTypes (webSearch + imageSearch). Sending an empty
-      // `googleSearch: {}` was causing degraded/blurred output — the model
-      // appeared to fall back to a draft mode without proper search context.
-      config.tools = [{
+      body.tools = [{
         googleSearch: {
           searchTypes: {
             webSearch: {},
@@ -117,36 +124,52 @@ const geminiImageProvider: ImageProvider = {
         },
       }]
     }
-    // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
-    // Pro Image (gemini-3-pro-image-preview) has built-in auto-thinking and
-    // rejects explicit thinkingConfig with 503 UNAVAILABLE on heavy generations.
-    if (modelId === 'gemini-3.1-flash-image-preview' && options?.thinking !== false) {
-      config.thinkingConfig = {
-        includeThoughts: true,
-        thinkingLevel: 'HIGH',
-      }
-    }
 
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: [{ role: 'user', parts }],
-      config,
+    // Direct REST call — bypasses @google/genai SDK which silently drops
+    // imageConfig.imageSize (googleapis/js-genai Issue #1461, still open).
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
     })
 
-    // Extract usage metadata for cost tracking
-    const inputTokens = response.usageMetadata?.promptTokenCount ?? 0
-    const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0
+    if (!response.ok) {
+      const errText = await response.text().catch(() => `HTTP ${response.status}`)
+      // Try to extract Google's structured error message.
+      let detail = errText
+      try {
+        const parsed = JSON.parse(errText)
+        detail = parsed.error?.message ?? errText
+      } catch { /* keep raw */ }
+      return { image_b64: null, status: `Gemini API error: ${detail}`, usage: undefined }
+    }
+
+    const data = await response.json()
+
+    // Extract usage metadata for cost tracking (REST shape uses snake_case in
+    // some fields, camelCase in others — try both).
+    const um = data.usageMetadata ?? data.usage_metadata ?? {}
+    const inputTokens = um.promptTokenCount ?? um.prompt_token_count ?? 0
+    const outputTokens = um.candidatesTokenCount ?? um.candidates_token_count ?? 0
     const costUsd = computeGeminiCost(modelId, inputTokens, outputTokens)
-    const usage: UsageInfo | undefined = response.usageMetadata
+    const usage: UsageInfo | undefined = (inputTokens > 0 || outputTokens > 0)
       ? { input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: costUsd }
       : undefined
 
-    const candidate = response.candidates?.[0]
-    if (candidate?.content?.parts) {
-      for (const part of candidate.content.parts) {
-        if (part.inlineData?.data) {
-          return { image_b64: part.inlineData.data, status: 'OK', usage }
-        }
+    // Extract first inline image part. Try both camelCase (SDK style) and
+    // snake_case (REST raw) field names.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const candidate = data.candidates?.[0]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const partsResp: any[] = candidate?.content?.parts ?? []
+    for (const part of partsResp) {
+      const inline = part.inlineData ?? part.inline_data
+      if (inline?.data) {
+        return { image_b64: inline.data, status: 'OK', usage }
       }
     }
     return { image_b64: null, status: 'No image generated', usage }

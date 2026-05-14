@@ -1,93 +1,129 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-let mockGenerateContent: ReturnType<typeof vi.fn>
-
-vi.mock('@google/genai', () => ({
-  GoogleGenAI: vi.fn(function () {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    this.models = { generateContent: mockGenerateContent }
-  }),
-}))
-
-// Must import after mock is set up
-import type { ImageProvider } from './index'
+const fetchMock = vi.fn()
 
 beforeEach(() => {
-  mockGenerateContent = vi.fn()
+  global.fetch = fetchMock as unknown as typeof fetch
 })
 
 afterEach(() => {
-  vi.clearAllMocks()
+  fetchMock.mockReset()
 })
 
-function fakeImageResponse() {
-  return {
-    candidates: [
-      {
-        content: {
-          parts: [{ inlineData: { data: 'AAA=', mimeType: 'image/png' } }],
-        },
-      },
-    ],
-    usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 100 },
-  }
+async function getProvider() {
+  await import('./geminiProvider')
+  const { getImageProvider } = await import('./index')
+  const provider = getImageProvider('gemini')
+  if (!provider) throw new Error('gemini provider not registered')
+  return provider
 }
 
-// Import the provider after mocks are set up
-let provider: ImageProvider | undefined
+function fakeOkResponse(b64 = 'AAA=') {
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/json' },
+    text: async () => '',
+    json: async () => ({
+      candidates: [{
+        content: {
+          parts: [{ inlineData: { data: b64, mimeType: 'image/png' } }],
+        },
+      }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 100 },
+    }),
+  } as unknown as Response
+}
 
-beforeEach(async () => {
-  const mod = await import('./geminiProvider')
-  // Extract provider from the module (it's registered, we need to get it)
-  const { getImageProvider } = await import('./index')
-  provider = getImageProvider('gemini')
-  if (!provider) {
-    throw new Error('gemini provider not registered')
-  }
-})
+describe('geminiImageProvider — REST direct', () => {
+  it('calls the REST endpoint with the correct URL and api key header', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent')
+    expect((init as RequestInit).method).toBe('POST')
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers['x-goog-api-key']).toBe('fake-key')
+    expect(headers['Content-Type']).toBe('application/json')
+  })
 
-describe('geminiImageProvider', () => {
-  it('includes thinkingConfig HIGH by default', async () => {
-    mockGenerateContent.mockResolvedValue(fakeImageResponse())
-    if (!provider) throw new Error('provider not initialized')
+  it('sends imageConfig.imageSize at 4K in generationConfig (the SDK-bug bypass)', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key', undefined, { imageSize: '4K', aspectRatio: '16:9' })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.imageConfig).toEqual({ imageSize: '4K', aspectRatio: '16:9' })
+  })
+
+  it('maps imageSize "0.5K" to "512" before sending', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '0.5K' })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.imageConfig.imageSize).toBe('512')
+  })
+
+  it('includes thinkingConfig HIGH for Flash by default', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
     await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key')
-    const config = mockGenerateContent.mock.calls[0][0].config
-    expect(config.thinkingConfig).toEqual({
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.thinkingConfig).toEqual({
       includeThoughts: true,
       thinkingLevel: 'HIGH',
     })
   })
 
-  it('omits thinkingConfig when options.thinking === false', async () => {
-    mockGenerateContent.mockResolvedValue(fakeImageResponse())
-    if (!provider) throw new Error('provider not initialized')
+  it('omits thinkingConfig when options.thinking === false on Flash', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
     await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { thinking: false })
-    const config = mockGenerateContent.mock.calls[0][0].config
-    expect(config.thinkingConfig).toBeUndefined()
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.thinkingConfig).toBeUndefined()
   })
 
   it('omits thinkingConfig for Pro Image regardless of options', async () => {
-    mockGenerateContent.mockResolvedValue(fakeImageResponse())
-    if (!provider) throw new Error('provider not initialized')
-    // Pro Image has auto-thinking; we must not send thinkingConfig.
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
     await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
-    const config = mockGenerateContent.mock.calls[0][0].config
-    expect(config.thinkingConfig).toBeUndefined()
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.thinkingConfig).toBeUndefined()
   })
 
-  it('maps imageSize "0.5K" to "512" in the SDK config', async () => {
-    mockGenerateContent.mockResolvedValue(fakeImageResponse())
-    if (!provider) throw new Error('provider not initialized')
-    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '0.5K' })
-    const config = mockGenerateContent.mock.calls[0][0].config
-    expect(config.imageConfig.imageSize).toBe('512')
+  it('includes googleSearch tool when useGrounding=true', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key', undefined, { useGrounding: true })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.tools).toEqual([{
+      googleSearch: {
+        searchTypes: { webSearch: {}, imageSearch: {} },
+      },
+    }])
   })
 
-  it('passes imageSize "4K" through unchanged', async () => {
-    mockGenerateContent.mockResolvedValue(fakeImageResponse())
-    if (!provider) throw new Error('provider not initialized')
-    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key', undefined, { imageSize: '4K' })
-    const config = mockGenerateContent.mock.calls[0][0].config
-    expect(config.imageConfig.imageSize).toBe('4K')
+  it('returns the b64 image and usage on success', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse('TEST_B64'))
+    const provider = await getProvider()
+    const result = await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
+    expect(result.image_b64).toBe('TEST_B64')
+    expect(result.status).toBe('OK')
+    expect(result.usage).toBeDefined()
+    expect(result.usage?.input_tokens).toBe(10)
+    expect(result.usage?.output_tokens).toBe(100)
+  })
+
+  it('surfaces Google error message on !ok response', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => JSON.stringify({ error: { message: 'Deadline expired before operation could complete.' } }),
+    } as unknown as Response)
+    const provider = await getProvider()
+    const result = await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
+    expect(result.image_b64).toBeNull()
+    expect(result.status).toContain('Deadline expired')
   })
 })

@@ -297,6 +297,7 @@ def generate_image(
     image_size: str | None = None,
     api_key: str | None = None,
     use_grounding: bool = False,
+    thinking: bool = True,
 ) -> Image.Image | None:
     """Generate an image using Gemini generateContent with IMAGE modality."""
     from google.genai import types
@@ -306,15 +307,18 @@ def generate_image(
 
     contents: list = []
     if reference_images:
-        contents.extend(reference_images[:8])
+        contents.extend(reference_images[:14])
     contents.append(prompt)
+
+    # Map 0.5K → 512 (SDK expects literal "512"); other buckets pass through.
+    mapped_size = "512" if image_size == "0.5K" else image_size
 
     # Build image config for resolution/aspect control
     image_cfg: dict = {}
     if aspect_ratio:
         image_cfg["aspect_ratio"] = aspect_ratio
-    if image_size:
-        image_cfg["image_size"] = image_size
+    if mapped_size:
+        image_cfg["image_size"] = mapped_size
     image_config = types.ImageConfig(**image_cfg) if image_cfg else None
 
     # Grounding requires TEXT+IMAGE modalities so the model can return search metadata
@@ -325,6 +329,10 @@ def generate_image(
         config_kwargs["image_config"] = image_config
     if use_grounding:
         config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+    if thinking:
+        config_kwargs["thinking_config"] = types.ThinkingConfig(
+            include_thoughts=True, thinking_level="HIGH",
+        )
 
     response, _usage = _call_with_gemini_retries(
         lambda: client.models.generate_content(

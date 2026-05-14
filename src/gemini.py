@@ -329,7 +329,9 @@ def generate_image(
         config_kwargs["image_config"] = image_config
     if use_grounding:
         config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
-    if thinking:
+    # thinking_config is configurable ONLY for gemini-3.1-flash-image-preview.
+    # Pro Image has built-in auto-thinking and rejects explicit thinking_config.
+    if thinking and use_model == "gemini-3.1-flash-image-preview":
         config_kwargs["thinking_config"] = types.ThinkingConfig(
             include_thoughts=True, thinking_level="HIGH",
         )

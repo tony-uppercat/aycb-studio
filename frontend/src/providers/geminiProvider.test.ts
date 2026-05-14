@@ -50,7 +50,7 @@ describe('geminiImageProvider', () => {
   it('includes thinkingConfig HIGH by default', async () => {
     mockGenerateContent.mockResolvedValue(fakeImageResponse())
     if (!provider) throw new Error('provider not initialized')
-    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
+    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key')
     const config = mockGenerateContent.mock.calls[0][0].config
     expect(config.thinkingConfig).toEqual({
       includeThoughts: true,
@@ -61,7 +61,16 @@ describe('geminiImageProvider', () => {
   it('omits thinkingConfig when options.thinking === false', async () => {
     mockGenerateContent.mockResolvedValue(fakeImageResponse())
     if (!provider) throw new Error('provider not initialized')
-    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key', undefined, { thinking: false })
+    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { thinking: false })
+    const config = mockGenerateContent.mock.calls[0][0].config
+    expect(config.thinkingConfig).toBeUndefined()
+  })
+
+  it('omits thinkingConfig for Pro Image regardless of options', async () => {
+    mockGenerateContent.mockResolvedValue(fakeImageResponse())
+    if (!provider) throw new Error('provider not initialized')
+    // Pro Image has auto-thinking; we must not send thinkingConfig.
+    await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
     const config = mockGenerateContent.mock.calls[0][0].config
     expect(config.thinkingConfig).toBeUndefined()
   })

@@ -117,7 +117,10 @@ const geminiImageProvider: ImageProvider = {
         },
       }]
     }
-    if (options?.thinking !== false) {
+    // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
+    // Pro Image (gemini-3-pro-image-preview) has built-in auto-thinking and
+    // rejects explicit thinkingConfig with 503 UNAVAILABLE on heavy generations.
+    if (modelId === 'gemini-3.1-flash-image-preview' && options?.thinking !== false) {
       config.thinkingConfig = {
         includeThoughts: true,
         thinkingLevel: 'HIGH',

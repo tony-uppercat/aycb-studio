@@ -139,8 +139,9 @@ export function estimateCost(
           : (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50)
       }
       const rawCost = imgCost + inputRefCost
-      // thinking surcharge applies only to Gemini image models (the only family that supports thinking)
-      const thinkingFactor = (thinking && pricingModelId.startsWith('gemini-')) ? 1.3 : 1
+      // thinking surcharge applies ONLY to gemini-3.1-flash-image-preview.
+      // Pro Image has built-in thinking included in its base per-call price.
+      const thinkingFactor = (thinking && pricingModelId === 'gemini-3.1-flash-image-preview') ? 1.3 : 1
       return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: rawCost * thinkingFactor, model: modelId }
     }
   }

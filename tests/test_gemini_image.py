@@ -108,3 +108,18 @@ def test_generate_image_caps_excess_refs_at_14():
         contents = sdk.models.generate_content.call_args.kwargs["contents"]
         # 20 refs passed → sliced to 14 + 1 prompt = 15
         assert len(contents) == 15
+
+
+def test_generate_image_skips_thinking_config_for_pro_image():
+    """Pro Image has built-in thinking; thinking_config must not be sent."""
+    with patch.object(gemini, "_get_client") as mock_client, \
+         patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
+        sdk = mock_client.return_value
+        sdk.models.generate_content.return_value = _fake_inline_response()
+        mock_retries.side_effect = lambda call, operation: (call(), None)
+
+        gemini.generate_image(prompt="hello", model_id="gemini-3-pro-image-preview", api_key="fake-key", thinking=True)
+
+        config = sdk.models.generate_content.call_args.kwargs["config"]
+        assert getattr(config, "thinking_config", None) is None, \
+            "thinking_config must NOT be sent to Pro Image (auto-thinking model)"

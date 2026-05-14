@@ -93,7 +93,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               title="Search Grounding — uses Google Search for real-time data before generating"
             >GND</button>
           )}
-          {h.modelInfo.provider === 'gemini' && (
+          {h.modelInfo.id === 'gemini-3.1-flash-image-preview' && (
             <button
               className={`${styles.batchBtn} ${h.thinking ? styles.batchBtnActive : ''}`}
               onClick={() => { h.setThinking(!h.thinking); h.updateNodeData(id, { thinking: !h.thinking }) }}

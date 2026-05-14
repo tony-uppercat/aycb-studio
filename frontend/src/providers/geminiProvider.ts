@@ -90,10 +90,13 @@ const geminiImageProvider: ImageProvider = {
       }
     }
 
+    // Map 0.5K → 512 (SDK literal); other buckets pass through.
+    const mappedSize = options?.imageSize === '0.5K' ? '512' : options?.imageSize
+
     // Build imageConfig for resolution and aspect ratio control
     const imageConfig: Record<string, string> = {}
     if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
-    if (options?.imageSize) imageConfig.imageSize = options.imageSize
+    if (mappedSize) imageConfig.imageSize = mappedSize
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config: Record<string, any> = {
@@ -113,6 +116,12 @@ const geminiImageProvider: ImageProvider = {
           },
         },
       }]
+    }
+    if (options?.thinking !== false) {
+      config.thinkingConfig = {
+        includeThoughts: true,
+        thinkingLevel: 'HIGH',
+      }
     }
 
     const response = await ai.models.generateContent({

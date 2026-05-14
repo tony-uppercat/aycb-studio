@@ -37,6 +37,9 @@ MAX_VIDEO_BYTES = 500 * 1024 * 1024  # 500 MB
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif"}
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".wmv"}
 
+# ── PNG constants ────────────────────────────────────────────────────────────
+_PNG_SIG = b"\x89PNG\r\n\x1a\n"
+
 
 async def _read_upload(upload: UploadFile, max_bytes: int, kind: str = "file") -> bytes:
     """Read an upload and enforce size limits."""
@@ -274,8 +277,7 @@ def _inject_png_text_chunks(png_bytes: bytes, meta: dict[str, str]) -> bytes:
     Returns the input bytes unchanged on parse failure so the save path
     never breaks on a malformed PNG.
     """
-    PNG_SIG = b"\x89PNG\r\n\x1a\n"
-    if not png_bytes.startswith(PNG_SIG):
+    if not png_bytes.startswith(_PNG_SIG):
         return png_bytes
 
     # Find the first IDAT chunk — that's where we insert before
@@ -296,6 +298,8 @@ def _inject_png_text_chunks(png_bytes: bytes, meta: dict[str, str]) -> bytes:
     extra = b""
     for key, value in meta.items():
         keyword = str(key).encode("latin-1", errors="replace")[:79]
+        if not keyword:
+            continue  # skip spec-illegal empty keyword
         text = str(value).encode("latin-1", errors="replace")
         data = keyword + b"\x00" + text
         chunk_type = b"tEXt"

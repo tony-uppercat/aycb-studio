@@ -122,3 +122,28 @@ def test_inject_png_text_malformed_returns_unchanged():
     from src.shared import _inject_png_text_chunks
     junk = b"definitely not a PNG"
     assert _inject_png_text_chunks(junk, {"prompt": "x"}) == junk
+
+
+def test_inject_png_text_iend_before_idat_returns_unchanged():
+    """PNG that has IEND before any IDAT must be returned unchanged."""
+    import zlib
+    from src.shared import _inject_png_text_chunks
+    sig = b"\x89PNG\r\n\x1a\n"
+    # Minimal IHDR (13-byte payload, all zeros)
+    ihdr_data = b"\x00" * 13
+    ihdr_crc = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF)
+    ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + ihdr_crc
+    # IEND with no IDAT in between
+    iend_crc = struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF)
+    iend = struct.pack(">I", 0) + b"IEND" + iend_crc
+    truncated = sig + ihdr + iend  # valid header, no IDAT
+    assert _inject_png_text_chunks(truncated, {"k": "v"}) == truncated
+
+
+def test_inject_png_text_truncated_stream_returns_unchanged():
+    """A stream that ends mid-chunk (no IDAT found) must be returned unchanged."""
+    from src.shared import _inject_png_text_chunks
+    sig = b"\x89PNG\r\n\x1a\n"
+    # Claim a chunk of 1 MB, provide only 8 bytes after sig → loop exits without finding IDAT
+    truncated = sig + b"\x00\x0F\x42\x40" + b"tEXt"  # length=1M, type=tEXt, no data
+    assert _inject_png_text_chunks(truncated, {"k": "v"}) == truncated

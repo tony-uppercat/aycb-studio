@@ -180,6 +180,22 @@
   white-space: nowrap;
 }
 
+.zoomBadge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  background: rgba(20, 20, 22, 0.78);
+  border: 1px solid #2a2a2e;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fafafa;
+  pointer-events: none;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
 /* ── Info panel (container for MediaInfoPanel) ── */
 .infoPanel {
   width: 320px;

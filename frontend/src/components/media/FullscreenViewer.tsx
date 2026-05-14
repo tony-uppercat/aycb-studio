@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type DiskMediaEntry } from './FullscreenMediaBrowser'
 import { MediaInfoPanel } from './MediaInfoPanel'
+import { useImageZoom } from './useImageZoom'
 import { type ReviewStatus } from '../../utils/reviewStatus'
 import styles from './FullscreenViewer.module.css'
 
@@ -98,6 +99,12 @@ export function FullscreenViewer({
 
   const src = fullSrc ?? thumbSrc
 
+  // Wheel zoom + drag pan + double-click reset + keyboard shortcuts (+/-/0).
+  const imageZoom = useImageZoom()
+
+  // Reset zoom whenever the displayed entry changes.
+  useEffect(() => { imageZoom.reset() }, [entry?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const goTo = useCallback((i: number) => {
     setIndex(Math.max(0, Math.min(entries.length - 1, i)))
   }, [entries.length])
@@ -184,7 +191,14 @@ export function FullscreenViewer({
               alt={entry.filename}
               className={styles.media}
               draggable={false}
+              style={imageZoom.style}
+              onWheel={imageZoom.handlers.onWheel}
+              onMouseDown={imageZoom.handlers.onMouseDown}
+              onDoubleClick={imageZoom.handlers.onDoubleClick}
             />
+          )}
+          {!isVideo && imageZoom.zoom > 1 && (
+            <div className={styles.zoomBadge}>{Math.round(imageZoom.zoom * 100)}%</div>
           )}
 
           {/* video */}

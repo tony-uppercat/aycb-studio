@@ -108,13 +108,14 @@ export const ASPECT_RATIOS = [
 
 export const RESOLUTIONS = [
   { value: '', label: 'Auto' },
+  { value: '0.5K', label: '0.5K' },
   { value: '1K', label: '1K' },
   { value: 'FHD', label: 'FHD' },
   { value: '2K', label: '2K' },
   { value: '4K', label: '4K' },
 ]
 
-const MAX_REFS = 8
+const MAX_REFS = 14
 const MAX_HISTORY = 50
 
 export function useGenerateImage(id: string, data: GenerateImageNodeData, selected: boolean | undefined) {
@@ -156,6 +157,11 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   )
   const [editMode, setEditMode, editModeRef] = useStateRef(
     Boolean((data as Record<string, unknown>).editMode)
+  )
+  const [thinking, setThinking, thinkingRef] = useStateRef(
+    typeof (data as Record<string, unknown>).thinking === 'boolean'
+      ? (data as Record<string, unknown>).thinking as boolean
+      : true,
   )
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64, imageB64Ref] = useStateRef<string | null>(null)
@@ -314,6 +320,15 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     updateNodeData(id, { resolution: '' })
   }, [selectedModel, modelInfo.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 0.5K is Flash-only (gemini-3.1-flash-image-preview). Reset to Auto if
+  // the model changes off Flash while 0.5K was selected.
+  useEffect(() => {
+    if (resolution !== '0.5K') return
+    if (modelInfo.id === 'gemini-3.1-flash-image-preview') return
+    setResolution('')
+    updateNodeData(id, { resolution: '' })
+  }, [selectedModel, modelInfo.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-adapt: when an image is connected to image-0 (or its source mediaId
   // changes), measure the input dimensions and pick the closest supported AR
   // + a 1K/2K bucket. Fires only when the source mediaId actually changes —
@@ -401,7 +416,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
 
   const promptForEstimate = pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt
   const editRefCount = (editMode && currentMediaId) ? 1 : 0
-  const estimate = estimateCost(selectedModel, 'generate_image', promptForEstimate, connectedImageCount + editRefCount, 0, 1, resolution)
+  const estimate = estimateCost(selectedModel, 'generate_image', promptForEstimate, connectedImageCount + editRefCount, 0, 1, resolution, thinking)
   const estimatedLabel = formatCostEstimate(estimate.costUsd)
 
   const [batchCount, setBatchCount] = useState(1)
@@ -459,6 +474,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       ...(currentAspectRatio ? { aspectRatio: currentAspectRatio } : {}),
       ...(currentResolution ? { imageSize: currentResolution } : {}),
       ...(groundingRef.current ? { useGrounding: true } : {}),
+      ...(thinkingRef.current === false ? { thinking: false } : {}),
     }
     const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, refs.length ? refs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }
@@ -520,7 +536,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
 
     // Track cost from API response or fall back to client-side estimate
     const actualUsage = r.usage
-    const fallback = estimateCost(selectedModel, 'generate_image', rawPrompt, refs.length, 0, 1, currentResolution)
+    const fallback = estimateCost(selectedModel, 'generate_image', rawPrompt, refs.length, 0, 1, currentResolution, thinkingRef.current)
     const costUsd = actualUsage?.cost_usd ?? fallback.costUsd
     setLastCost(costUsd)
     useCanvasStore.getState().addCost({
@@ -590,6 +606,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     markManualOverride,
     useGrounding, setUseGrounding,
     editMode, setEditMode,
+    thinking, setThinking,
     localPrompt, setLocalPrompt,
     imageB64,
     compareSourceUrl,

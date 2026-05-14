@@ -329,6 +329,18 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     updateNodeData(id, { resolution: '' })
   }, [selectedModel, modelInfo.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Flash API has an upstream bug (Issue #1461) — imageSize=4K is silently
+  // ignored and returns ~1K output. Hide 4K from Flash by resetting to Auto
+  // if a legacy node persisted Flash + 4K. The provider also has a
+  // defense-in-depth swap (see geminiProvider.ts), but resetting here keeps
+  // the UI honest.
+  useEffect(() => {
+    if (resolution !== '4K') return
+    if (modelInfo.id !== 'gemini-3.1-flash-image-preview') return
+    setResolution('')
+    updateNodeData(id, { resolution: '' })
+  }, [selectedModel, modelInfo.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-adapt: when an image is connected to image-0 (or its source mediaId
   // changes), measure the input dimensions and pick the closest supported AR
   // + a 1K/2K bucket. Fires only when the source mediaId actually changes —

@@ -615,10 +615,12 @@ describe('estimateCost resolution-aware pricing', () => {
     const { estimateCost } = await import('../utils/costEstimate')
     const r1k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '1K')
     const r2k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '2K')
+    // Flash+4K is auto-swapped to Pro at the provider level (Issue #1461 workaround).
+    // Cost estimate mirrors that swap: returns Pro 4K price ($0.240), not Flash 4K ($0.151).
     const r4k  = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'test', 0, 0, 1, '4K')
     expect(r1k.costUsd).toBeCloseTo(0.067, 3)
     expect(r2k.costUsd).toBeCloseTo(0.101, 3)
-    expect(r4k.costUsd).toBeCloseTo(0.151, 3)
+    expect(r4k.costUsd).toBeCloseTo(0.240, 3)
   })
 
   it('defaults to 1K price when resolution is empty', async () => {

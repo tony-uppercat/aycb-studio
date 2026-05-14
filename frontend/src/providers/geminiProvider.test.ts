@@ -126,17 +126,4 @@ describe('geminiImageProvider — REST direct', () => {
     expect(result.image_b64).toBeNull()
     expect(result.status).toContain('Deadline expired')
   })
-
-  it('swaps Flash+4K to Pro endpoint (Issue #1461 workaround)', async () => {
-    fetchMock.mockResolvedValue(fakeOkResponse())
-    const provider = await getProvider()
-    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '4K' })
-    const url = fetchMock.mock.calls[0][0] as string
-    // URL must contain the Pro model id, not Flash, because of the swap.
-    expect(url).toContain('gemini-3-pro-image-preview')
-    expect(url).not.toContain('gemini-3.1-flash-image-preview')
-    // And no thinkingConfig (Pro has built-in thinking).
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    expect(body.generationConfig.thinkingConfig).toBeUndefined()
-  })
 })

@@ -95,17 +95,6 @@ const geminiImageProvider: ImageProvider = {
     if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
     if (mappedSize) imageConfig.imageSize = mappedSize
 
-    // Workaround for Flash 4K API bug (Issue #1461): Google silently ignores
-    // imageSize=4K on gemini-3.1-flash-image-preview and returns ~1K output.
-    // Auto-swap to Pro Image for genuine 4K. Defense-in-depth — the UI also
-    // filters this combination, but a legacy node or programmatic call could
-    // reach here with Flash+4K.
-    let effectiveModelId = modelId
-    if (modelId === 'gemini-3.1-flash-image-preview' && mappedSize === '4K') {
-      effectiveModelId = 'gemini-3-pro-image-preview'
-      console.warn('[geminiProvider] Flash 4K is unreliable upstream — swapped to Pro Image for this generation')
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const generationConfig: Record<string, any> = {
       responseModalities: ['IMAGE', 'TEXT'],
@@ -113,9 +102,7 @@ const geminiImageProvider: ImageProvider = {
     }
     // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
     // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
-    // After the Flash 4K → Pro swap, effectiveModelId is Pro so thinkingConfig
-    // is correctly omitted even if the original modelId was Flash.
-    if (effectiveModelId === 'gemini-3.1-flash-image-preview' && options?.thinking !== false) {
+    if (modelId === 'gemini-3.1-flash-image-preview' && options?.thinking !== false) {
       generationConfig.thinkingConfig = {
         includeThoughts: true,
         thinkingLevel: 'HIGH',
@@ -140,7 +127,7 @@ const geminiImageProvider: ImageProvider = {
 
     // Direct REST call — bypasses @google/genai SDK which silently drops
     // imageConfig.imageSize (googleapis/js-genai Issue #1461, still open).
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModelId}:generateContent`
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -168,7 +155,7 @@ const geminiImageProvider: ImageProvider = {
     const um = data.usageMetadata ?? data.usage_metadata ?? {}
     const inputTokens = um.promptTokenCount ?? um.prompt_token_count ?? 0
     const outputTokens = um.candidatesTokenCount ?? um.candidates_token_count ?? 0
-    const costUsd = computeGeminiCost(effectiveModelId, inputTokens, outputTokens)
+    const costUsd = computeGeminiCost(modelId, inputTokens, outputTokens)
     const usage: UsageInfo | undefined = (inputTokens > 0 || outputTokens > 0)
       ? { input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: costUsd }
       : undefined

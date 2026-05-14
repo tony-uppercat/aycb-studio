@@ -74,7 +74,6 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             {RESOLUTIONS
               .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
               .filter(r => r.value !== '0.5K' || h.modelInfo.id === 'gemini-3.1-flash-image-preview')
-              .filter(r => r.value !== '4K' || h.modelInfo.id !== 'gemini-3.1-flash-image-preview')
               .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
             }
           </select>

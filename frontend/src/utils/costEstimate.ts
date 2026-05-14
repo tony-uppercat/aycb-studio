@@ -121,13 +121,7 @@ export function estimateCost(
       'recraftv4_vector':               { '': 0.08 },
       'recraftv4_pro_vector':           { '': 0.30 },
     }
-    // Mirror the geminiProvider Flash 4K → Pro swap (Issue #1461 workaround).
-    // User-visible cost must match the model that will actually run.
-    let effectivePricingModel = pricingModelId
-    if (pricingModelId === 'gemini-3.1-flash-image-preview' && resolution === '4K') {
-      effectivePricingModel = 'gemini-3-pro-image-preview'
-    }
-    const resMap = FIXED_IMAGE_COST[effectivePricingModel]
+    const resMap = FIXED_IMAGE_COST[pricingModelId]
     if (resMap !== undefined) {
       const imgCost = resMap[resolution] ?? resMap[''] ?? 0.067
       // Per-ref input cost varies sharply by provider. OpenAI's gpt-image-2
@@ -140,14 +134,14 @@ export function estimateCost(
       }
       let inputRefCost = 0
       if (imageCount > 0) {
-        inputRefCost = effectivePricingModel in PER_REF_AVG
-          ? PER_REF_AVG[effectivePricingModel] * imageCount
-          : (imageCount * 560 / 1_000_000) * (MODEL_PRICING[effectivePricingModel]?.[0] ?? 0.50)
+        inputRefCost = pricingModelId in PER_REF_AVG
+          ? PER_REF_AVG[pricingModelId] * imageCount
+          : (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50)
       }
       const rawCost = imgCost + inputRefCost
-      // Surcharge applies only when thinking is explicitly enabled on Flash. After
-      // the Flash 4K → Pro swap, thinking is built-in (no extra cost).
-      const thinkingFactor = (thinking && effectivePricingModel === 'gemini-3.1-flash-image-preview') ? 1.3 : 1
+      // thinking surcharge applies ONLY to gemini-3.1-flash-image-preview.
+      // Pro Image has built-in thinking included in its base per-call price.
+      const thinkingFactor = (thinking && pricingModelId === 'gemini-3.1-flash-image-preview') ? 1.3 : 1
       return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: rawCost * thinkingFactor, model: modelId }
     }
   }

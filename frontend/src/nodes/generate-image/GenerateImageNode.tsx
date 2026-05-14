@@ -97,7 +97,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             <button
               className={`${styles.batchBtn} ${h.thinking ? styles.batchBtnActive : ''}`}
               onClick={() => { h.setThinking(!h.thinking); h.updateNodeData(id, { thinking: !h.thinking }) }}
-              title="Thinking HIGH — composition refinement on, costo +"
+              title="Thinking HIGH — composition refinement on, cost +"
             >THK</button>
           )}
           <button

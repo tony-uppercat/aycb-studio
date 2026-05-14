@@ -12,3 +12,4 @@ _reload_trigger.py
 _restart.bat
 feedback/
 .superpowers/
+.claude/scheduled_tasks.lock

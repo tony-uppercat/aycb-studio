@@ -34,6 +34,7 @@ async def generate_image_endpoint(
     image_size: str = Form(""),
     project_name: str = Form(""),
     use_grounding: str = Form(""),
+    thinking: str = Form("true"),
     ref_images: list[UploadFile] | None = File(default=None),
 ):
     from src.gemini import generate_image, get_last_usage
@@ -43,20 +44,22 @@ async def generate_image_endpoint(
 
     pil_refs: list[PILImage.Image] = []
     if ref_images:
-        for f in ref_images[:8]:
+        for f in ref_images[:14]:
             _validate_image_upload(f)
             raw = await _read_upload(f, MAX_IMAGE_BYTES, "Reference image")
             pil_refs.append(PILImage.open(io.BytesIO(raw)).convert("RGB"))
 
     grounding = use_grounding.lower() in ("true", "1", "yes")
+    thinking_bool = thinking.lower() in ("true", "1", "yes")
     model_id = IMAGE_MODELS.get(model, model)
-    _log(f"Generate image — model={model} ({model_id}), {len(pil_refs)} refs, grounding={grounding}, prompt={clean_prompt[:80]}...")
+    _log(f"Generate image — model={model} ({model_id}), {len(pil_refs)} refs, grounding={grounding}, thinking={thinking_bool}, prompt={clean_prompt[:80]}...")
     t0 = time.time()
     try:
         result = await asyncio.to_thread(
             generate_image, clean_prompt, pil_refs if pil_refs else None, model_id,
             aspect_ratio=aspect_ratio or None, image_size=image_size or None,
             api_key=effective_key, use_grounding=grounding,
+            thinking=thinking_bool,
         )
     except Exception as exc:
         dt = time.time() - t0

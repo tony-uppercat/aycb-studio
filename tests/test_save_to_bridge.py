@@ -147,3 +147,44 @@ def test_inject_png_text_truncated_stream_returns_unchanged():
     # Claim a chunk of 1 MB, provide only 8 bytes after sig → loop exits without finding IDAT
     truncated = sig + b"\x00\x0F\x42\x40" + b"tEXt"  # length=1M, type=tEXt, no data
     assert _inject_png_text_chunks(truncated, {"k": "v"}) == truncated
+
+
+def test_save_to_bridge_writes_sidecar_and_preserves_idat(media_root):
+    """Verify that img_bytes path writes sidecar JSON + preserves IDAT byte-perfectly."""
+    import json
+    from src.shared import _save_to_bridge
+
+    original = _make_test_png()
+    result = _save_to_bridge(
+        img_bytes=original,
+        prompt="vista alpina",
+        model="gemini-3-pro-image-preview",
+        model_name="Nano Banana Pro",
+        aspect_ratio="16:9",
+        image_size="2K",
+        cost_usd=0.134,
+        project_name="testproj",
+    )
+    assert result is not None
+    assert result["status"] == "ok"
+
+    png_path = media_root / "testproj" / result["path"]
+    json_path = png_path.with_stem(png_path.stem.rsplit(".", 1)[0]).parent / f"{png_path.stem}.meta.json"
+
+    # JSON sidecar exists with full meta
+    assert json_path.exists(), f"sidecar not written at {json_path}"
+    sidecar = json.loads(json_path.read_text(encoding="utf-8"))
+    assert sidecar["prompt"] == "vista alpina"
+    assert sidecar["model"] == "gemini-3-pro-image-preview"
+    assert sidecar["cost_usd"] == 0.134
+
+    # PNG IDAT bytes are unchanged from the original Gemini output
+    saved_bytes = png_path.read_bytes()
+    assert _extract_idat(saved_bytes) == _extract_idat(original)
+
+    # tEXt chunks are present (backward-compat reader path)
+    reloaded = Image.open(png_path)
+    info = dict(reloaded.info)
+    reloaded.close()
+    assert info.get("prompt") == "vista alpina"
+    assert info.get("source") == "aycb"

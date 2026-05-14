@@ -321,7 +321,13 @@ def _save_to_bridge(
     project_name: str = "",
     pil_image: PILImage.Image | None = None,
 ) -> dict | None:
-    """Save image with embedded PNG tEXt metadata to shared/Media/ for Review Hub."""
+    """Save image with embedded PNG tEXt metadata + sidecar .meta.json to shared/Media/.
+
+    img_bytes path: byte-perfect — inject tEXt chunks into the raw Gemini bytes,
+    write a sidecar JSON, never decode the pixels.
+    pil_image path (legacy fallback, hit only when /api/generate/image runs
+    server-side via gemini.py PIL flow): re-encode through PIL + sidecar JSON.
+    """
     try:
         target_dir, stem, generated_at = _resolve_bridge_target(project_name, "generated")
         folder = target_dir.name
@@ -339,22 +345,34 @@ def _save_to_bridge(
             "generated_at": generated_at,
         }
 
-        if pil_image is None and img_bytes is not None:
-            pil_img = PILImage.open(io.BytesIO(img_bytes))
-        elif pil_image is not None:
-            pil_img = pil_image
-        else:
-            _log("Review Hub bridge — error: no image data provided")
-            return None
+        # Always write the JSON sidecar — single forward-compatible reader path.
+        sidecar_path = target_dir / f"{stem}.meta.json"
+        sidecar_path.write_text(
+            json.dumps(meta, indent=2),
+            encoding="utf-8",
+            newline="\n",
+        )
 
-        png_info = PngInfo()
-        for k, v in meta.items():
-            if v is not None:
-                png_info.add_text(k, str(v))
+        if img_bytes is not None:
+            # Byte-perfect path: inject tEXt chunks without re-encoding pixels.
+            text_meta = {k: str(v) for k, v in meta.items() if v is not None}
+            enriched = _inject_png_text_chunks(img_bytes, text_meta)
+            img_path.write_bytes(enriched)
+            _log(f"Review Hub bridge — saved {folder}/{img_path.name} byte-perfect + sidecar")
+            return {"status": "ok", "path": str(img_path.name), "stem": stem, "folder": folder}
 
-        pil_img.save(str(img_path), format="PNG", pnginfo=png_info)
-        _log(f"Review Hub bridge — saved {folder}/{img_path.name} + embedded meta")
-        return {"status": "ok", "path": str(img_path.name), "stem": stem, "folder": folder}
+        if pil_image is not None:
+            # Legacy PIL path (server-side generation): pixel-lossless but re-encoded.
+            png_info = PngInfo()
+            for k, v in meta.items():
+                if v is not None:
+                    png_info.add_text(k, str(v))
+            pil_image.save(str(img_path), format="PNG", pnginfo=png_info)
+            _log(f"Review Hub bridge — saved {folder}/{img_path.name} via PIL + sidecar")
+            return {"status": "ok", "path": str(img_path.name), "stem": stem, "folder": folder}
+
+        _log("Review Hub bridge — error: no image data provided")
+        return None
     except Exception as e:
         _log(f"Review Hub bridge — error: {e}")
         return None

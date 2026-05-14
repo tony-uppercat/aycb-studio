@@ -1,5 +1,7 @@
 """Tests for _save_to_bridge — image saving with PNG tEXt metadata."""
+import io
 import pytest
+import struct
 import time
 from pathlib import Path
 from PIL import Image
@@ -72,3 +74,51 @@ def test_save_to_bridge_sanitizes_project_name(media_root):
     assert result is not None
     assert "/" not in result["folder"]
     assert ":" not in result["folder"]
+
+
+# ── PNG tEXt chunk injection tests ───────────────────────────────────────
+def _make_test_png() -> bytes:
+    img = Image.new("RGB", (4, 4), "red")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _extract_idat(png_bytes: bytes) -> bytes:
+    """Concatenate all IDAT chunk payloads for byte-equality comparison."""
+    out = b""
+    pos = 8  # skip 8-byte PNG signature
+    while pos + 12 <= len(png_bytes):
+        (length,) = struct.unpack(">I", png_bytes[pos:pos + 4])
+        chunk_type = png_bytes[pos + 4:pos + 8]
+        if chunk_type == b"IDAT":
+            out += png_bytes[pos + 8:pos + 8 + length]
+        if chunk_type == b"IEND":
+            break
+        pos += 12 + length
+    return out
+
+
+def test_inject_png_text_preserves_idat():
+    from src.shared import _inject_png_text_chunks
+    original = _make_test_png()
+    enriched = _inject_png_text_chunks(original, {"prompt": "test", "cost_usd": "0.05"})
+    assert _extract_idat(original) == _extract_idat(enriched)
+
+
+def test_inject_png_text_round_trip_meta():
+    from src.shared import _inject_png_text_chunks
+    original = _make_test_png()
+    meta = {"prompt": "una vista alpina", "model": "gemini-3-pro-image-preview", "cost_usd": "0.134"}
+    enriched = _inject_png_text_chunks(original, meta)
+    reloaded = Image.open(io.BytesIO(enriched))
+    info = dict(reloaded.info)
+    reloaded.close()
+    for k, v in meta.items():
+        assert info.get(k) == v, f"meta key {k!r} did not round-trip"
+
+
+def test_inject_png_text_malformed_returns_unchanged():
+    from src.shared import _inject_png_text_chunks
+    junk = b"definitely not a PNG"
+    assert _inject_png_text_chunks(junk, {"prompt": "x"}) == junk

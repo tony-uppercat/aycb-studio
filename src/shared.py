@@ -5,7 +5,9 @@ import base64
 import io
 import json
 import re
+import struct
 import time
+import zlib
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -259,6 +261,49 @@ def _resolve_bridge_target(project_name: str, stem_prefix: str) -> tuple[Path, s
     stem = f"{stem_prefix}_{int(time.time() * 1000)}"
     generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     return target_dir, stem, generated_at
+
+
+def _inject_png_text_chunks(png_bytes: bytes, meta: dict[str, str]) -> bytes:
+    """Inject tEXt chunks before IDAT without re-encoding pixels.
+
+    PNG layout: 8-byte signature + IHDR + [optional chunks] + IDAT + IEND.
+    Each chunk: 4-byte length + 4-byte type + data + 4-byte CRC.
+    tEXt chunks carry `keyword(1-79 Latin-1 bytes) + 0x00 + Latin-1 text`.
+
+    tEXt chunks must appear before IDAT per PNG spec so PIL can read them.
+    Returns the input bytes unchanged on parse failure so the save path
+    never breaks on a malformed PNG.
+    """
+    PNG_SIG = b"\x89PNG\r\n\x1a\n"
+    if not png_bytes.startswith(PNG_SIG):
+        return png_bytes
+
+    # Find the first IDAT chunk — that's where we insert before
+    pos = 8  # skip PNG signature
+    while pos + 12 <= len(png_bytes):
+        (length,) = struct.unpack(">I", png_bytes[pos:pos + 4])
+        chunk_type = png_bytes[pos + 4:pos + 8]
+        if chunk_type == b"IDAT":
+            insert_pos = pos
+            break
+        if chunk_type == b"IEND":
+            # No IDAT found; can't inject safely
+            return png_bytes
+        pos += 12 + length
+    else:
+        return png_bytes
+
+    extra = b""
+    for key, value in meta.items():
+        keyword = str(key).encode("latin-1", errors="replace")[:79]
+        text = str(value).encode("latin-1", errors="replace")
+        data = keyword + b"\x00" + text
+        chunk_type = b"tEXt"
+        length_bytes = struct.pack(">I", len(data))
+        crc_bytes = struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+        extra += length_bytes + chunk_type + data + crc_bytes
+
+    return png_bytes[:insert_pos] + extra + png_bytes[insert_pos:]
 
 
 def _save_to_bridge(

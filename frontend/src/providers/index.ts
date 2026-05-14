@@ -4,6 +4,8 @@ export interface ImageGenerationOptions {
   aspectRatio?: string
   imageSize?: string
   useGrounding?: boolean
+  /** When undefined or true, the provider passes thinkingConfig HIGH (Gemini only). */
+  thinking?: boolean
 }
 
 export interface ImageProvider {

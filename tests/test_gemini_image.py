@@ -91,3 +91,20 @@ def test_generate_image_accepts_14_refs():
         contents = sdk.models.generate_content.call_args.kwargs["contents"]
         # contents = refs (14 PIL images) + 1 prompt string
         assert len(contents) == 15
+
+
+def test_generate_image_caps_excess_refs_at_14():
+    """If caller passes more than 14 refs, generate_image must slice down to 14."""
+    refs = [Image.new("RGB", (2, 2), "red") for _ in range(20)]
+
+    with patch.object(gemini, "_get_client") as mock_client, \
+         patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
+        sdk = mock_client.return_value
+        sdk.models.generate_content.return_value = _fake_inline_response()
+        mock_retries.side_effect = lambda call, operation: (call(), None)
+
+        gemini.generate_image(prompt="hello", reference_images=refs, api_key="fake-key")
+
+        contents = sdk.models.generate_content.call_args.kwargs["contents"]
+        # 20 refs passed → sliced to 14 + 1 prompt = 15
+        assert len(contents) == 15

@@ -82,7 +82,7 @@ _TEXT_MODELS: tuple[Model, ...] = (
         cost_per_token=(2.00, 12.00),
     ),
     Model(
-        id="gemini-3.1-flash-lite-preview",
+        id="gemini-3.1-flash-lite",
         name="Gemini 3.1 Flash-Lite",
         provider="gemini",
         capability="text",
@@ -94,22 +94,6 @@ _TEXT_MODELS: tuple[Model, ...] = (
         provider="gemini",
         capability="text",
         cost_per_token=(0.50, 3.00),
-    ),
-    Model(
-        id="gemini-2.5-flash",
-        name="Gemini 2.5 Flash",
-        provider="gemini",
-        capability="text",
-        cost_per_token=(0.30, 2.50),
-        deprecated=True,
-    ),
-    Model(
-        id="gemini-2.5-pro",
-        name="Gemini 2.5 Pro",
-        provider="gemini",
-        capability="text",
-        cost_per_token=(1.25, 10.00),
-        deprecated=True,
     ),
     Model(
         id="claude-sonnet-4-6-20250620",

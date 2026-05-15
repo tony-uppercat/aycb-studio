@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # ── API Keys ──────────────────────────────────────────────────────
     gemini_api_key: str = ""
     anthropic_api_key: str = ""
-    gemini_flash_model: str = "gemini-3.1-flash-lite-preview"
+    gemini_flash_model: str = "gemini-3.1-flash-lite"
     gemini_embedding_model: str = "gemini-embedding-exp-03-07"
 
     # ── Google Cloud (Vertex AI) ──────────────────────────────────────

@@ -128,3 +128,51 @@ def test_atlas_kling_v3_pro_renamed_and_has_ref2v():
     assert m.name == "Kling 3.0 Omni Pro (Atlas)"
     assert m.endpoint_ref2v == "kwaivgi/kling-video-o3-pro/reference-to-video"
     assert min(m.allowed_durations) == 3 and max(m.allowed_durations) == 15
+
+
+# ── LLM text-model lineup (2026-05-14 update) ──────────────────────────
+
+def test_registry_has_flash_lite_ga():
+    """Flash-Lite GA was released 2026-05-07; preview shuts down 2026-05-25."""
+    from src.registry import REGISTRY
+    m = REGISTRY["gemini-3.1-flash-lite"]
+    assert m.cost_per_token == (0.25, 1.50)
+    assert m.capability == "text"
+    assert m.provider == "gemini"
+    assert m.deprecated is False
+
+
+def test_registry_drops_flash_lite_preview():
+    """Preview id removed in favor of GA — saved canvases migrate via MODEL_MAP."""
+    from src.registry import REGISTRY
+    assert "gemini-3.1-flash-lite-preview" not in REGISTRY
+
+
+def test_registry_drops_gemini_2_5_text_models():
+    """gemini-2.5-flash and gemini-2.5-pro shut down 2026-10-16; removed early."""
+    from src.registry import REGISTRY
+    assert "gemini-2.5-flash" not in REGISTRY
+    assert "gemini-2.5-pro" not in REGISTRY
+
+
+def test_shared_model_pricing_has_flash_lite_ga():
+    from src.shared import MODEL_PRICING
+    assert MODEL_PRICING["gemini-3.1-flash-lite"] == (0.25, 1.50)
+
+
+def test_shared_model_pricing_keeps_preview_alias_for_transition():
+    """Saved canvases still pass the -preview id to estimateCost. Keep the
+    alias entry until 2026-06-30 so the cost display doesn't fall to $0."""
+    from src.shared import MODEL_PRICING
+    assert MODEL_PRICING["gemini-3.1-flash-lite-preview"] == (0.25, 1.50)
+
+
+def test_shared_model_pricing_drops_gemini_2_5():
+    from src.shared import MODEL_PRICING
+    assert "gemini-2.5-flash" not in MODEL_PRICING
+    assert "gemini-2.5-pro" not in MODEL_PRICING
+
+
+def test_shared_models_display_map_points_to_ga():
+    from src.shared import MODELS
+    assert MODELS["Gemini 3.1 Flash-Lite"] == "gemini-3.1-flash-lite"

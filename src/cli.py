@@ -21,7 +21,7 @@ VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
 MODELS = {
     "3.1-pro": "gemini-3.1-pro-preview",
-    "3.1-lite": "gemini-3.1-flash-lite-preview",
+    "3.1-lite": "gemini-3.1-flash-lite",
     "3-flash": "gemini-3-flash-preview",
     "flash": "gemini-3-flash-preview",
 }

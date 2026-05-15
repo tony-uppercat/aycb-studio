@@ -19,7 +19,7 @@ describe('llm manifest', () => {
   })
 
   it('has defaultData with model', () => {
-    expect(manifest.defaultData.selectedModel).toBe('gemini-3.1-flash-lite-preview:thinking')
+    expect(manifest.defaultData.selectedModel).toBe('gemini-3.1-flash-lite:thinking')
     expect(manifest.defaultData.prompt).toBe('')
     expect(manifest.defaultData.systemPrompt).toBe('')
   })

@@ -102,8 +102,14 @@ def _sanitize_stem(stem: str | None) -> str:
 # ── Model map ────────────────────────────────────────────────────────────────
 MODELS = {
     "Gemini 3.1 Pro": "gemini-3.1-pro-preview",
-    "Gemini 3.1 Flash-Lite": "gemini-3.1-flash-lite-preview",
+    "Gemini 3.1 Flash-Lite": "gemini-3.1-flash-lite",
     "Gemini 3 Flash": "gemini-3-flash-preview",
+    # Migration aliases — saved canvases pre-2026-05-14 ship the legacy
+    # preview id; rewrite to GA before the Gemini API call so they keep
+    # working past the 2026-05-25 preview shutdown. Safe to remove after
+    # 2026-06-30.
+    "gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-preview:thinking": "gemini-3.1-flash-lite:thinking",
 }
 
 IMAGE_MODELS = {
@@ -115,14 +121,14 @@ IMAGE_MODELS = {
 MODEL_PRICING = {
     # Gemini 3.1
     "gemini-3.1-pro-preview": (2.00, 12.00),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
+    # Transition alias — canvases saved before 2026-05-14 still pass this id.
+    # Safe to remove after 2026-06-30.
     "gemini-3.1-flash-lite-preview": (0.25, 1.50),
     "gemini-3.1-flash-image-preview": (0.50, 60.00),   # image gen: $60/1M output
     # Gemini 3
     "gemini-3-flash-preview": (0.50, 3.00),
     "gemini-3-pro-image-preview": (2.00, 120.00),      # image gen: $120/1M output
-    # Gemini 2.5 (legacy — kept for historical cost lookups)
-    "gemini-2.5-flash": (0.30, 2.50),
-    "gemini-2.5-pro": (1.25, 10.00),
     # Claude (Anthropic)
     "claude-sonnet-4-6-20250620": (3.00, 15.00),
     "claude-opus-4-6-20250620": (15.00, 75.00),

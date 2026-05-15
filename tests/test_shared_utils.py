@@ -106,9 +106,9 @@ def test_classify_error_generic():
 
 def test_estimate_cost_known_model():
     from src.shared import _estimate_cost
-    result = _estimate_cost("gemini-2.5-flash", {"input_tokens": 1_000_000, "output_tokens": 1_000_000})
+    result = _estimate_cost("gemini-3-flash-preview", {"input_tokens": 1_000_000, "output_tokens": 1_000_000})
     assert result is not None
-    assert result["cost_usd"] == pytest.approx(0.30 + 2.50, abs=0.01)
+    assert result["cost_usd"] == pytest.approx(0.50 + 3.00, abs=0.01)
 
 
 def test_estimate_cost_unknown_model():
@@ -120,7 +120,7 @@ def test_estimate_cost_unknown_model():
 
 def test_estimate_cost_none_usage():
     from src.shared import _estimate_cost
-    assert _estimate_cost("gemini-2.5-flash", None) is None
+    assert _estimate_cost("gemini-3-flash-preview", None) is None
 
 
 # ── generate_image grounding config ────────────────────────────────────────

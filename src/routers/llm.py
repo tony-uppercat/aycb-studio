@@ -138,15 +138,10 @@ async def _chat_gemini(
         config_kwargs: dict = {}
         if system_prompt.strip():
             config_kwargs["system_instruction"] = system_prompt.strip()
-        if is_thinking:
-            if is_gemini3:
-                config_kwargs["thinking_config"] = genai_types.ThinkingConfig(
-                    include_thoughts=True, thinking_level="HIGH"
-                )
-            else:
-                config_kwargs["thinking_config"] = genai_types.ThinkingConfig(
-                    include_thoughts=True, thinking_budget=-1
-                )
+        if is_thinking and is_gemini3:
+            config_kwargs["thinking_config"] = genai_types.ThinkingConfig(
+                include_thoughts=True, thinking_level="high"
+            )
         config = genai_types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
         contents = [{"role": "user", "parts": parts}]

@@ -16,8 +16,8 @@ import styles from '../_shared/Node.module.css'
 type LLMNodeType = Node<LLMNodeData, 'llm'>
 
 const LLM_MODELS = [
-  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite', api: 'gemini', tooltip: 'Ultra fast & cheap, thinking support', price: '$0.25/$1.50', cost: 0.25, deprecated: false },
-  { id: 'gemini-3.1-flash-lite-preview:thinking', name: 'Gemini 3.1 Flash-Lite Thinking', api: 'gemini', tooltip: '3.1 Flash-Lite with high thinking level', price: '$0.25/$1.50', cost: 0.25, deprecated: false },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', api: 'gemini', tooltip: 'Ultra fast & cheap, default minimal thinking', price: '$0.25/$1.50', cost: 0.25, deprecated: false },
+  { id: 'gemini-3.1-flash-lite:thinking', name: 'Gemini 3.1 Flash-Lite Thinking', api: 'gemini', tooltip: 'Flash-Lite with thinking forced to high', price: '$0.25/$1.50', cost: 0.25, deprecated: false },
   { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', api: 'gemini', tooltip: 'Latest, thinking always on, advanced agentic reasoning', price: '$2/$12', cost: 2, deprecated: false },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', api: 'gemini', tooltip: '1M context, fast balanced performance, multimodal', price: '$0.50/$3', cost: 0.50, deprecated: false },
   { id: 'gemini-3-flash-preview:thinking', name: 'Gemini 3 Flash Thinking', api: 'gemini', tooltip: 'Gemini 3 Flash with high thinking level', price: '$0.50/$3', cost: 0.50, deprecated: false },

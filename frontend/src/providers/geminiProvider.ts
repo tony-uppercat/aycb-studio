@@ -15,13 +15,19 @@ import { getCachedRegistry } from '../hooks/useModelRegistry'
  * naming still resolve. Unrelated to the registry (not duplicated data).
  */
 const MODEL_MAP: Record<string, string> = {
+  // Display-name → id aliases (legacy callers passing labels rather than ids)
   'Gemini 3.1 Pro': 'gemini-3.1-pro-preview',
-  'Gemini 3.1 Flash-Lite': 'gemini-3.1-flash-lite-preview',
-  'Gemini 3.1 Flash-Lite Thinking': 'gemini-3.1-flash-lite-preview:thinking',
+  'Gemini 3.1 Flash-Lite': 'gemini-3.1-flash-lite',
+  'Gemini 3.1 Flash-Lite Thinking': 'gemini-3.1-flash-lite:thinking',
   'Gemini 3 Flash': 'gemini-3-flash-preview',
   'Gemini 3 Flash Thinking': 'gemini-3-flash-preview:thinking',
   'Gemini 3.1 Flash Image': 'gemini-3.1-flash-image-preview',
   'Gemini 3 Pro Image': 'gemini-3-pro-image-preview',
+  // Migration aliases — saved canvases serialized before 2026-05-14 carry the
+  // -preview id; rewrite to GA before the HTTP call so the API still resolves.
+  // Safe to remove after 2026-06-30.
+  'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+  'gemini-3.1-flash-lite-preview:thinking': 'gemini-3.1-flash-lite:thinking',
 }
 
 export function resolveModel(nameOrId: string): string {
@@ -102,10 +108,23 @@ const geminiImageProvider: ImageProvider = {
     }
     // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
     // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
-    if (modelId === 'gemini-3.1-flash-image-preview' && options?.thinking !== false) {
+    // Empirically (smoke_test_flash_thinking_4k + smoke_test_flash_2k_thinking_repeat):
+    // Flash + thinkingConfig HIGH + imageSize >= 2K → API silently degrades to 1K
+    // and frequently returns IMAGE_RECITATION blocks. We omit thinkingConfig at
+    // 2K/4K so the requested size is honored.
+    // When omitted at 2K/4K, the API falls back to the default `minimal` level
+    // (thinking cannot be disabled — only modulated). Doc canonical casing is
+    // lowercase ("minimal" / "high"); legacy uppercase appears in some Google
+    // examples but the thinking doc page prefers lowercase.
+    const thinkingIncompatibleSize = options?.imageSize === '2K' || options?.imageSize === '4K'
+    if (
+      modelId === 'gemini-3.1-flash-image-preview'
+      && options?.thinking !== false
+      && !thinkingIncompatibleSize
+    ) {
       generationConfig.thinkingConfig = {
         includeThoughts: true,
-        thinkingLevel: 'HIGH',
+        thinkingLevel: 'high',
       }
     }
 
@@ -209,7 +228,7 @@ const geminiLLMProvider: LLMProvider = {
     let thinkingConfig: any = undefined
     if (isThinking) {
       thinkingConfig = isGemini3
-        ? { includeThoughts: true, thinkingLevel: 'HIGH' }
+        ? { includeThoughts: true, thinkingLevel: 'high' }
         : { includeThoughts: true, thinkingBudget: -1 }
     }
 

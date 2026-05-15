@@ -99,11 +99,40 @@ export function FullscreenViewer({
 
   const src = fullSrc ?? thumbSrc
 
-  // Wheel zoom + drag pan + double-click reset + keyboard shortcuts (+/-/0).
-  const imageZoom = useImageZoom()
+  // Track natural pixel dims + rendered width so the zoom hook can map
+  // "100%" to true 1:1 pixel mapping rather than the misleading CSS scale=1
+  // (which is fit-to-container after object-fit:contain).
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [naturalDims, setNaturalDims] = useState<{ w: number; h: number } | null>(null)
+  const [displayedWidth, setDisplayedWidth] = useState<number | null>(null)
 
-  // Reset zoom whenever the displayed entry changes.
-  useEffect(() => { imageZoom.reset() }, [entry?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const measureDisplayed = useCallback(() => {
+    const el = imgRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    // When zoomed/transformed, getBoundingClientRect reflects post-transform
+    // width. We want the un-transformed fit width — divide by current scale.
+    // But we read state for zoom-aware divide; simpler approach: measure
+    // offsetWidth which ignores transforms.
+    if (el.offsetWidth > 0) setDisplayedWidth(el.offsetWidth)
+  }, [])
+
+  // Wheel zoom + drag pan + double-click reset + keyboard shortcuts (+/-/0/1).
+  const imageZoom = useImageZoom({ naturalDims, displayedWidth })
+
+  // Reset zoom + dims whenever the displayed entry changes.
+  useEffect(() => {
+    imageZoom.reset()
+    setNaturalDims(null)
+    setDisplayedWidth(null)
+  }, [entry?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-measure on window resize so fitScale stays accurate.
+  useEffect(() => {
+    if (isVideo) return
+    window.addEventListener('resize', measureDisplayed)
+    return () => window.removeEventListener('resize', measureDisplayed)
+  }, [isVideo, measureDisplayed])
 
   const goTo = useCallback((i: number) => {
     setIndex(Math.max(0, Math.min(entries.length - 1, i)))
@@ -187,6 +216,7 @@ export function FullscreenViewer({
           {/* image */}
           {!isVideo && src && (
             <img
+              ref={imgRef}
               src={src}
               alt={entry.filename}
               className={styles.media}
@@ -195,10 +225,24 @@ export function FullscreenViewer({
               onWheel={imageZoom.handlers.onWheel}
               onMouseDown={imageZoom.handlers.onMouseDown}
               onDoubleClick={imageZoom.handlers.onDoubleClick}
+              onLoad={(e) => {
+                const el = e.currentTarget
+                setNaturalDims({ w: el.naturalWidth, h: el.naturalHeight })
+                if (el.offsetWidth > 0) setDisplayedWidth(el.offsetWidth)
+              }}
             />
           )}
-          {!isVideo && imageZoom.zoom > 1 && (
-            <div className={styles.zoomBadge}>{Math.round(imageZoom.zoom * 100)}%</div>
+          {!isVideo && naturalDims && (
+            <div
+              className={styles.zoomBadge}
+              title="Click to snap to 1:1 (or press 1). Press 0 to fit."
+              onClick={imageZoom.snapToOneToOne}
+              style={{ cursor: 'pointer' }}
+            >
+              {imageZoom.realPercent != null ? `${imageZoom.realPercent}%` : `${Math.round(imageZoom.zoom * 100)}%`}
+              {imageZoom.atOneToOne && ' · 1:1'}
+              <span style={{ opacity: 0.55, marginLeft: 8 }}>{naturalDims.w}×{naturalDims.h}</span>
+            </div>
           )}
 
           {/* video */}

@@ -14,6 +14,9 @@
 export const MODEL_PRICING: Record<string, [number, number]> = {
   // Gemini 3.1 (text/LLM)
   'gemini-3.1-pro-preview':           [2.00, 12.00],
+  'gemini-3.1-flash-lite':            [0.25,  1.50],
+  // Transition alias — canvases saved before 2026-05-14 still pass this id.
+  // Safe to remove after 2026-06-30.
   'gemini-3.1-flash-lite-preview':    [0.25,  1.50],
   // Nano Banana 2 (Gemini 3.1 Flash Image) — ~$0.067/image @1K, $0.15 @4K
   'gemini-3.1-flash-image-preview':   [0.50, 60.00],
@@ -23,9 +26,6 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   'gemini-3-pro-image-preview':       [2.00, 120.00],
   // GPT Image 2 (tokenized: $5/M text in, $8/M image in, $30/M image out)
   'gpt-image-2':                      [5.00, 30.00],
-  // Gemini 2.5 (legacy — kept for historical cost lookups)
-  'gemini-2.5-flash':                 [0.30,  2.50],
-  'gemini-2.5-pro':                   [1.25, 10.00],
   // Claude models (approximate)
   'claude-sonnet-4-6-20250620':       [3.00, 15.00],
   'claude-opus-4-6-20250620':         [15.00, 75.00],
@@ -141,7 +141,13 @@ export function estimateCost(
       const rawCost = imgCost + inputRefCost
       // thinking surcharge applies ONLY to gemini-3.1-flash-image-preview.
       // Pro Image has built-in thinking included in its base per-call price.
-      const thinkingFactor = (thinking && pricingModelId === 'gemini-3.1-flash-image-preview') ? 1.3 : 1
+      // At imageSize 2K/4K, the provider omits thinkingConfig (Google API silently
+      // degrades or blocks) — so the surcharge does not apply at those sizes.
+      const thinkingEffective = thinking
+        && pricingModelId === 'gemini-3.1-flash-image-preview'
+        && resolution !== '2K'
+        && resolution !== '4K'
+      const thinkingFactor = thinkingEffective ? 1.3 : 1
       return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: rawCost * thinkingFactor, model: modelId }
     }
   }

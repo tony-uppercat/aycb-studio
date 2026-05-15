@@ -12,11 +12,16 @@ describe('estimateCost — Gemini image quality push additions', () => {
     expect(result.costUsd).toBeCloseTo(0.067, 3)
   })
 
-  it('applies thinking ×1.3 multiplier on Flash 4K', () => {
+  it('does NOT apply thinking ×1.3 on Flash 4K (provider omits thinkingConfig — API degrades when both set)', () => {
     const base = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', false)
     const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', true)
     expect(base.costUsd).toBeCloseTo(0.151, 3)
-    expect(withThinking.costUsd).toBeCloseTo(0.151 * 1.3, 3)
+    expect(withThinking.costUsd).toBeCloseTo(0.151, 3)
+  })
+
+  it('does NOT apply thinking ×1.3 on Flash 2K (provider omits thinkingConfig — API degrades when both set)', () => {
+    const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '2K', true)
+    expect(withThinking.costUsd).toBeCloseTo(0.101, 3)
   })
 
   it('does NOT apply thinking ×1.3 to Pro Image (auto-thinking, included in base price)', () => {
@@ -38,5 +43,27 @@ describe('estimateCost — Gemini image quality push additions', () => {
   it('does NOT apply thinking ×1.3 to Recraft', () => {
     const result = estimateCost('recraftv4_pro', 'generate_image', 'short', 0, 0, 1, '', true)
     expect(result.costUsd).toBeCloseTo(0.25, 3)
+  })
+})
+
+describe('estimateCost — LLM text pricing (Gemini 3.1 Flash-Lite GA)', () => {
+  it('returns non-zero cost for gemini-3.1-flash-lite GA id', () => {
+    const result = estimateCost('gemini-3.1-flash-lite', 'llm_chat', 'hello there', 0)
+    expect(result.costUsd).toBeGreaterThan(0)
+  })
+
+  it('returns non-zero cost for the transition alias gemini-3.1-flash-lite-preview', () => {
+    const result = estimateCost('gemini-3.1-flash-lite-preview', 'llm_chat', 'hello there', 0)
+    expect(result.costUsd).toBeGreaterThan(0)
+  })
+
+  it('returns zero cost for the removed gemini-2.5-flash', () => {
+    const result = estimateCost('gemini-2.5-flash', 'llm_chat', 'hello there', 0)
+    expect(result.costUsd).toBe(0)
+  })
+
+  it('returns zero cost for the removed gemini-2.5-pro', () => {
+    const result = estimateCost('gemini-2.5-pro', 'llm_chat', 'hello there', 0)
+    expect(result.costUsd).toBe(0)
   })
 })

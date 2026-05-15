@@ -14,6 +14,7 @@ import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
 import { fetchReviewStatus, registerBridgeStem, saveMediaMeta, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
+import { cropImageFileToAspectRatio } from '../../utils/cropToAspectRatio'
 
 export interface ImageModelDef {
   id: string
@@ -151,6 +152,17 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   )
   const [resolution, setResolution, resolutionRef] = useStateRef(
     (data as Record<string, unknown>).resolution as string || '1K'
+  )
+  // `inputLocked` freezes the current aspect-ratio and resolution dropdown
+  // values. When ON: AR auto-adapt is skipped, FHD/0.5K model-switch resets
+  // are skipped, dropdowns are disabled. Settings stay exactly as the user
+  // left them. Reads legacy `resolutionLocked` key for nodes saved during
+  // the brief life of the resolution-only flavor of this feature.
+  const [inputLocked, setInputLocked] = useState<boolean>(
+    Boolean(
+      (data as Record<string, unknown>).inputLocked
+      ?? (data as Record<string, unknown>).resolutionLocked,
+    ),
   )
   const [useGrounding, setUseGrounding, groundingRef] = useStateRef(
     Boolean((data as Record<string, unknown>).useGrounding)
@@ -313,21 +325,25 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // FHD is OpenAI-only (gpt-image-2 size constraint maps to 1920×1088). When
   // the model switches to a non-openai provider, reset to Auto so the
   // dropdown selection matches what the active provider actually accepts.
+  // The user can opt out via the resolution lock.
   useEffect(() => {
+    if (inputLocked) return
     if (resolution !== 'FHD') return
     if (modelInfo.provider === 'openai') return
     setResolution('')
     updateNodeData(id, { resolution: '' })
-  }, [selectedModel, modelInfo.provider]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedModel, modelInfo.provider, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 0.5K is Flash-only (gemini-3.1-flash-image-preview). Reset to Auto if
-  // the model changes off Flash while 0.5K was selected.
+  // the model changes off Flash while 0.5K was selected. The user can opt
+  // out via the resolution lock.
   useEffect(() => {
+    if (inputLocked) return
     if (resolution !== '0.5K') return
     if (modelInfo.id === 'gemini-3.1-flash-image-preview') return
     setResolution('')
     updateNodeData(id, { resolution: '' })
-  }, [selectedModel, modelInfo.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-adapt: when an image is connected to image-0 (or its source mediaId
   // changes), measure the input dimensions and pick the closest supported AR
@@ -351,6 +367,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // must not override them anymore — node values always win.
   const userOverrodeRef = useRef(false)
   useEffect(() => {
+    // Lock freezes current settings — no auto-adapt while locked.
+    if (inputLocked) return
     if (userOverrodeRef.current) return
     if (!sourceMediaIdImage0) return
     if (lastAdaptedRef.current === sourceMediaIdImage0) return
@@ -387,10 +405,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
         // Tolerance: if the input is far from any supported ratio, fall back
         // to Auto rather than forcing a bad match.
         if (bestDelta > 0.5) bestAr = ''
-        // Resolution is NOT auto-adapted from input dimensions — 1K is the
-        // standard default and the user explicitly bumps to 2K when needed.
-        // Promoting to 2K for high-MP inputs surprised the user with extra
-        // cost on every image edit / iteration.
+        // Resolution auto-adapt is handled by the lock-only useEffect below
+        // (when inputLocked is ON). The default path here only adapts AR.
         lastAdaptedRef.current = sourceMediaIdImage0
         setAspectRatio(bestAr)
         updateNodeData(id, { aspectRatio: bestAr })
@@ -399,7 +415,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       }
     })()
     return () => { cancelled = true }
-  }, [sourceMediaIdImage0]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sourceMediaIdImage0, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function swapRefs() {
     setEdges(eds => {
@@ -447,7 +463,11 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     if (!rawPrompt.trim()) { setError('Write a prompt'); return }
     const prompt = rawPrompt.trim()
     const refs = await pullAllMedia(id, 'image-', getNodes, getEdges)
-    // Edit mode: prepend the last generated image as reference for iterative editing
+    // Edit mode: prepend the last generated image as iterative base. When no
+    // prior gen exists but the user has connected an input image (Ref 1), that
+    // image already sits at refs[0] via pullAllMedia and serves as the edit
+    // target — EDIT is then a no-op at the refs level but stays semantically
+    // meaningful (cost estimate already counts it via connectedImageCount).
     if (editModeRef.current && currentMediaIdRef.current) {
       const lastFile = await loadMedia(currentMediaIdRef.current)
       if (lastFile) refs.unshift(lastFile)
@@ -476,7 +496,12 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       ...(groundingRef.current ? { useGrounding: true } : {}),
       ...(thinkingRef.current === false ? { thinking: false } : {}),
     }
-    const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, refs.length ? refs : undefined, imageOptions)
+    // Pre-crop refs to match the selected output AR. Keeps chain coherent:
+    // input AR == output AR, so feeding the output back as ref does not drift.
+    // cropImageFileToAspectRatio returns the original file when AR is empty,
+    // the file is non-image, or the source already matches within tolerance.
+    const croppedRefs = await Promise.all(refs.map(f => cropImageFileToAspectRatio(f, currentAspectRatio)))
+    const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, croppedRefs.length ? croppedRefs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }
 
     // Generate mediaId and set it with imageB64 so both are in the same render batch
@@ -603,6 +628,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     selectedModel, setSelectedModel,
     aspectRatio, setAspectRatio,
     resolution, setResolution,
+    inputLocked, setInputLocked,
     markManualOverride,
     useGrounding, setUseGrounding,
     editMode, setEditMode,

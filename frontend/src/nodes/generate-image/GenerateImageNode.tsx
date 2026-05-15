@@ -1,5 +1,6 @@
 import { memo, useState } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
+import { Lock, Unlock } from 'lucide-react'
 import { NodeShell } from '../_shared/NodeShell'
 import { CompareSlider } from '../_shared/CompareSlider'
 import type { GenerateImageNodeData } from '../../types'
@@ -62,7 +63,8 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         <div className={styles.arResRow}>
           <select className={styles.selectSmall} value={h.aspectRatio}
             onChange={e => { h.markManualOverride(); h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
-            title="Aspect Ratio">
+            disabled={h.inputLocked}
+            title={h.inputLocked ? 'Locked — unlock to change' : 'Aspect Ratio'}>
             {ASPECT_RATIOS
               .filter(a => a.value === '' || h.modelInfo.aspect_ratios.length === 0 || h.modelInfo.aspect_ratios.includes(a.value))
               .map(a => <option key={a.value} value={a.value}>{a.label}</option>)
@@ -70,13 +72,27 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
           </select>
           <select className={styles.selectSmall} value={h.resolution}
             onChange={e => { h.markManualOverride(); h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
-            title="Resolution">
+            disabled={h.inputLocked}
+            title={h.inputLocked ? 'Locked — unlock to change' : 'Resolution'}>
             {RESOLUTIONS
               .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
               .filter(r => r.value !== '0.5K' || h.modelInfo.id === 'gemini-3.1-flash-image-preview')
               .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
             }
           </select>
+          <button
+            className={`${styles.lockBtn} ${h.inputLocked ? styles.lockBtnActive : ''}`}
+            onClick={() => {
+              const next = !h.inputLocked
+              h.setInputLocked(next)
+              h.updateNodeData(id, { inputLocked: next })
+            }}
+            title={h.inputLocked
+              ? 'Aspect + resolution locked'
+              : 'Lock current aspect + resolution'}
+          >
+            {h.inputLocked ? <Lock size={12} strokeWidth={1.5}/> : <Unlock size={12} strokeWidth={1.5}/>}
+          </button>
           <div className={styles.batchToggle}>
             {[1, 2, 4].map(n => (
               <button key={n}
@@ -93,17 +109,28 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               title="Search Grounding — uses Google Search for real-time data before generating"
             >GND</button>
           )}
-          {h.modelInfo.id === 'gemini-3.1-flash-image-preview' && (
-            <button
-              className={`${styles.batchBtn} ${h.thinking ? styles.batchBtnActive : ''}`}
-              onClick={() => { h.setThinking(!h.thinking); h.updateNodeData(id, { thinking: !h.thinking }) }}
-              title="Thinking HIGH — composition refinement on, cost +"
-            >THK</button>
-          )}
+          {h.modelInfo.id === 'gemini-3.1-flash-image-preview' && (() => {
+            const thinkingIncompatible = h.resolution === '2K' || h.resolution === '4K'
+            const effectiveOn = h.thinking && !thinkingIncompatible
+            return (
+              <button
+                className={`${styles.batchBtn} ${effectiveOn ? styles.batchBtnActive : ''}`}
+                onClick={() => {
+                  if (thinkingIncompatible) return
+                  h.setThinking(!h.thinking)
+                  h.updateNodeData(id, { thinking: !h.thinking })
+                }}
+                disabled={thinkingIncompatible}
+                title={thinkingIncompatible
+                  ? 'Thinking forced to minimal at 2K/4K — explicit "high" makes Google API degrade or block the image'
+                  : 'Thinking high — composition refinement on, cost +'}
+              >THK</button>
+            )
+          })()}
           <button
             className={`${styles.batchBtn} ${h.editMode ? styles.batchBtnActive : ''}`}
             onClick={() => { h.setEditMode(!h.editMode); h.updateNodeData(id, { editMode: !h.editMode }) }}
-            title="Edit Mode — re-uses last generated image as reference for iterative editing"
+            title="Edit Mode — reuses last generation as iterative base. Without a prior gen, the connected input image (Ref 1) acts as the implicit edit target."
           >EDIT</button>
         </div>
         {h.connectedImageCount >= 2 && (

@@ -72,7 +72,7 @@ describe('geminiImageProvider — REST direct', () => {
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
     expect(body.generationConfig.thinkingConfig).toEqual({
       includeThoughts: true,
-      thinkingLevel: 'HIGH',
+      thinkingLevel: 'high',
     })
   })
 
@@ -82,6 +82,35 @@ describe('geminiImageProvider — REST direct', () => {
     await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { thinking: false })
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
     expect(body.generationConfig.thinkingConfig).toBeUndefined()
+  })
+
+  it('omits thinkingConfig at imageSize 4K on Flash (API silently degrades when both set)', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '4K', thinking: true })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.thinkingConfig).toBeUndefined()
+    expect(body.generationConfig.imageConfig.imageSize).toBe('4K')
+  })
+
+  it('omits thinkingConfig at imageSize 2K on Flash (API silently degrades when both set)', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '2K', thinking: true })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.thinkingConfig).toBeUndefined()
+    expect(body.generationConfig.imageConfig.imageSize).toBe('2K')
+  })
+
+  it('keeps thinkingConfig at imageSize 1K on Flash', async () => {
+    fetchMock.mockResolvedValue(fakeOkResponse())
+    const provider = await getProvider()
+    await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '1K', thinking: true })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.generationConfig.thinkingConfig).toEqual({
+      includeThoughts: true,
+      thinkingLevel: 'high',
+    })
   })
 
   it('omits thinkingConfig for Pro Image regardless of options', async () => {
@@ -125,5 +154,27 @@ describe('geminiImageProvider — REST direct', () => {
     const result = await provider.generateImage('hello', 'gemini-3-pro-image-preview', 'fake-key')
     expect(result.image_b64).toBeNull()
     expect(result.status).toContain('Deadline expired')
+  })
+})
+
+describe('resolveModel — migration aliases (2026-05-14)', () => {
+  it('maps the display name "Gemini 3.1 Flash-Lite" to the GA id', async () => {
+    const { resolveModel } = await import('./geminiProvider')
+    expect(resolveModel('Gemini 3.1 Flash-Lite')).toBe('gemini-3.1-flash-lite')
+  })
+
+  it('migrates the legacy preview id to the GA id (saved canvases)', async () => {
+    const { resolveModel } = await import('./geminiProvider')
+    expect(resolveModel('gemini-3.1-flash-lite-preview')).toBe('gemini-3.1-flash-lite')
+  })
+
+  it('migrates the legacy preview :thinking id to the GA :thinking id', async () => {
+    const { resolveModel } = await import('./geminiProvider')
+    expect(resolveModel('gemini-3.1-flash-lite-preview:thinking')).toBe('gemini-3.1-flash-lite:thinking')
+  })
+
+  it('passes the GA id through unchanged', async () => {
+    const { resolveModel } = await import('./geminiProvider')
+    expect(resolveModel('gemini-3.1-flash-lite')).toBe('gemini-3.1-flash-lite')
   })
 })

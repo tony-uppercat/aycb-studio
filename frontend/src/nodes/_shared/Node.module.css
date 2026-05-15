@@ -191,14 +191,42 @@
 .batchBtn:first-child { border-radius: 3px 0 0 3px; }
 .batchBtn:last-child { border-radius: 0 3px 3px 0; }
 
-.batchBtn:hover {
+.batchBtn:hover:not(:disabled) {
   color: var(--text-primary);
   border-color: var(--border-bright);
+}
+
+.batchBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .batchBtnActive {
   background: var(--accent);
   color: #000;
+  border-color: var(--accent);
+}
+
+.lockBtn {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.lockBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-bright);
+}
+
+.lockBtnActive {
+  color: var(--accent);
   border-color: var(--accent);
 }
 

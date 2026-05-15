@@ -44,7 +44,9 @@ def test_generate_image_passes_thinking_config_by_default():
         config = kwargs["config"]
         thinking = getattr(config, "thinking_config", None)
         assert thinking is not None, "thinking_config should be set by default"
-        assert thinking.thinking_level == "HIGH"
+        # SDK normalizes our "high" arg into the enum ThinkingLevel.HIGH (which
+        # stringifies to "HIGH" or repr-shows the enum). Match on substring.
+        assert "HIGH" in str(thinking.thinking_level)
         assert thinking.include_thoughts is True
 
 
@@ -123,3 +125,49 @@ def test_generate_image_skips_thinking_config_for_pro_image():
         config = sdk.models.generate_content.call_args.kwargs["config"]
         assert getattr(config, "thinking_config", None) is None, \
             "thinking_config must NOT be sent to Pro Image (auto-thinking model)"
+
+
+def test_generate_image_skips_thinking_config_at_4k_on_flash():
+    """Flash + thinking + 4K -> API silently degrades to 1K (smoke-test-verified).
+    Provider must omit thinking_config at imageSize=4K to honor the requested size."""
+    with patch.object(gemini, "_get_client") as mock_client, \
+         patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
+        sdk = mock_client.return_value
+        sdk.models.generate_content.return_value = _fake_inline_response()
+        mock_retries.side_effect = lambda call, operation: (call(), None)
+
+        gemini.generate_image(prompt="hello", api_key="fake-key", image_size="4K", thinking=True)
+
+        config = sdk.models.generate_content.call_args.kwargs["config"]
+        assert getattr(config, "thinking_config", None) is None
+
+
+def test_generate_image_skips_thinking_config_at_2k_on_flash():
+    """Flash + thinking + 2K -> API returns IMAGE_RECITATION or degrades (verified)."""
+    with patch.object(gemini, "_get_client") as mock_client, \
+         patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
+        sdk = mock_client.return_value
+        sdk.models.generate_content.return_value = _fake_inline_response()
+        mock_retries.side_effect = lambda call, operation: (call(), None)
+
+        gemini.generate_image(prompt="hello", api_key="fake-key", image_size="2K", thinking=True)
+
+        config = sdk.models.generate_content.call_args.kwargs["config"]
+        assert getattr(config, "thinking_config", None) is None
+
+
+def test_generate_image_keeps_thinking_config_at_1k_on_flash():
+    """Flash + thinking + 1K works correctly — thinking_config must still be sent."""
+    with patch.object(gemini, "_get_client") as mock_client, \
+         patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
+        sdk = mock_client.return_value
+        sdk.models.generate_content.return_value = _fake_inline_response()
+        mock_retries.side_effect = lambda call, operation: (call(), None)
+
+        gemini.generate_image(prompt="hello", api_key="fake-key", image_size="1K", thinking=True)
+
+        config = sdk.models.generate_content.call_args.kwargs["config"]
+        thinking_cfg = getattr(config, "thinking_config", None)
+        assert thinking_cfg is not None
+        # SDK normalizes our "high" arg into the enum ThinkingLevel.HIGH.
+        assert "HIGH" in str(thinking_cfg.thinking_level)

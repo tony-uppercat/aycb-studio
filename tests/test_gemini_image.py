@@ -127,9 +127,8 @@ def test_generate_image_skips_thinking_config_for_pro_image():
             "thinking_config must NOT be sent to Pro Image (auto-thinking model)"
 
 
-def test_generate_image_skips_thinking_config_at_4k_on_flash():
-    """Flash + thinking + 4K -> API silently degrades to 1K (smoke-test-verified).
-    Provider must omit thinking_config at imageSize=4K to honor the requested size."""
+def test_generate_image_keeps_thinking_config_at_4k_on_flash():
+    """Flash + thinking + 4K: caller controls thinking; provider forwards it as-is."""
     with patch.object(gemini, "_get_client") as mock_client, \
          patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
         sdk = mock_client.return_value
@@ -139,11 +138,13 @@ def test_generate_image_skips_thinking_config_at_4k_on_flash():
         gemini.generate_image(prompt="hello", api_key="fake-key", image_size="4K", thinking=True)
 
         config = sdk.models.generate_content.call_args.kwargs["config"]
-        assert getattr(config, "thinking_config", None) is None
+        thinking_cfg = getattr(config, "thinking_config", None)
+        assert thinking_cfg is not None
+        assert "HIGH" in str(thinking_cfg.thinking_level)
 
 
-def test_generate_image_skips_thinking_config_at_2k_on_flash():
-    """Flash + thinking + 2K -> API returns IMAGE_RECITATION or degrades (verified)."""
+def test_generate_image_keeps_thinking_config_at_2k_on_flash():
+    """Flash + thinking + 2K: caller controls thinking; provider forwards it as-is."""
     with patch.object(gemini, "_get_client") as mock_client, \
          patch.object(gemini, "_call_with_gemini_retries") as mock_retries:
         sdk = mock_client.return_value
@@ -153,7 +154,9 @@ def test_generate_image_skips_thinking_config_at_2k_on_flash():
         gemini.generate_image(prompt="hello", api_key="fake-key", image_size="2K", thinking=True)
 
         config = sdk.models.generate_content.call_args.kwargs["config"]
-        assert getattr(config, "thinking_config", None) is None
+        thinking_cfg = getattr(config, "thinking_config", None)
+        assert thinking_cfg is not None
+        assert "HIGH" in str(thinking_cfg.thinking_level)
 
 
 def test_generate_image_keeps_thinking_config_at_1k_on_flash():

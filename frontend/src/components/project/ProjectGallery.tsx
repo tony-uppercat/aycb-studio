@@ -45,7 +45,7 @@ export const PRESETS: PresetTemplate[] = [
     icon: '✨',
     nodes: [
       { id: 'prompt-1', type: 'textInput', position: { x: 60, y: 120 }, data: { outputText: 'A futuristic city at sunset, cinematic' } },
-      { id: 'gen-1', type: 'generateImage', position: { x: 380, y: 120 }, data: { prompt: '', selectedModel: 'gemini-3.1-flash-image-preview' } },
+      { id: 'gen-1', type: 'generateImage', position: { x: 380, y: 120 }, data: { prompt: '', selectedModel: 'gemini-3-pro-image-preview' } },
     ],
     edges: [
       { id: 'e1', source: 'prompt-1', sourceHandle: 'text-out', target: 'gen-1', targetHandle: 'prompt-in' },
@@ -121,7 +121,7 @@ export const PRESETS: PresetTemplate[] = [
     nodes: [
       { id: 'img-1', type: 'imageUpload', position: { x: 60, y: 60 }, data: {} },
       { id: 'prompt-1', type: 'textInput', position: { x: 60, y: 320 }, data: { outputText: 'Transform this into a watercolor painting' } },
-      { id: 'gen-1', type: 'generateImage', position: { x: 400, y: 120 }, data: { prompt: '', selectedModel: 'gemini-3.1-flash-image-preview' } },
+      { id: 'gen-1', type: 'generateImage', position: { x: 400, y: 120 }, data: { prompt: '', selectedModel: 'gemini-3-pro-image-preview' } },
     ],
     edges: [
       { id: 'e1', source: 'img-1', sourceHandle: 'image-out', target: 'gen-1', targetHandle: 'image-0' },

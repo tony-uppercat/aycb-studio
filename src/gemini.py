@@ -331,16 +331,7 @@ def generate_image(
         config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
     # thinking_config is configurable ONLY for gemini-3.1-flash-image-preview.
     # Pro Image has built-in auto-thinking and rejects explicit thinking_config.
-    # Empirically (scripts/smoke_test_flash_thinking_4k + 2k_thinking_repeat):
-    # Flash + thinking HIGH + image_size in {2K, 4K} -> API silently degrades
-    # to 1K and frequently returns IMAGE_RECITATION blocks. Skip at 2K/4K so
-    # the requested size is honored.
-    thinking_incompatible_size = image_size in ("2K", "4K")
-    if (
-        thinking
-        and use_model == "gemini-3.1-flash-image-preview"
-        and not thinking_incompatible_size
-    ):
+    if thinking and use_model == "gemini-3.1-flash-image-preview":
         config_kwargs["thinking_config"] = types.ThinkingConfig(
             include_thoughts=True, thinking_level="high",
         )

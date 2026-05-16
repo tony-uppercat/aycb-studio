@@ -108,19 +108,10 @@ const geminiImageProvider: ImageProvider = {
     }
     // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
     // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
-    // Empirically (smoke_test_flash_thinking_4k + smoke_test_flash_2k_thinking_repeat):
-    // Flash + thinkingConfig HIGH + imageSize >= 2K → API silently degrades to 1K
-    // and frequently returns IMAGE_RECITATION blocks. We omit thinkingConfig at
-    // 2K/4K so the requested size is honored.
-    // When omitted at 2K/4K, the API falls back to the default `minimal` level
-    // (thinking cannot be disabled — only modulated). Doc canonical casing is
-    // lowercase ("minimal" / "high"); legacy uppercase appears in some Google
-    // examples but the thinking doc page prefers lowercase.
-    const thinkingIncompatibleSize = options?.imageSize === '2K' || options?.imageSize === '4K'
+    // Canonical casing is lowercase ("minimal" / "high").
     if (
       modelId === 'gemini-3.1-flash-image-preview'
       && options?.thinking !== false
-      && !thinkingIncompatibleSize
     ) {
       generationConfig.thinkingConfig = {
         includeThoughts: true,

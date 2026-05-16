@@ -18,7 +18,7 @@ describe('generate-image manifest', () => {
   })
 
   it('has defaultData with model', () => {
-    expect(manifest.defaultData.selectedModel).toBe('gemini-3.1-flash-image-preview')
+    expect(manifest.defaultData.selectedModel).toBe('gemini-3-pro-image-preview')
     expect(manifest.defaultData.prompt).toBe('')
   })
 })

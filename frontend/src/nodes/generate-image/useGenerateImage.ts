@@ -141,7 +141,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   }, [imageCount, id, updateNodeInternals])
 
   const [selectedModel, setSelectedModel] = useState(
-    typeof data.selectedModel === 'string' ? data.selectedModel : 'gemini-3.1-flash-image-preview'
+    typeof data.selectedModel === 'string' ? data.selectedModel : 'gemini-3-pro-image-preview'
   )
   // These seven refs back the values runSingle reads — runSingle is a
   // long-lived callback that outlives any single render, so reading the
@@ -174,6 +174,13 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     typeof (data as Record<string, unknown>).thinking === 'boolean'
       ? (data as Record<string, unknown>).thinking as boolean
       : true,
+  )
+  // Pre-crop refs to match output AR before sending. Default OFF — refs are
+  // sent intact and the model decides how to align AR. ON: legacy behavior
+  // that crops center to output AR (useful when iterating on a single AR
+  // chain and you want input/output to stay byte-aligned).
+  const [cropRefs, setCropRefs, cropRefsRef] = useStateRef(
+    Boolean((data as Record<string, unknown>).cropRefs),
   )
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64, imageB64Ref] = useStateRef<string | null>(null)
@@ -496,12 +503,12 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       ...(groundingRef.current ? { useGrounding: true } : {}),
       ...(thinkingRef.current === false ? { thinking: false } : {}),
     }
-    // Pre-crop refs to match the selected output AR. Keeps chain coherent:
-    // input AR == output AR, so feeding the output back as ref does not drift.
-    // cropImageFileToAspectRatio returns the original file when AR is empty,
-    // the file is non-image, or the source already matches within tolerance.
-    const croppedRefs = await Promise.all(refs.map(f => cropImageFileToAspectRatio(f, currentAspectRatio)))
-    const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, croppedRefs.length ? croppedRefs : undefined, imageOptions)
+    // Pre-crop refs to output AR only when the user opted in via the CROP
+    // toggle. Default: send refs intact and let the model handle AR mismatch.
+    const sentRefs = cropRefsRef.current
+      ? await Promise.all(refs.map(f => cropImageFileToAspectRatio(f, currentAspectRatio)))
+      : refs
+    const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, sentRefs.length ? sentRefs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }
 
     // Generate mediaId and set it with imageB64 so both are in the same render batch
@@ -633,6 +640,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     useGrounding, setUseGrounding,
     editMode, setEditMode,
     thinking, setThinking,
+    cropRefs, setCropRefs,
     localPrompt, setLocalPrompt,
     imageB64,
     compareSourceUrl,

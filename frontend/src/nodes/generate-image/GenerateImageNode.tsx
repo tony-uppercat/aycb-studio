@@ -109,24 +109,22 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               title="Search Grounding — uses Google Search for real-time data before generating"
             >GND</button>
           )}
-          {h.modelInfo.id === 'gemini-3.1-flash-image-preview' && (() => {
-            const thinkingIncompatible = h.resolution === '2K' || h.resolution === '4K'
-            const effectiveOn = h.thinking && !thinkingIncompatible
-            return (
-              <button
-                className={`${styles.batchBtn} ${effectiveOn ? styles.batchBtnActive : ''}`}
-                onClick={() => {
-                  if (thinkingIncompatible) return
-                  h.setThinking(!h.thinking)
-                  h.updateNodeData(id, { thinking: !h.thinking })
-                }}
-                disabled={thinkingIncompatible}
-                title={thinkingIncompatible
-                  ? 'Thinking forced to minimal at 2K/4K — explicit "high" makes Google API degrade or block the image'
-                  : 'Thinking high — composition refinement on, cost +'}
-              >THK</button>
-            )
-          })()}
+          {h.modelInfo.id === 'gemini-3.1-flash-image-preview' && (
+            <button
+              className={`${styles.batchBtn} ${h.thinking ? styles.batchBtnActive : ''}`}
+              onClick={() => { h.setThinking(!h.thinking); h.updateNodeData(id, { thinking: !h.thinking }) }}
+              title={(h.resolution === '2K' || h.resolution === '4K')
+                ? 'Thinking high at 2K/4K — Google API may silently degrade resolution; toggle off for guaranteed size'
+                : 'Thinking high — composition refinement on, cost +'}
+            >THK</button>
+          )}
+          <button
+            className={`${styles.batchBtn} ${h.cropRefs ? styles.batchBtnActive : ''}`}
+            onClick={() => { h.setCropRefs(!h.cropRefs); h.updateNodeData(id, { cropRefs: !h.cropRefs }) }}
+            title={h.cropRefs
+              ? 'Refs pre-cropped to output AR before sending (chain coherence)'
+              : 'Refs sent intact — model handles AR mismatch'}
+          >CROP</button>
           <button
             className={`${styles.batchBtn} ${h.editMode ? styles.batchBtnActive : ''}`}
             onClick={() => { h.setEditMode(!h.editMode); h.updateNodeData(id, { editMode: !h.editMode }) }}

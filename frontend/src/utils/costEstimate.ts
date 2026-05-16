@@ -141,12 +141,8 @@ export function estimateCost(
       const rawCost = imgCost + inputRefCost
       // thinking surcharge applies ONLY to gemini-3.1-flash-image-preview.
       // Pro Image has built-in thinking included in its base per-call price.
-      // At imageSize 2K/4K, the provider omits thinkingConfig (Google API silently
-      // degrades or blocks) — so the surcharge does not apply at those sizes.
       const thinkingEffective = thinking
         && pricingModelId === 'gemini-3.1-flash-image-preview'
-        && resolution !== '2K'
-        && resolution !== '4K'
       const thinkingFactor = thinkingEffective ? 1.3 : 1
       return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: rawCost * thinkingFactor, model: modelId }
     }

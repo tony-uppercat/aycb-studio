@@ -12,16 +12,16 @@ describe('estimateCost — Gemini image quality push additions', () => {
     expect(result.costUsd).toBeCloseTo(0.067, 3)
   })
 
-  it('does NOT apply thinking ×1.3 on Flash 4K (provider omits thinkingConfig — API degrades when both set)', () => {
+  it('applies thinking ×1.3 on Flash 4K when thinking=true', () => {
     const base = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', false)
     const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', true)
     expect(base.costUsd).toBeCloseTo(0.151, 3)
-    expect(withThinking.costUsd).toBeCloseTo(0.151, 3)
+    expect(withThinking.costUsd).toBeCloseTo(0.151 * 1.3, 3)
   })
 
-  it('does NOT apply thinking ×1.3 on Flash 2K (provider omits thinkingConfig — API degrades when both set)', () => {
+  it('applies thinking ×1.3 on Flash 2K when thinking=true', () => {
     const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '2K', true)
-    expect(withThinking.costUsd).toBeCloseTo(0.101, 3)
+    expect(withThinking.costUsd).toBeCloseTo(0.101 * 1.3, 3)
   })
 
   it('does NOT apply thinking ×1.3 to Pro Image (auto-thinking, included in base price)', () => {

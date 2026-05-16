@@ -19,6 +19,8 @@ At the start of EVERY session:
 
 When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
 
+When creating or modifying CLI scripts in `scripts/` (image/video generation, smoke tests, Batch API), read `skills/aycb-cli-generation/SKILL.md`.
+
 ---
 
 ## Rules (Non-Negotiable)

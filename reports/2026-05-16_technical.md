@@ -154,5 +154,92 @@ left untouched per CLAUDE.md rule 13:
 - `frontend/src/nodes/image-compare/ImageCompareNode.tsx`
 
 Untracked, not authored this session:
-- `scripts/batch_brush_refsheet.py`
-- `scripts/batch_brush_refsheet_async.py`
+- `scripts/batch_brush_refsheet.py` — see Thread 3 addendum below
+- `scripts/batch_brush_refsheet_async.py` — see Thread 3 addendum below
+
+---
+
+## Thread 3 — CLI Batch Generation + Project Skill
+
+Separate evening session 2026-05-15 → 2026-05-16. Built CLI workflow
+for batch image generation (sync + async Batch API) starting from
+"possiamo generare via CLI?" and ending with a generalized project
+skill that loads automatically for future `scripts/` work.
+
+### Empirical chain that drove the design
+
+1. First attempt: Pro Image 2K direct on 3 PAO brush photos. 1/3 OK
+   (4673×2629 ref, 12 MB), 2/3 HTTP 503 "Deadline expired" (8192×5464
+   / 51 MB and 7812×4394 / 40 MB refs).
+2. Added retry (5s + 15s backoff, 3 attempts) — same 2 images still
+   failed 3/3 attempts each. → not transient.
+3. Root cause identified: Google's server-side deadline cannot
+   finish processing on huge refs in time. Refs only need visual
+   identity, not full resolution.
+4. Switched to NB2 Flash 1K + pre-downscale to 1536px JPEG q=92.
+   3/3 success in 14-31s, ~$0.083/img.
+5. Antonio requested Batch API for 50% cost — sent the
+   ai.google.dev/gemini-api/docs/batch-api spec. Implemented as a
+   second script using `google.genai` SDK (`client.batches.*`,
+   `client.files.*`), JSONL file upload (doc-recommended for
+   images), polling at 10s, crash recovery via persisted
+   `.batch_job.json`.
+
+### Files Created
+
+| File | Purpose |
+|---|---|
+| `scripts/batch_brush_refsheet.py` | Sync batch via REST direct (urllib). Flash 1K, 16:9. Retry on 5xx/429, pre-downscale refs to 1536px JPEG q=92, skip-if-exists, tee_stdout log file, cost table. ~325 lines (within 300+30% margin per Antonio's clarification). |
+| `scripts/batch_brush_refsheet_async.py` | Async batch via Gemini Batch API SDK. Pro Image 2K, 16:9. JSONL upload, poll every 10s, resume via `.batch_job.json`, 50% discount in cost table. ~290 lines. |
+| `skills/aycb-cli-generation/SKILL.md` | Project skill codifying every pattern proven this session (refs prep, REST-vs-SDK, retry, log, cost, batch API, crash recovery, mistakes table). |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `CLAUDE.md` | Added trigger line under Session Start: *"When creating or modifying CLI scripts in `scripts/` (image/video generation, smoke tests, Batch API), read `skills/aycb-cli-generation/SKILL.md`"*. |
+
+### Memory Updates (`~/.claude/projects/.../memory/`)
+
+| File | Type | Why |
+|---|---|---|
+| `feedback_downscale_large_refs.md` | feedback (new) | Pre-downscale refs >2K/5MB to ~1536px JPEG before sending — Pro Image 503s on 8K/40MB+ inputs. Empirically observed on this session. |
+| `reference_cli_generation_skill.md` | reference (new) | Pointer mirroring CLAUDE.md's trigger — ensures the skill loads even when conversation mentions CLI without yet touching `scripts/`. |
+| `MEMORY.md` | index | Indexed both new memories under Feedback / Reference sections. |
+
+### Tests
+
+- `python -m py_compile` clean on both new scripts.
+- Sync script empirically validated: 3/3 OK on first NB2 1K run
+  after downscale fix.
+- Async script not yet run live — awaiting Antonio's go-ahead.
+- No unit tests added (one-shot CLI scripts, low value).
+
+### Cost summary (this thread)
+
+| Run | Cost USD |
+|---|---|
+| Pro 2K attempt 1 (1/3 OK, 2/3 503) | ~$0.30 |
+| Pro 2K retry (0/2 OK, all 503) | $0 (failed requests aren't billed) |
+| Flash 1K + downscaled refs (3/3 OK) | ~$0.25 |
+| Flash 1K re-run after `v1/` move (3/3 OK) | ~$0.25 |
+| **Total session out-of-pocket** | **~$0.80** |
+
+### Output Artifacts (outside repo)
+
+In `C:\Users\upper\Uppercat Dropbox\Antonio Cottone\2026\06_PAO\00_incoming\Product Videos\01- Brushes\00_batch\00_outuput\`:
+- `v1/` — first NB2 1K batch (3 PNGs, archived by Antonio)
+- `IMG_0524.png`, `IMG_0539.png`, `IMG_0542.png` — second NB2 1K batch
+- `batch_20260515_194816.log` — run log with cost table
+
+### Open Items / Next Tasks
+
+1. **First live Pro 2K Batch API run** when Antonio wants. Pro 2K
+   should now succeed even on huge refs because (a) downscale is
+   applied, and (b) batch API has no per-request deadline.
+2. **Skill iteration** if real use surfaces gaps. Currently 936 words
+   (over the 500-word target for "other skills" but content-dense
+   reference, not always-loaded).
+3. **Backlog deferred** from broader project (untouched): pre-existing
+   working-tree mods in image-compare / fullscreen viewer; `config/
+   prompts/library.json` change.

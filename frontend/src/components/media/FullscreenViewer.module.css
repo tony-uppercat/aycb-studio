@@ -42,6 +42,7 @@
   justify-content: center;
   padding: 40px 56px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .media {
@@ -238,6 +239,28 @@
 .toolBtnActive {
   background: #2a2a2e;
   color: #f59e0b;
+  border-color: #f59e0b40;
+}
+
+.scaleSelect {
+  background: #1e1e22;
+  border: 1px solid #2a2a2e;
+  border-radius: 4px;
+  color: #999;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 5px 8px;
+  transition: background 0.1s, color 0.1s;
+  font-family: inherit;
+}
+
+.scaleSelect:hover {
+  background: #2a2a2e;
+  color: #e5e5e5;
+}
+
+.scaleSelect:focus {
+  outline: none;
   border-color: #f59e0b40;
 }
 

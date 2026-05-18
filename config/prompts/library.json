@@ -60,5 +60,14 @@
       "utility"
     ],
     "created_at": "2026-05-10 04:31:57"
+  },
+  {
+    "id": "3f30d73f-079a-4b66-8baa-152f91fad223",
+    "name": "apply-edit",
+    "text": "Apply the following edit to the scene, but do not alter the subject or the composition.[] ",
+    "tags": [
+      "utility"
+    ],
+    "created_at": "2026-05-15 18:50:56"
   }
 ]

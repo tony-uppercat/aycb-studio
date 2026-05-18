@@ -120,6 +120,16 @@ export function FullscreenViewer({
   // Wheel zoom + drag pan + double-click reset + keyboard shortcuts (+/-/0/1).
   const imageZoom = useImageZoom({ naturalDims, displayedWidth })
 
+  // Match current zoom to a discrete preset so the scale dropdown stays in sync.
+  const scalePreset = (() => {
+    if (Math.abs(imageZoom.zoom - 1) < 0.001) return 'fit'
+    if (imageZoom.realPercent == null) return ''
+    for (const p of [50, 100, 200, 400]) {
+      if (Math.abs(imageZoom.realPercent - p) < 2) return String(p)
+    }
+    return ''
+  })()
+
   // Reset zoom + dims whenever the displayed entry changes.
   useEffect(() => {
     imageZoom.reset()
@@ -346,6 +356,25 @@ export function FullscreenViewer({
           </svg>
           Info
         </button>
+        {!isVideo && naturalDims && (
+          <select
+            className={styles.scaleSelect}
+            value={scalePreset}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === 'fit') imageZoom.reset()
+              else if (v) imageZoom.setRealPercent(parseInt(v, 10))
+            }}
+            title="Zoom level"
+          >
+            <option value="fit">Fit</option>
+            <option value="50">50%</option>
+            <option value="100">100% (1:1)</option>
+            <option value="200">200%</option>
+            <option value="400">400%</option>
+            {!scalePreset && <option value="">Custom</option>}
+          </select>
+        )}
         {onDownload && src && (
           <button className={styles.toolBtn} onClick={() => onDownload(src, entry.filename)} title="Download (S)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

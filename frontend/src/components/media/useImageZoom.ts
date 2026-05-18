@@ -46,6 +46,8 @@ export interface ImageZoomState {
   reset: () => void
   /** Snap to true 1:1 pixel mapping. No-op when dims unknown. */
   snapToOneToOne: () => void
+  /** Snap to a target real-pixel percent (50, 100, 200, …). No-op when dims unknown. */
+  setRealPercent: (percent: number) => void
 }
 
 export function useImageZoom(options: ImageZoomOptions = {}): ImageZoomState {
@@ -83,6 +85,14 @@ export function useImageZoom(options: ImageZoomOptions = {}): ImageZoomState {
     if (zoom1to1 == null) return
     setZoom(Math.min(zoom1to1, maxZoom))
   }, [zoom1to1, maxZoom])
+
+  const setRealPercent = useCallback((percent: number) => {
+    if (fitScale == null) return
+    const target = (percent / 100) / fitScale
+    const clamped = Math.max(MIN_ZOOM, Math.min(maxZoom, target))
+    setZoom(clamped)
+    if (clamped === MIN_ZOOM) setPan({ x: 0, y: 0 })
+  }, [fitScale, maxZoom])
 
   const onWheel = useCallback((e: React.WheelEvent<HTMLImageElement>) => {
     e.preventDefault()
@@ -148,14 +158,24 @@ export function useImageZoom(options: ImageZoomOptions = {}): ImageZoomState {
     return () => document.removeEventListener('keydown', handler)
   }, [reset, snapToOneToOne, maxZoom])
 
+  // At exact 1:1, switch from transform-scale to natural width/height so each
+  // natural pixel maps to one CSS pixel (the GPU compositor cannot do this
+  // reliably when the CSS scale factor is non-integer). Pan still uses
+  // translate(). Other zoom levels keep transform-scale for 60fps wheel zoom.
+  const useNaturalSize = atOneToOne && naturalDims != null
   const style: React.CSSProperties = {
-    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+    transform: useNaturalSize
+      ? `translate(${pan.x}px, ${pan.y}px)`
+      : `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+    ...(useNaturalSize
+      ? { width: `${naturalDims!.w}px`, height: `${naturalDims!.h}px`, maxWidth: 'none' as const, maxHeight: 'none' as const }
+      : {}),
     cursor: zoom > MIN_ZOOM ? 'grab' : 'default',
     transition: 'transform 60ms ease',
     willChange: zoom > MIN_ZOOM ? 'transform' : undefined,
-    // Pixel-perfect rendering when we're at or above 1:1 — avoids the
-    // smoothing blur that browsers apply on upscale.
-    imageRendering: atOneToOne || (realPercent != null && realPercent > 100) ? 'pixelated' : undefined,
+    // Pixel-perfect rendering above 1:1 (intentional upscale). At exact 1:1
+    // the natural width/height already gives a 1:1 mapping, no hint needed.
+    imageRendering: (realPercent != null && realPercent > 101) ? 'pixelated' : undefined,
   }
 
   return {
@@ -168,5 +188,6 @@ export function useImageZoom(options: ImageZoomOptions = {}): ImageZoomState {
     handlers: { onWheel, onMouseDown, onDoubleClick },
     reset,
     snapToOneToOne,
+    setRealPercent,
   }
 }

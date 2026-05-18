@@ -6,9 +6,11 @@ interface Props {
   imageB: string
   labelA?: string
   labelB?: string
+  /** When true, wrap fills its parent (height: 100%) instead of growing to image height. */
+  fillContainer?: boolean
 }
 
-export function CompareSlider({ imageA, imageB, labelA, labelB }: Props) {
+export function CompareSlider({ imageA, imageB, labelA, labelB, fillContainer }: Props) {
   const [sliderPos, setSliderPos] = useState(50)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
@@ -44,7 +46,7 @@ export function CompareSlider({ imageA, imageB, labelA, labelB }: Props) {
   return (
     <div
       ref={containerRef}
-      className={styles.compareSliderWrap}
+      className={`${styles.compareSliderWrap} ${fillContainer ? styles.compareSliderFill : ''}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

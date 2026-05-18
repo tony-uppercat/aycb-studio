@@ -42,7 +42,7 @@ const IMAGE_MODELS_FALLBACK: ImageModelDef[] = [
   { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false, aspect_ratios: GEMINI_FLASH_AR },
   { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false, aspect_ratios: GEMINI_PRO_AR },
   // OpenAI
-  { id: 'gpt-image-2', name: 'GPT Image 2', provider: 'openai', tooltip: 'OpenAI gpt-image-2 — multi-ref edit, text fidelity, 1K med / 2K high', price: '$0.211', cost: 0.211, deprecated: false, aspect_ratios: OPENAI_AR },
+  { id: 'gpt-image-2', name: 'GPT Image 2', provider: 'openai', tooltip: 'OpenAI gpt-image-2 — multi-ref edit, text fidelity. Draft (low) / 1K (medium) / FHD–4K (high). ≥2K experimental per OpenAI.', price: '$0.053', cost: 0.053, deprecated: false, aspect_ratios: OPENAI_AR },
   // Recraft V4
   { id: 'recraftv4', name: 'Recraft V4', provider: 'recraft', tooltip: 'Recraft V4 — fast raster, 1MP', price: '$0.04', cost: 0.04, deprecated: false, aspect_ratios: RECRAFT_AR },
   { id: 'recraftv4_pro', name: 'Recraft V4 Pro', provider: 'recraft', tooltip: 'Recraft V4 Pro — high-quality raster, 4MP', price: '$0.25', cost: 0.25, deprecated: false, aspect_ratios: RECRAFT_AR },
@@ -109,6 +109,7 @@ export const ASPECT_RATIOS = [
 
 export const RESOLUTIONS = [
   { value: '', label: 'Auto' },
+  { value: 'Draft', label: 'Draft' },
   { value: '0.5K', label: '0.5K' },
   { value: '1K', label: '1K' },
   { value: 'FHD', label: 'FHD' },
@@ -350,6 +351,30 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     if (modelInfo.id === 'gemini-3.1-flash-image-preview') return
     setResolution('')
     updateNodeData(id, { resolution: '' })
+  }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Draft is gpt-image-2-only (maps to low quality, 1024² at ~$0.006/img).
+  // Reset to Auto if the model changes off gpt-image-2 while Draft was
+  // selected. The user can opt out via the resolution lock.
+  useEffect(() => {
+    if (inputLocked) return
+    if (resolution !== 'Draft') return
+    if (modelInfo.id === 'gpt-image-2') return
+    setResolution('')
+    updateNodeData(id, { resolution: '' })
+  }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // NB2 (gemini-3-pro-image-preview) is configured to default to max quality
+  // (4K). 1K is hidden from the dropdown because it costs the same as 2K, so
+  // any stale 1K selection is upgraded to 4K (the new default). 2K is left
+  // alone — it's still in the dropdown as an explicit cost-saving choice.
+  // The user can opt out via the resolution lock.
+  useEffect(() => {
+    if (inputLocked) return
+    if (resolution !== '1K') return
+    if (modelInfo.id !== 'gemini-3-pro-image-preview') return
+    setResolution('4K')
+    updateNodeData(id, { resolution: '4K' })
   }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-adapt: when an image is connected to image-0 (or its source mediaId

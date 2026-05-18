@@ -63,9 +63,10 @@ function computeSize(aspect?: string, resolution?: string): string {
   return `${w}x${h}`
 }
 
-/** Quality knob — 1K bucket uses medium (much cheaper), 2K uses high. */
+/** Quality knob — Draft=low (~$0.006/img at 1K), 1K=medium, FHD/2K/4K=high. */
 function resolutionToQuality(res?: string): string {
   if (!res) return 'auto'
+  if (res === 'Draft') return 'low'
   if (res === '1K') return 'medium'
   return 'high'
 }

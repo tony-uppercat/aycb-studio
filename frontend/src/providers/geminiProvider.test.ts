@@ -84,27 +84,21 @@ describe('geminiImageProvider — REST direct', () => {
     expect(body.generationConfig.thinkingConfig).toBeUndefined()
   })
 
-  it('sends thinkingConfig HIGH at imageSize 4K on Flash when thinking=true', async () => {
+  it('omits thinkingConfig at imageSize 4K on Flash to avoid silent res degradation', async () => {
     fetchMock.mockResolvedValue(fakeOkResponse())
     const provider = await getProvider()
     await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '4K', thinking: true })
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    expect(body.generationConfig.thinkingConfig).toEqual({
-      includeThoughts: true,
-      thinkingLevel: 'high',
-    })
+    expect(body.generationConfig.thinkingConfig).toBeUndefined()
     expect(body.generationConfig.imageConfig.imageSize).toBe('4K')
   })
 
-  it('sends thinkingConfig HIGH at imageSize 2K on Flash when thinking=true', async () => {
+  it('omits thinkingConfig at imageSize 2K on Flash to avoid silent res degradation', async () => {
     fetchMock.mockResolvedValue(fakeOkResponse())
     const provider = await getProvider()
     await provider.generateImage('hello', 'gemini-3.1-flash-image-preview', 'fake-key', undefined, { imageSize: '2K', thinking: true })
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    expect(body.generationConfig.thinkingConfig).toEqual({
-      includeThoughts: true,
-      thinkingLevel: 'high',
-    })
+    expect(body.generationConfig.thinkingConfig).toBeUndefined()
     expect(body.generationConfig.imageConfig.imageSize).toBe('2K')
   })
 

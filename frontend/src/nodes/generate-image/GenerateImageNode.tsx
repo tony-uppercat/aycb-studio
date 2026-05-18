@@ -73,10 +73,17 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
           <select className={styles.selectSmall} value={h.resolution}
             onChange={e => { h.markManualOverride(); h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
             disabled={h.inputLocked}
-            title={h.inputLocked ? 'Locked — unlock to change' : 'Resolution'}>
+            title={
+              h.inputLocked ? 'Locked — unlock to change'
+              : (h.modelInfo.id === 'gpt-image-2' && (h.resolution === '2K' || h.resolution === '4K'))
+                ? 'Resolution — OpenAI flags ≥2K experimental for gpt-image-2 (mixed results, test your case)'
+                : 'Resolution'
+            }>
             {RESOLUTIONS
               .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
               .filter(r => r.value !== '0.5K' || h.modelInfo.id === 'gemini-3.1-flash-image-preview')
+              .filter(r => r.value !== 'Draft' || h.modelInfo.id === 'gpt-image-2')
+              .filter(r => r.value !== '1K' || h.modelInfo.id !== 'gemini-3-pro-image-preview')
               .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
             }
           </select>

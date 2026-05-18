@@ -109,9 +109,17 @@ const geminiImageProvider: ImageProvider = {
     // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
     // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
     // Canonical casing is lowercase ("minimal" / "high").
+    //
+    // At imageSize 2K/4K, explicit thinkingLevel=high silently degrades the
+    // output to the 1K bucket (768×1376 at 9:16) — confirmed empirically via
+    // scripts/smoke_test_nb2_imagesize.py vs in-app reports. Omit thinkingConfig
+    // at high res so the API falls back to default `minimal` which honors
+    // imageSize. See memory feedback_gemini_thinking_imagesize.
+    const isHighRes = options?.imageSize === '2K' || options?.imageSize === '4K'
     if (
       modelId === 'gemini-3.1-flash-image-preview'
       && options?.thinking !== false
+      && !isHighRes
     ) {
       generationConfig.thinkingConfig = {
         includeThoughts: true,

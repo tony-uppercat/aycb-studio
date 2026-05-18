@@ -37,7 +37,12 @@ describe('estimateCost — Gemini image quality push additions', () => {
   it('does NOT apply thinking ×1.3 to non-Gemini models', () => {
     // gpt-image-2 does not support thinking; thinking=true must not inflate its cost.
     const result = estimateCost('gpt-image-2', 'generate_image', 'short', 0, 0, 1, '2K', true)
-    expect(result.costUsd).toBeCloseTo(0.211, 3)
+    expect(result.costUsd).toBeCloseTo(0.30, 3)
+  })
+
+  it('estimates Draft resolution on gpt-image-2 at ~$0.006', () => {
+    const result = estimateCost('gpt-image-2', 'generate_image', 'short', 0, 0, 1, 'Draft', false)
+    expect(result.costUsd).toBeCloseTo(0.006, 3)
   })
 
   it('does NOT apply thinking ×1.3 to Recraft', () => {

@@ -1,8 +1,8 @@
 /* ── Console panel ── */
 .consoleWrap {
   flex-shrink: 0;
-  background: #111113;
-  border-top: 1px solid #222225;
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-bg-elevated);
   display: flex;
   flex-direction: column;
   z-index: 10;
@@ -30,13 +30,13 @@
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
-  border-bottom: 1px solid #222225;
+  border-bottom: 1px solid var(--color-bg-elevated);
 }
 
 .consoleTitle {
   font-size: 11px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-text-tertiary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -80,14 +80,14 @@
 .consoleToggle {
   background: none;
   border: none;
-  color: #52525b;
+  color: var(--color-text-tertiary);
   font-size: 12px;
   cursor: pointer;
   padding: 2px 4px;
 }
 
 .consoleToggle:hover {
-  color: #a1a1aa;
+  color: var(--color-text-secondary);
 }
 
 /* ── Tab bar (inline with header) ── */
@@ -101,7 +101,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #52525b;
+  color: var(--color-text-tertiary);
   font-size: 10px;
   font-weight: 600;
   padding: 4px 12px;
@@ -115,7 +115,7 @@
 }
 
 .tabBtn:hover {
-  color: #a1a1aa;
+  color: var(--color-text-secondary);
 }
 
 .tabBtnActive {
@@ -150,7 +150,7 @@
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   font-size: 10px;
   line-height: 1.5;
-  color: #71717a;
+  color: var(--color-text-tertiary);
   white-space: pre-wrap;
   word-break: break-all;
   min-width: 0;
@@ -171,7 +171,7 @@
 }
 
 .clickable:hover {
-  background: #1a1a1f;
+  background: var(--color-bg-secondary);
 }
 
 .copied {
@@ -184,11 +184,11 @@
 }
 
 .consoleLine:hover {
-  color: #a1a1aa;
+  color: var(--color-text-secondary);
 }
 
 .consoleEmpty {
-  color: #3f3f46;
+  color: var(--color-border-bright);
   font-style: italic;
   margin: 0;
 }
@@ -204,11 +204,11 @@
 }
 
 .netRow:hover {
-  background: #18181b;
+  background: var(--color-bg-tertiary);
 }
 
 .netTime {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   width: 72px;
 }
@@ -236,7 +236,7 @@
   flex-shrink: 0;
   width: 44px;
   text-align: right;
-  color: #52525b;
+  color: var(--color-text-tertiary);
 }
 
 .netGreen .netStatus { color: #4ade80; }
@@ -253,9 +253,9 @@
 }
 
 .refreshBtn {
-  background: #1e1e22;
-  border: 1px solid #27272a;
-  color: #a1a1aa;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   font-size: 10px;
   padding: 2px 8px;
   cursor: pointer;
@@ -263,7 +263,7 @@
 }
 
 .refreshBtn:hover:not(:disabled) {
-  background: #27272a;
+  background: var(--color-border);
   color: #e2e8f0;
 }
 
@@ -273,7 +273,7 @@
 }
 
 .mediaCount {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   font-size: 10px;
 }
 
@@ -288,7 +288,7 @@
 }
 
 .mediaRow:hover {
-  background: #18181b;
+  background: var(--color-bg-tertiary);
 }
 
 .mediaType {
@@ -307,14 +307,14 @@
 }
 
 .mediaSize {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   text-align: right;
   width: 52px;
 }
 
 .mediaId {
-  color: #3f3f46;
+  color: var(--color-border-bright);
   flex-shrink: 0;
   width: 130px;
   overflow: hidden;
@@ -341,7 +341,7 @@
 }
 
 .errTime {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   width: 72px;
 }
@@ -389,11 +389,11 @@
 }
 
 .costRow:hover {
-  background: #18181b;
+  background: var(--color-bg-tertiary);
 }
 
 .costTime {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   width: 72px;
 }
@@ -407,14 +407,14 @@
 }
 
 .costModel {
-  color: #71717a;
+  color: var(--color-text-tertiary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .costTokens {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   width: 80px;
   text-align: right;
@@ -443,7 +443,7 @@
   align-items: center;
   gap: 8px;
   padding: 4px 6px 2px;
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--color-border);
   margin-top: 4px;
 }
 .costTotal {
@@ -459,7 +459,7 @@
   width: 4px;
   flex-shrink: 0;
   cursor: col-resize;
-  background: #222225;
+  background: var(--color-bg-elevated);
   transition: background 0.1s;
 }
 .splitDivider:hover,
@@ -470,20 +470,20 @@
 /* ── Feedback side panel ── */
 .fbPanel {
   flex-shrink: 0;
-  border-left: 1px solid #27272a;
+  border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  background: #0e0e10;
+  background: var(--color-bg-primary);
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   font-size: 10px;
-  color: #71717a;
+  color: var(--color-text-tertiary);
 }
 .fbHeader {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  border-bottom: 1px solid #222225;
+  border-bottom: 1px solid var(--color-bg-elevated);
   flex-shrink: 0;
 }
 .fbTabBtn {
@@ -506,7 +506,7 @@
 .fbTitle {
   font-size: 10px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -539,8 +539,8 @@
   margin-bottom: 1px;
   border-radius: 0 3px 3px 0;
 }
-.fbRow:hover { background: #18181b; }
-.fbTime { color: #52525b; flex-shrink: 0; width: 64px; }
+.fbRow:hover { background: var(--color-bg-tertiary); }
+.fbTime { color: var(--color-text-tertiary); flex-shrink: 0; width: 64px; }
 .fbTag {
   flex-shrink: 0;
   font-size: 9px;
@@ -554,13 +554,13 @@
 .fbTag_ux { color: #93c5fd; background: rgba(59,130,246,0.15); }
 .fbTag_idea { color: #86efac; background: rgba(34,197,94,0.15); }
 .fbTag_prompt { color: #d8b4fe; background: rgba(168,85,247,0.15); }
-.fbText { color: #d4d4d8; flex: 1; word-break: break-word; white-space: pre-wrap; }
-.fbNode { color: #52525b; flex-shrink: 0; font-size: 9px; }
+.fbText { color: var(--color-text-primary); flex: 1; word-break: break-word; white-space: pre-wrap; }
+.fbNode { color: var(--color-text-tertiary); flex-shrink: 0; font-size: 9px; }
 .fbNodeOverall { color: #6366f1; font-style: italic; }
 .fbUrgentBtn {
   flex-shrink: 0;
   background: none;
-  border: 1px solid #52525b;
+  border: 1px solid var(--color-text-tertiary);
   color: #f59e0b;
   font-size: 9px;
   font-weight: 800;
@@ -587,7 +587,7 @@
 
 .fbForm {
   flex-shrink: 0;
-  border-top: 1px solid #222225;
+  border-top: 1px solid var(--color-bg-elevated);
   padding: 4px 8px 4px;
   display: flex;
   flex-direction: column;
@@ -599,9 +599,9 @@
   align-items: center;
 }
 .fbCatBtn {
-  background: #1a1a1e;
-  border: 1px solid #27272a;
-  color: #71717a;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
   font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
@@ -610,12 +610,12 @@
   border-radius: 3px;
   letter-spacing: 0.03em;
 }
-.fbCatBtn:hover { border-color: #3f3f46; }
+.fbCatBtn:hover { border-color: var(--color-border-bright); }
 .fbCatActive { border-color: #6366f1; color: #e2e8f0; }
 .fbExportBtn {
   margin-left: auto;
-  background: #1a1a1e;
-  border: 1px solid #27272a;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   color: #6366f1;
   font-size: 9px;
   font-weight: 600;
@@ -623,15 +623,15 @@
   cursor: pointer;
   border-radius: 3px;
 }
-.fbExportBtn:hover { background: #27272a; }
+.fbExportBtn:hover { background: var(--color-border); }
 .fbInputRow {
   display: flex;
   gap: 4px;
 }
 .fbInput {
   flex: 1;
-  background: #1a1a1e;
-  border: 1px solid #27272a;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   color: #e2e8f0;
   font-size: 11px;
   padding: 3px 8px;
@@ -640,7 +640,7 @@
   font-family: inherit;
 }
 .fbInput:focus { border-color: #6366f1; }
-.fbInput::placeholder { color: #3f3f46; }
+.fbInput::placeholder { color: var(--color-border-bright); }
 .fbSendBtn {
   background: #4f46e5;
   border: none;
@@ -680,8 +680,8 @@
 .fbCheckBtn {
   flex-shrink: 0;
   background: none;
-  border: 1px solid #27272a;
-  color: #52525b;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
   font-size: 11px;
   width: 16px;
   height: 16px;

@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: 500;
-  background: #0d0d0f;
+  background: var(--color-bg-primary);
   display: flex;
   flex-direction: column;
 }
@@ -16,46 +16,46 @@
   align-items: center;
   gap: 8px;
   padding: 0 16px;
-  border-bottom: 1px solid #2a2a2e;
-  background: #141416;
+  border-bottom: 1px solid var(--color-bg-raised);
+  background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 .hdrSelect {
-  background: #1e1e22; border: 1px solid #2a2a2e; border-radius: 4px;
+  background: var(--color-bg-elevated); border: 1px solid var(--color-bg-raised); border-radius: 4px;
   color: #e2e8f0; font-size: 11px; padding: 4px 8px; height: 30px;
   max-width: 160px; cursor: pointer; outline: none;
 }
 .hdrSelect:focus { border-color: #f59e0b }
 .hdrFilters { display: flex; align-items: center; gap: 2px; }
-.hdrSep { width: 1px; height: 18px; background: #2a2a2e; margin: 0 4px; }
+.hdrSep { width: 1px; height: 18px; background: var(--color-bg-raised); margin: 0 4px; }
 .hdrBtn {
-  background: #1e1e22; border: 1px solid #2a2a2e; border-radius: 4px;
+  background: var(--color-bg-elevated); border: 1px solid var(--color-bg-raised); border-radius: 4px;
   color: #94a3b8; font-size: 11px; padding: 4px 10px; cursor: pointer;
 }
-.hdrBtn:hover { background: #27272a; color: #e2e8f0 }
+.hdrBtn:hover { background: var(--color-border); color: #e2e8f0 }
 .hdrBtnOn { background: rgba(245,158,11,0.12); border-color: #f59e0b; color: #f59e0b }
 .hdrBtnGreen { background: rgba(34,197,94,0.12); border-color: #22c55e; color: #22c55e }
 .hdrBtnRed { background: rgba(239,68,68,0.12); border-color: #ef4444; color: #ef4444 }
 .hdrSearch { position: relative; flex: 1; min-width: 0; max-width: 360px; }
 .hdrSearchIn {
-  width: 100%; height: 30px; background: #1e1e22; border: 1px solid #2a2a2e;
+  width: 100%; height: 30px; background: var(--color-bg-elevated); border: 1px solid var(--color-bg-raised);
   border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 0 28px 0 10px;
   outline: none; box-sizing: border-box;
 }
-.hdrSearchIn::placeholder { color: #555 }
+.hdrSearchIn::placeholder { color: var(--color-text-tertiary) }
 .hdrSearchIn:focus { border-color: #f59e0b }
 .hdrSearchX {
   position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
-  background: none; border: none; color: #666; font-size: 16px; cursor: pointer; padding: 0;
+  background: none; border: none; color: var(--color-text-tertiary); font-size: 16px; cursor: pointer; padding: 0;
 }
-.hdrCount { font-size: 11px; color: #555; }
+.hdrCount { font-size: 11px; color: var(--color-text-tertiary); }
 .hdrSlider { display: flex; align-items: center; gap: 6px; }
 .hdrSlider input { width: 80px; height: 4px; accent-color: #f59e0b; cursor: pointer; }
 .hdrClose {
-  background: none; border: none; color: #555; font-size: 20px;
+  background: none; border: none; color: var(--color-text-tertiary); font-size: 20px;
   cursor: pointer; padding: 4px 6px; margin-left: auto;
 }
-.hdrClose:hover { color: #ccc }
+.hdrClose:hover { color: var(--color-text-secondary) }
 
 /* ── BODY ── */
 .body {
@@ -71,10 +71,10 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  scrollbar-color: var(--color-border-bright) transparent;
 }
 .scroll::-webkit-scrollbar { width: 6px }
-.scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 3px }
+.scroll::-webkit-scrollbar-thumb { background: var(--color-border-bright); border-radius: 3px }
 
 /* Inner spacer — sets total scrollable height */
 .scrollInner {
@@ -95,7 +95,7 @@
 .gridEmpty {
   grid-column: 1 / -1;
   text-align: center;
-  color: #555;
+  color: var(--color-text-tertiary);
   font-size: 13px;
   padding: 40px 0;
 }
@@ -107,7 +107,7 @@
   cursor: pointer;
   overflow: hidden;
 }
-.cell:hover { border-color: #3a3a40 }
+.cell:hover { border-color: var(--color-border-bright) }
 .cellOn { border-color: #f59e0b; background: rgba(245,158,11,0.05) }
 
 /* Thumbnail — aspect-ratio: 1 (NOT padding-bottom trick) + background-image */
@@ -136,7 +136,7 @@
 
 .cellFav {
   position: absolute; top: 4px; left: 4px;
-  background: none; border: none; color: #555; font-size: 15px;
+  background: none; border: none; color: var(--color-text-tertiary); font-size: 15px;
   cursor: pointer; padding: 0; z-index: 3;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8));
   opacity: 0; transition: opacity 0.15s;
@@ -154,14 +154,14 @@
 /* ── FOOTER ── */
 .foot {
   height: 40px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px; border-top: 1px solid #2a2a2e; background: #141416;
-  font-size: 11px; color: #666; flex-shrink: 0;
+  padding: 0 16px; border-top: 1px solid var(--color-bg-raised); background: var(--color-bg-secondary);
+  font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0;
 }
 .footL { display: flex; align-items: center; gap: 6px }
-.footSep { color: #333 }
+.footSep { color: var(--color-border-bright) }
 .footHi { color: #f59e0b }
 .footBtn {
-  background: #1e1e22; border: 1px solid #2a2a2e; border-radius: 4px;
+  background: var(--color-bg-elevated); border: 1px solid var(--color-bg-raised); border-radius: 4px;
   color: #94a3b8; font-size: 11px; padding: 4px 10px; cursor: pointer;
 }
-.footBtn:hover { background: #27272a; color: #e2e8f0 }
+.footBtn:hover { background: var(--color-border); color: #e2e8f0 }

@@ -23,20 +23,20 @@
 }
 
 .label {
-  color: #71717a;
+  color: var(--color-text-tertiary);
   font-weight: 500;
   transition: color 0.3s;
 }
 
 /* States */
 .saved .dot { background: #22c55e; }
-.saved .label { color: #71717a; }
+.saved .label { color: var(--color-text-tertiary); }
 
 .saving .dot { background: #f59e0b; animation: pulse 1s infinite; }
 .saving .label { color: #f59e0b; }
 
 .unsaved .dot { background: #ef4444; }
-.unsaved .label { color: #a1a1aa; }
+.unsaved .label { color: var(--color-text-secondary); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

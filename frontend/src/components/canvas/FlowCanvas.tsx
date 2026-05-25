@@ -9,6 +9,7 @@ import '@xyflow/react/dist/style.css'
 
 import { NODE_TYPES } from '../../nodes/index'
 import { BackendStatusDot } from '../BackendStatusDot'
+import { ThemeToggle } from '../ThemeToggle'
 import { WorkflowManager } from '../WorkflowManager'
 import { SettingsPanel } from '../SettingsPanel'
 import { MediaBrowser } from '../media/MediaBrowser'
@@ -63,6 +64,7 @@ function FlowCanvasInner() {
   const storagePanelOpen = useCanvasStore(s => s.storagePanelOpen)
   const fullscreenBrowserOpen = useCanvasStore(s => s.fullscreenBrowserOpen)
   const toggleFullscreenBrowser = useCanvasStore(s => s.toggleFullscreenBrowser)
+  const theme = useCanvasStore(s => s.theme)
   const [privacy, setPrivacy] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: ContextMenuTarget; flowPos?: { x: number; y: number } } | null>(null)
@@ -617,6 +619,7 @@ function FlowCanvasInner() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </a>
           <BackendStatusDot />
+          <ThemeToggle className={styles.iconBtn} />
           <button className={styles.iconBtn} onClick={() => useCanvasStore.setState({ settingsOpen: true })} title="Settings" aria-label="Settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           </button>
@@ -697,7 +700,7 @@ function FlowCanvasInner() {
           onDrop={onDrop}
           isValidConnection={isValidConnection}
           nodeTypes={NODE_TYPES}
-          colorMode="dark"
+          colorMode={theme}
           onNodeContextMenu={handleNodeContextMenu}
           onSelectionContextMenu={handleSelectionContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
@@ -716,20 +719,20 @@ function FlowCanvasInner() {
           minZoom={0.05}
           maxZoom={4}
         >
-          <Background color="#1a1a1a" gap={20} />
+          <Background color={theme === 'light' ? '#d4d4d8' : '#1a1a1a'} gap={20} />
           <Controls />
           {minimapVisible && (
             <MiniMap
-              nodeColor="#aaa"
-              nodeStrokeColor="#d4d4d8"
+              nodeColor={theme === 'light' ? '#71717a' : '#aaa'}
+              nodeStrokeColor={theme === 'light' ? '#52525b' : '#d4d4d8'}
               nodeStrokeWidth={2}
-              maskColor="rgba(0, 0, 0, 0.7)"
+              maskColor={theme === 'light' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.7)'}
               maskStrokeColor="#f59e0b"
               maskStrokeWidth={2}
               pannable
               zoomable
               style={{
-                backgroundColor: '#18181b',
+                backgroundColor: theme === 'light' ? '#f4f4f5' : '#18181b',
                 border: '1px solid #f59e0b55',
                 borderRadius: 8,
                 width: 180,

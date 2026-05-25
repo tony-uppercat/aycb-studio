@@ -49,6 +49,25 @@
   /* Additional surfaces */
   --surface-hover: #2e2e2e;
   --surface-active: #333333;
+
+  /* --color-* family. Dark values ≈ the existing hardcoded hex used across
+     the app; revived here because design-tokens.css is never loaded. Themed
+     by the [data-theme="light"] block below. */
+  --color-bg-primary: #0a0a0b;
+  --color-bg-secondary: #111113;
+  --color-bg-tertiary: #18181b;
+  --color-bg-elevated: #1e1e22;
+  --color-bg-raised: #2a2a2e;
+  --color-border: #27272a;
+  --color-border-bright: #3a3a40;
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-accent: #F52776;
+  --color-accent-hover: #d41f64;
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-error: #ef4444;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -87,4 +106,34 @@ body.prv [data-prv-show] [data-s] {
   filter: none;
   user-select: auto;
   pointer-events: auto;
+}
+
+/* Light theme — overrides the dark :root tokens when <html data-theme="light">.
+   Additive: dark remains the default. */
+:root[data-theme="light"] {
+  --surface-0: #f4f4f5;
+  --surface-1: #f7f7f8;
+  --surface-2: #fafafa;
+  --surface-3: #fcfcfd;
+  --surface-4: #ffffff;
+  --surface-hover: #ececee;
+  --surface-active: #e4e4e7;
+  --border: #e4e4e7;
+  --border-bright: #d4d4d8;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-dim: #a1a1aa;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.14);
+  --color-bg-primary: #f4f4f5;
+  --color-bg-secondary: #fafafa;
+  --color-bg-tertiary: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-raised: #ececee;
+  --color-border: #e4e4e7;
+  --color-border-bright: #d4d4d8;
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #a1a1aa;
 }

@@ -6,7 +6,7 @@
   z-index: 200;
   display: flex;
   flex-direction: column;
-  background: #0d0d0f;
+  background: var(--color-bg-primary);
   animation: fadeIn 0.12s ease-out;
 }
 
@@ -79,7 +79,7 @@
   width: 100%;
   max-width: 800px;
   height: 6px;
-  background: #2a2a2e;
+  background: var(--color-bg-raised);
   border-radius: 3px;
   cursor: pointer;
   flex-shrink: 0;
@@ -116,10 +116,10 @@
 }
 
 .playBtn {
-  background: #2a2a2e;
+  background: var(--color-bg-raised);
   border: none;
   border-radius: 4px;
-  color: #e5e5e5;
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: 6px 10px;
   display: flex;
@@ -128,17 +128,17 @@
   transition: background 0.1s;
 }
 
-.playBtn:hover { background: #3a3a3e; }
+.playBtn:hover { background: var(--color-border-bright); }
 
 .timeCode {
   font-size: 12px;
-  color: #888;
+  color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
 /* ── No media ── */
 .noMedia {
-  color: #555;
+  color: var(--color-text-tertiary);
   font-size: 14px;
 }
 
@@ -149,9 +149,9 @@
   transform: translateY(-50%);
   z-index: 2;
   background: rgba(30, 30, 34, 0.85);
-  border: 1px solid #2a2a2e;
+  border: 1px solid var(--color-bg-raised);
   border-radius: 6px;
-  color: #ccc;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 10px 8px;
   display: flex;
@@ -176,7 +176,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-size: 11px;
-  color: #555;
+  color: var(--color-text-tertiary);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -187,11 +187,11 @@
   right: 12px;
   padding: 4px 10px;
   background: rgba(20, 20, 22, 0.78);
-  border: 1px solid #2a2a2e;
+  border: 1px solid var(--color-bg-raised);
   border-radius: 12px;
   font-size: 11px;
   font-weight: 500;
-  color: #fafafa;
+  color: var(--color-text-primary);
   pointer-events: none;
   white-space: nowrap;
   letter-spacing: 0.02em;
@@ -212,8 +212,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border-top: 1px solid #1e1e22;
-  background: #141416;
+  border-top: 1px solid var(--color-bg-elevated);
+  background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 
@@ -221,10 +221,10 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  background: #1e1e22;
-  border: 1px solid #2a2a2e;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-bg-raised);
   border-radius: 4px;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 11px;
   cursor: pointer;
   padding: 5px 10px;
@@ -232,21 +232,21 @@
 }
 
 .toolBtn:hover {
-  background: #2a2a2e;
-  color: #e5e5e5;
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
 }
 
 .toolBtnActive {
-  background: #2a2a2e;
+  background: var(--color-bg-raised);
   color: #f59e0b;
   border-color: #f59e0b40;
 }
 
 .scaleSelect {
-  background: #1e1e22;
-  border: 1px solid #2a2a2e;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-bg-raised);
   border-radius: 4px;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 11px;
   cursor: pointer;
   padding: 5px 8px;
@@ -255,8 +255,8 @@
 }
 
 .scaleSelect:hover {
-  background: #2a2a2e;
-  color: #e5e5e5;
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
 }
 
 .scaleSelect:focus {
@@ -277,8 +277,8 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-top: 1px solid #1e1e22;
-  background: #141416;
+  border-top: 1px solid var(--color-bg-elevated);
+  background: var(--color-bg-secondary);
   overflow-x: auto;
   scrollbar-width: thin;
   flex-shrink: 0;

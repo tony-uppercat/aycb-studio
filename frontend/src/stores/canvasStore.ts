@@ -39,6 +39,8 @@ interface CanvasState {
   toggleMinimap: () => void;
   toggleStorage: () => void;
   toggleFullscreenBrowser: () => void;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
 
   logs: string[];
   setLogs: (logs: string[]) => void;
@@ -89,6 +91,8 @@ export const useCanvasStore = create<CanvasState>()(
       toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),
       toggleStorage: () => set((s) => ({ storagePanelOpen: !s.storagePanelOpen })),
       toggleFullscreenBrowser: () => set((s) => ({ fullscreenBrowserOpen: !s.fullscreenBrowserOpen })),
+      theme: 'dark' as const,
+      toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
 
       logs: [],
       setLogs: (logs) => set({ logs }),
@@ -131,6 +135,7 @@ export const useCanvasStore = create<CanvasState>()(
         consoleOpen: state.consoleOpen,
         minimapVisible: state.minimapVisible,
         costs: state.costs,
+        theme: state.theme,
       }),
     }
   )

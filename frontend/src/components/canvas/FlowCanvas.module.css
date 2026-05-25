@@ -3,14 +3,14 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #0a0a0c;
+  background: var(--color-bg-primary);
 }
 
 .topBar {
   height: 48px;
   flex-shrink: 0;
-  background: #111113;
-  border-bottom: 1px solid #222225;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-bg-elevated);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -32,10 +32,10 @@
 }
 
 .addBtn {
-  background: #1c1c20;
-  border: 1px solid #2e2e33;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-bg-raised);
   border-radius: 7px;
-  color: #a1a1aa;
+  color: var(--color-text-secondary);
   padding: 5px 14px;
   font-size: 12px;
   font-weight: 500;
@@ -44,9 +44,9 @@
 }
 
 .addBtn:hover {
-  background: #27272a;
-  color: #e5e5e5;
-  border-color: #3a3a40;
+  background: var(--color-border);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-bright);
 }
 
 .topActions {
@@ -56,10 +56,10 @@
 }
 
 .iconBtn {
-  background: #1c1c20;
-  border: 1px solid #2e2e33;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-bg-raised);
   border-radius: 7px;
-  color: #71717a;
+  color: var(--color-text-tertiary);
   padding: 6px 8px;
   cursor: pointer;
   transition: all 0.15s;
@@ -69,9 +69,9 @@
 }
 
 .iconBtn:hover {
-  background: #27272a;
-  color: #e5e5e5;
-  border-color: #3a3a40;
+  background: var(--color-border);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-bright);
 }
 
 .iconBtn:disabled {
@@ -103,8 +103,8 @@ a.iconBtn {
 }
 
 .storagePanel {
-  background: #18181b;
-  border: 1px solid #2e2e33;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-bg-raised);
   border-radius: 10px;
   width: 340px;
   max-height: calc(100vh - 80px);
@@ -118,19 +118,19 @@ a.iconBtn {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid #27272a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .storagePanelTitle {
   font-size: 13px;
   font-weight: 600;
-  color: #e5e5e5;
+  color: var(--color-text-primary);
 }
 
 .storagePanelClose {
   background: none;
   border: none;
-  color: #52525b;
+  color: var(--color-text-tertiary);
   cursor: pointer;
   padding: 2px;
   display: flex;
@@ -140,8 +140,8 @@ a.iconBtn {
 }
 
 .storagePanelClose:hover {
-  color: #a1a1aa;
-  background: #27272a;
+  color: var(--color-text-secondary);
+  background: var(--color-border);
 }
 
 .storagePanelStats {
@@ -149,8 +149,8 @@ a.iconBtn {
   justify-content: space-between;
   padding: 8px 14px;
   font-size: 11px;
-  color: #71717a;
-  border-bottom: 1px solid #27272a;
+  color: var(--color-text-tertiary);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .storagePanelList {
@@ -161,7 +161,7 @@ a.iconBtn {
 }
 
 .storagePanelEmpty {
-  color: #3f3f46;
+  color: var(--color-border-bright);
   font-style: italic;
   font-size: 12px;
   text-align: center;
@@ -179,12 +179,12 @@ a.iconBtn {
 }
 
 .storagePanelItem:hover {
-  background: #1f1f23;
+  background: var(--color-bg-elevated);
 }
 
 .storagePanelItemName {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,7 +194,7 @@ a.iconBtn {
 
 .storagePanelItemSize {
   font-size: 11px;
-  color: #52525b;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -202,7 +202,7 @@ a.iconBtn {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--color-border);
 }
 
 .storagePanelBtn {
@@ -211,17 +211,17 @@ a.iconBtn {
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
-  border: 1px solid #2e2e33;
-  background: #1c1c20;
-  color: #a1a1aa;
+  border: 1px solid var(--color-bg-raised);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .storagePanelBtn:hover:not(:disabled) {
-  background: #27272a;
-  color: #e5e5e5;
-  border-color: #3a3a40;
+  background: var(--color-border);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-bright);
 }
 
 .storagePanelBtn:disabled {

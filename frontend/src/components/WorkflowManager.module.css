@@ -1,28 +1,28 @@
 .wrap { display: flex; gap: 8px; align-items: center; }
 .btn {
-  background: #1a1a1a; border: 1px solid #333; border-radius: 6px;
-  color: #aaa; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  background: var(--color-bg-secondary); border: 1px solid var(--color-border-bright); border-radius: 6px;
+  color: var(--color-text-secondary); padding: 5px 12px; font-size: 12px; cursor: pointer;
 }
-.btn:hover { background: #252525; color: #fff; }
+.btn:hover { background: var(--color-bg-raised); color: var(--color-text-primary); }
 .dropdown {
   position: absolute; top: 44px; right: 0;
-  background: #161616; border: 1px solid #333; border-radius: 8px;
+  background: var(--color-bg-secondary); border: 1px solid var(--color-border-bright); border-radius: 8px;
   min-width: 200px; z-index: 100; padding: 6px 0;
   box-shadow: 0 8px 24px rgba(0,0,0,0.6);
 }
 .item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 7px 12px; cursor: pointer; font-size: 12px; color: #ccc;
+  padding: 7px 12px; cursor: pointer; font-size: 12px; color: var(--color-text-secondary);
 }
-.item:hover { background: #222; color: #fff; }
+.item:hover { background: var(--color-bg-elevated); color: var(--color-text-primary); }
 .deleteBtn {
-  background: none; border: none; color: #666; cursor: pointer; font-size: 11px; padding: 0 4px;
+  background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 11px; padding: 0 4px;
 }
 .deleteBtn:hover { color: #f87171; }
 .saveForm { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 .input {
-  background: #1a1a1a; border: 1px solid #333; border-radius: 4px;
-  color: #e5e5e5; padding: 5px 8px; font-size: 12px; outline: none;
+  background: var(--color-bg-secondary); border: 1px solid var(--color-border-bright); border-radius: 4px;
+  color: var(--color-text-primary); padding: 5px 8px; font-size: 12px; outline: none;
 }
 .input:focus { border-color: var(--accent); }
 .confirmBtn {

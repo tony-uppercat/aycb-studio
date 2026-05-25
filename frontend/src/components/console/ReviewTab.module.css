@@ -5,7 +5,7 @@
   height: 100%;
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   font-size: 10px;
-  color: #71717a;
+  color: var(--color-text-tertiary);
 }
 
 .reviewHeader {
@@ -17,7 +17,7 @@
 }
 
 .sessionLabel {
-  color: #52525b;
+  color: var(--color-text-tertiary);
   font-size: 10px;
 }
 
@@ -39,8 +39,8 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 2px 0;
-  color: #52525b;
-  border-bottom: 1px solid #1e1e22;
+  color: var(--color-text-tertiary);
+  border-bottom: 1px solid var(--color-bg-elevated);
   margin-bottom: 2px;
 }
 
@@ -56,7 +56,7 @@
 }
 
 .itemRow:hover {
-  background: #18181b;
+  background: var(--color-bg-tertiary);
 }
 
 .borderP0 {
@@ -68,7 +68,7 @@
 }
 
 .borderP2 {
-  border-left: 2px solid #3f3f46;
+  border-left: 2px solid var(--color-border-bright);
 }
 
 /* ── Status icon ── */
@@ -80,7 +80,7 @@
 }
 
 .statusPending {
-  color: #52525b;
+  color: var(--color-text-tertiary);
 }
 
 .statusPass {
@@ -94,7 +94,7 @@
 /* ── Item text ── */
 .itemText {
   flex: 1;
-  color: #d4d4d8;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -102,7 +102,7 @@
 
 .itemTextDone {
   flex: 1;
-  color: #52525b;
+  color: var(--color-text-tertiary);
   text-decoration: line-through;
   white-space: nowrap;
   overflow: hidden;
@@ -151,7 +151,7 @@
 .passBtn,
 .failBtn {
   background: none;
-  border: 1px solid #27272a;
+  border: 1px solid var(--color-border);
   font-size: 9px;
   font-weight: 600;
   padding: 0 6px;
@@ -202,8 +202,8 @@
 
 .noteInput {
   flex: 1;
-  background: #1a1a1e;
-  border: 1px solid #27272a;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   color: #e2e8f0;
   font-size: 10px;
   padding: 2px 6px;
@@ -217,7 +217,7 @@
 }
 
 .noteInput::placeholder {
-  color: #3f3f46;
+  color: var(--color-border-bright);
 }
 
 .noteSaveBtn {
@@ -247,15 +247,15 @@
   display: flex;
   gap: 6px;
   padding: 4px 0 2px;
-  border-top: 1px solid #222225;
+  border-top: 1px solid var(--color-bg-elevated);
   margin-top: 4px;
   flex-shrink: 0;
 }
 
 .footerBtn {
-  background: #1a1a1e;
-  border: 1px solid #27272a;
-  color: #71717a;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
   font-size: 9px;
   font-weight: 600;
   padding: 2px 10px;
@@ -264,13 +264,13 @@
 }
 
 .footerBtn:hover {
-  background: #27272a;
+  background: var(--color-border);
   color: #e2e8f0;
 }
 
 /* ── Empty state ── */
 .emptyState {
-  color: #3f3f46;
+  color: var(--color-border-bright);
   font-style: italic;
   margin: 0;
   padding: 8px 0;

@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #1a1a1e;
-  border: 1px solid #2a2a2e;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-raised);
   border-radius: 6px;
   padding: 4px;
   max-height: 280px;
@@ -18,7 +18,7 @@
   border-radius: 4px;
 }
 .row:hover {
-  background: #25252a;
+  background: var(--color-bg-raised);
 }
 .meta {
   display: flex;
@@ -29,21 +29,21 @@
   min-width: 0;
 }
 .timestamp {
-  color: #ccc;
+  color: var(--color-text-secondary);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .subline {
-  color: #666;
+  color: var(--color-text-tertiary);
   display: flex;
   gap: 8px;
 }
 .counts {
-  color: #888;
+  color: var(--color-text-secondary);
 }
 .projectId {
   font-family: ui-monospace, monospace;
   font-size: 10px;
-  color: #555;
+  color: var(--color-text-tertiary);
   word-break: break-all;
 }

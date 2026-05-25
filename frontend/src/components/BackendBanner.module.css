@@ -42,7 +42,7 @@
 
 .hint {
   font-size: 10px;
-  color: #71717a;
+  color: var(--color-text-tertiary);
   font-family: monospace;
 }
 

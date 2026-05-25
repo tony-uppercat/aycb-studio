@@ -9,8 +9,8 @@
 .menu {
   position: fixed;
   z-index: 511;
-  background: #1a1a22;
-  border: 1px solid #333;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-bright);
   border-radius: 10px;
   padding: 4px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -31,7 +31,7 @@
   width: 100%;
   background: none;
   border: none;
-  color: #ddd;
+  color: var(--color-text-primary);
   font-size: 12px;
   padding: 6px 10px;
   border-radius: 6px;
@@ -41,11 +41,11 @@
 }
 
 .item:hover {
-  background: #2a2a35;
+  background: var(--color-bg-raised);
 }
 
 .item:active {
-  background: #333340;
+  background: var(--color-border-bright);
 }
 
 .itemDisabled {
@@ -76,7 +76,7 @@
 
 .shortcut {
   font-size: 10px;
-  color: #555;
+  color: var(--color-text-tertiary);
   font-family: monospace;
   white-space: nowrap;
   margin-left: auto;
@@ -85,15 +85,15 @@
 
 .separator {
   height: 1px;
-  background: #2a2a2f;
+  background: var(--color-bg-raised);
   margin: 3px 8px;
 }
 
 .header {
   font-size: 10px;
-  color: #666;
+  color: var(--color-text-tertiary);
   padding: 4px 10px 5px;
-  border-bottom: 1px solid #2a2a2f;
+  border-bottom: 1px solid var(--color-bg-raised);
   margin-bottom: 2px;
   user-select: none;
   overflow: hidden;

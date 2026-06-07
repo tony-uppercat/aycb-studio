@@ -3,10 +3,9 @@
 How to download the project from GitHub and launch it with `start.bat` on
 another Windows PC.
 
-> **Before you start (on the MAIN PC):** the new PC pulls from GitHub, so make
-> sure the latest work is actually pushed. As of the last check the local `dev`
-> branch was **30 commits ahead** of `origin/dev` with uncommitted changes.
-> Commit + `git push origin dev` first, otherwise the new PC gets stale code.
+> **Everything is on the `dev-full` branch.** All work (committed + previously
+> uncommitted) was bundled and pushed to `dev-full` on GitHub. Clone that branch
+> on the new PC — do **not** use `dev` or `main`, they are behind.
 
 ---
 
@@ -34,12 +33,15 @@ checkbox, or add it manually.
 
 ## 2. Clone the repo
 
+Download **only** the `dev-full` branch (single-branch, shallow = fastest):
+
 ```powershell
 cd C:\Users\<YourUser>\Documents
-git clone https://github.com/tony-uppercat/aycb-studio.git 00_aycb_v2
+git clone --branch dev-full --single-branch https://github.com/tony-uppercat/aycb-studio.git 00_aycb_v2
 cd 00_aycb_v2
-git checkout dev          # work happens on the dev branch, not main
 ```
+
+To pull later updates on the new PC: `git pull origin dev-full`.
 
 The repo can live in **any folder** — `start.bat` is path-independent (it uses
 its own location). The path does **not** have to match the main PC.

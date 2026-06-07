@@ -299,11 +299,28 @@ def generate_image(
     use_grounding: bool = False,
     thinking: bool = True,
 ) -> Image.Image | None:
-    """Generate an image using Gemini generateContent with IMAGE modality."""
+    """Generate an image. Supports Gemini (generate_content) and Imagen (generate_images)."""
     from google.genai import types
 
     client = _get_client(api_key)
     use_model = model_id or NANO_BANANA_MODEL
+
+    if use_model.startswith("imagen"):
+        imagen_cfg: dict = {"number_of_images": 1}
+        if aspect_ratio:
+            imagen_cfg["aspect_ratio"] = aspect_ratio
+        response, _usage = _call_with_gemini_retries(
+            lambda: client.models.generate_images(
+                model=use_model,
+                prompt=prompt,
+                config=types.GenerateImagesConfig(**imagen_cfg),
+            ),
+            operation="generate_image",
+        )
+        if response.generated_images:
+            img_data = response.generated_images[0].image.image_bytes
+            return Image.open(io.BytesIO(img_data))
+        return None
 
     contents: list = []
     if reference_images:

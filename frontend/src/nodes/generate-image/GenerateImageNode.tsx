@@ -42,9 +42,11 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         >
           {[
             { label: 'Google Gemini', filter: 'gemini' },
+            { label: 'Google Imagen', filter: 'imagen' },
             { label: 'OpenAI', filter: 'openai' },
             { label: 'Recraft', filter: 'recraft' },
             { label: 'Flux (BFL Cloud)', filter: 'flux-cloud' },
+            { label: 'Atlas Cloud', filter: 'atlas' },
             { label: 'Local GPU', filter: 'local' },
           ].map(g => {
             const items = imageModels.filter(m => m.provider === g.filter)

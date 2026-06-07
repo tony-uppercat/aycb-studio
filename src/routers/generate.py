@@ -16,7 +16,7 @@ from src.shared import (
     _log, _require_key, _require_prompt, _classify_error,
     _estimate_cost, _pil_to_b64, _save_to_bridge, _validate_image_upload,
     _read_upload,
-    IMAGE_MODELS, MAX_IMAGE_BYTES,
+    IMAGE_MODELS, MAX_IMAGE_BYTES, MODEL_PRICING,
 )
 # Lazy imports — src.gemini pulls cv2/numpy which may fail at boot on Windows
 # from src.gemini import generate_image, get_last_usage  → inside endpoints
@@ -69,6 +69,10 @@ async def generate_image_endpoint(
 
     usage = get_last_usage()
     cost = _estimate_cost(model_id, usage)
+    # Imagen models have no token usage — derive per-image cost from MODEL_PRICING.
+    if model_id.startswith("imagen"):
+        per_image_cost = MODEL_PRICING.get(model_id, (0, 0))[1] / 1_000_000 * 1000
+        cost = {"input_tokens": 0, "output_tokens": 0, "cost_usd": round(per_image_cost, 6)}
 
     dt = time.time() - t0
     if result is None:

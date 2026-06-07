@@ -1,0 +1,459 @@
+PROJECT: proj-1779207005835-ik3jy4
+TIMESTAMP: 2026-05-19T16:25:06.257187+00:00
+NODES: 51   EDGES: 64
+
+=== TYPE COUNTS ===
+   18 x textInput
+   11 x imageUpload
+    8 x llm
+    7 x generateImage
+    3 x jsonParser
+    3 x bracketParser
+    1 x imageCompare
+
+=== NODES ===
+imageUpload-94b90f4d [imageUpload]
+    pos=(18637,-2023)
+    mediaId='media-1779136807761-l2a0ii'
+    outputMediaIds=None
+
+llm-88b3d9fb [llm]
+    pos=(19265,-2471)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<1037 chars> { |   "products": { |     "product_01": "replace the partially visible orange bottle in th
+    text=<1037 chars> { |   "products": { |     "product_01": "replace the partially visible orange bottle in th
+    showThinking=False
+
+textInput-34e328f9 [textInput]  name='sinlge'
+    pos=(18463,-2447)
+    outputText=<4428 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    text=<4428 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    prompt=<4428 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+
+generateImage-682bd6a4 [generateImage]
+    pos=(21100,-2130)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='3:4'
+    resolution='2K'
+    outputMediaIds=None
+    mediaId='media-1779140990689-yeyd0p'
+    historyIds=[22 items]
+
+jsonParser-b238c2d0 [jsonParser]
+    pos=(19603,-2468)
+    jsonPath=''
+    outputText=<847 chars> replace the partially visible orange bottle in the bottom left corner, with product labell
+    outputPins={8 keys}: ['text-0', 'text-1', 'text-2', 'text-3', 'text-4', 'text-5']
+    parseMode='json'
+    outputFormat='values'
+    flatten=True
+    overrides={0 keys}: []
+    excludedKeys=[0 items]
+    excludedSections=[0 items]
+    outputLimit=0
+    maxDepth=0
+    outputOverride=None
+    pinsCollapsed=False
+    previewCollapsed=True
+    textCollapsed=False
+
+bracketParser-5e27cacf [bracketParser]
+    pos=(20100,-2469)
+    outputText=<798 chars> replace the partially visible orange bottle in the bottom left corner, with product labell
+    outputPins={1 keys}: ['text-0']
+    outputMode='template'
+    overrides={11 keys}: ['input2', 'input3', 'input4', 'input5', 'input6', 'input7']
+    excludedKeys=[0 items]
+    outputLimit=0
+    outputOverride=None
+    pinsCollapsed=False
+    previewCollapsed=True
+    textCollapsed=False
+
+imageUpload-cda9d505 [imageUpload]  name='1'
+    pos=(18525,-1742)
+    mediaId='media-1779136807761-beftcb'
+
+imageUpload-930b1343 [imageUpload]  name='2'
+    pos=(18467,-1490)
+    mediaId='media-1779136807761-pkl0gy'
+
+imageUpload-06498b5e [imageUpload]  name='3'
+    pos=(19560,-1294)
+    mediaId='media-1779136807761-cejdi3'
+    outputMediaIds={1 keys}: ['image-out']
+
+textInput-16ddea93 [textInput]
+    pos=(20827,-2270)
+    outputText=<4044 chars> Replace the seven orange pump bottles with hexagonal bottles, sourced from the reference i
+    text=<4044 chars> Replace the seven orange pump bottles with hexagonal bottles, sourced from the reference i
+    prompt=<4044 chars> Replace the seven orange pump bottles with hexagonal bottles, sourced from the reference i
+    autoUpdate=True
+
+llm-3759faa4 [llm]
+    pos=(20386,-2268)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<4044 chars> Replace the seven orange pump bottles with hexagonal bottles, sourced from the reference i
+    text=<7867 chars> <thinking> | **Prompt Generation Process** |  | Okay, here's how I'm approaching this. I n
+    showThinking=False
+
+textInput-af106976 [textInput]
+    pos=(19720,-2702)
+    outputText=<13551 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+    text=<13551 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+    prompt=<13551 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+
+textInput-b3768883 [textInput]  name='forech'
+    pos=(18458,-2329)
+    outputText=<5098 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    text=<5098 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    prompt=<5098 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+
+generateImage-2ba27644 [generateImage]
+    pos=(22050,-1631)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='3:4'
+    resolution='2K'
+    mediaId='media-1779144999154-ps27qb'
+    historyIds=[2 items]
+    outputMediaIds=None
+
+textInput-42d3c798 [textInput]
+    pos=(21345,-1599)
+    outputText=<1912 chars> # SYSTEM — NB Pro Temporal Continuation |  | You receive a prior-frame image as input1 and
+    text=<1912 chars> # SYSTEM — NB Pro Temporal Continuation |  | You receive a prior-frame image as input1 and
+    prompt=<1912 chars> # SYSTEM — NB Pro Temporal Continuation |  | You receive a prior-frame image as input1 and
+
+llm-8b33dbeb [llm]
+    pos=(21672,-1602)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<959 chars> Render a continuation frame of input1 set 15 seconds later, with the camera pushed in clos
+    text=<4283 chars> <thinking> | **Prompt Generation Summary** |  | Okay, here's the breakdown of my thinking.
+    showThinking=False
+
+textInput-e8779408 [textInput]
+    pos=(21264,-1490)
+    outputText=<73 chars> muovi la camera 30% avanti | 15sec dopo | gli oggetti continuano la rotazione
+    text=<73 chars> muovi la camera 30% avanti | 15sec dopo | gli oggetti continuano la rotazione
+    prompt=<73 chars> muovi la camera 30% avanti | 15sec dopo | gli oggetti continuano la rotazione
+
+imageUpload-e12a0e2b [imageUpload]  name='1'
+    pos=(18939,1658)
+    mediaId='media-1779136807761-l2a0ii'
+    outputMediaIds={1 keys}: ['image-out']
+
+llm-4cf1fae7 [llm]
+    pos=(19566,1210)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<751 chars> { |   "products": { |     "product_01": "replace the floating grey pill labelled 01, with 
+    text=<751 chars> { |   "products": { |     "product_01": "replace the floating grey pill labelled 01, with 
+    showThinking=False
+
+textInput-9255526b [textInput]  name='sinlge'
+    pos=(18764,1234)
+    outputText=<4428 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    text=<4428 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    prompt=<4428 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+
+generateImage-d45fc9ab [generateImage]
+    pos=(21677,1560)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='16:9'
+    resolution='2K'
+    outputMediaIds=None
+    mediaId='media-1779207528987-1dc2va'
+    historyIds=[47 items]
+
+jsonParser-eca42a68 [jsonParser]
+    pos=(19904,1213)
+    jsonPath=''
+    outputText=<603 chars> replace the floating grey pill labelled 01, with product labelled [input2] | replace the f
+    outputPins={6 keys}: ['text-0', 'text-1', 'text-2', 'text-3', 'text-4', 'text-5']
+    parseMode='json'
+    outputFormat='values'
+    flatten=True
+    overrides={0 keys}: []
+    excludedKeys=[0 items]
+    excludedSections=[0 items]
+    outputLimit=0
+    maxDepth=0
+    outputOverride=None
+    pinsCollapsed=False
+    previewCollapsed=True
+    textCollapsed=False
+    text=<2640 chars> { |   "products": { |     "product_01": "replace the grey pill labelled 06 on the far left
+
+bracketParser-adf6f3bf [bracketParser]
+    pos=(20249,1212)
+    outputText=<593 chars> replace the floating grey pill labelled 01, with product labelled input2 | replace the flo
+    outputPins={5 keys}: ['text-0', 'text-1', 'text-2', 'text-3', 'text-4']
+    outputMode='template'
+    overrides={1 keys}: ['input1']
+    excludedKeys=[0 items]
+    outputLimit=0
+    outputOverride=None
+    pinsCollapsed=False
+    previewCollapsed=True
+    textCollapsed=False
+    text=<668 chars> replace the lowest grey pill-shaped object labelled 01, with product labelled [input1] | r
+
+imageUpload-0e9ef328 [imageUpload]  name='2'
+    pos=(18988,1917)
+    mediaId='media-1779136807761-beftcb'
+
+imageUpload-2d0eb1ca [imageUpload]  name='3'
+    pos=(18930,2169)
+    mediaId='media-1779136807761-pkl0gy'
+
+imageUpload-7e01286c [imageUpload]  name='4'
+    pos=(19862,2387)
+    mediaId='media-1779136807761-cejdi3'
+    outputMediaIds={1 keys}: ['image-out']
+
+textInput-56d11f89 [textInput]
+    pos=(21249,1311)
+    outputText=<6281 chars> Replace the 22 grey pills with PAO bottles, sourced from the reference images. |  | Use in
+    text=<6281 chars> Replace the 22 grey pills with PAO bottles, sourced from the reference images. |  | Use in
+    prompt=<6281 chars> Replace the 22 grey pills with PAO bottles, sourced from the reference images. |  | Use in
+    autoUpdate=True
+
+llm-0fc0b745 [llm]
+    pos=(20738,1413)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<6281 chars> Replace the 22 grey pills with PAO bottles, sourced from the reference images. |  | Use in
+    text=<9133 chars> <thinking> | **Nano Banana 2 Prompt Generation: A Deep Dive** |  | Okay, here's my breakdo
+    showThinking=False
+
+textInput-bc394f13 [textInput]
+    pos=(20021,979)
+    outputText=<11518 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+    text=<11518 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+    prompt=<11518 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+
+textInput-44dfcafb [textInput]  name='forech'
+    pos=(18760,1352)
+    outputText=<5098 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    text=<5098 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+    prompt=<5098 chars> # PRODUCT DESCRIPTOR EXTRACTOR | Analyze the input image. Detect every distinct product vi
+
+generateImage-4e9bf64c [generateImage]
+    pos=(23420,2115)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='16:9'
+    resolution='2K'
+    mediaId='media-1779146270027-wqxaxc'
+    historyIds=[3 items]
+    outputMediaIds=None
+
+textInput-34dd522b [textInput]
+    pos=(22563,2531)
+    outputText=<1912 chars> # SYSTEM — NB Pro Temporal Continuation |  | You receive a prior-frame image as input1 and
+    text=<1912 chars> # SYSTEM — NB Pro Temporal Continuation |  | You receive a prior-frame image as input1 and
+    prompt=<1912 chars> # SYSTEM — NB Pro Temporal Continuation |  | You receive a prior-frame image as input1 and
+
+llm-ea4efcb2 [llm]
+    pos=(23042,2144)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<874 chars> Render a continuation frame of input1 set 15 seconds later, with the camera pushed in clos
+    text=<3382 chars> <thinking> | **My Thought Process: Crafting the Continuation Frame** |  | Okay, so I've be
+    showThinking=False
+
+textInput-1e018e62 [textInput]
+    pos=(22567,2395)
+    outputText=<73 chars> muovi la camera 30% avanti | 15sec dopo | gli oggetti continuano la rotazione
+    text=<73 chars> muovi la camera 30% avanti | 15sec dopo | gli oggetti continuano la rotazione
+    prompt=<73 chars> muovi la camera 30% avanti | 15sec dopo | gli oggetti continuano la rotazione
+
+paste-e611e207 [imageUpload]
+    pos=(15040,586)
+    mediaId='media-1779146114140-mfa2qv'
+
+generateImage-d29ec166 [generateImage]
+    pos=(16492,581)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='16:9'
+    resolution='2K'
+    inputLocked=True
+    mediaId='media-1779207635258-jrpiqw'
+    historyIds=[7 items]
+    outputMediaIds=None
+
+textInput-23ef9021 [textInput]
+    pos=(15690,789)
+    outputText=<80 chars> Outpaint input1 to [AR]. Keep original pixels unchanged. Extend background only.
+    text=<80 chars> Outpaint input1 to {AR}. Keep original pixels unchanged. Extend background only.
+    prompt=<80 chars> Outpaint input1 to {AR}. Keep original pixels unchanged. Extend background only.
+
+bracketParser-c4e75a2a [bracketParser]
+    pos=(15951,788)
+    outputText=<80 chars> Outpaint input1 to 16:9. Keep original pixels unchanged. Extend background only.
+    outputPins={1 keys}: ['text-0']
+    outputMode='template'
+    overrides={1 keys}: ['AR']
+    excludedKeys=[0 items]
+    outputLimit=0
+    outputOverride=None
+    pinsCollapsed=False
+    previewCollapsed=False
+    textCollapsed=False
+    text=<80 chars> Outpaint input1 to [AR]. Keep original pixels unchanged. Extend background only.
+
+textInput-42af47e1 [textInput]
+    pos=(20010,682)
+    outputText=<11166 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+    text=<11166 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+    prompt=<11166 chars> # SYSTEM — Brief → NB Pro Prompt (Multi-Input Compositing) |  | You are a prompt engineer.
+
+generateImage-1a1fb1d5 [generateImage]
+    pos=(17805,1221)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='16:9'
+    resolution='2K'
+    mediaId='media-1779207702513-a639el'
+    historyIds=[23 items]
+    outputMediaIds=None
+    inputLocked=True
+
+textInput-b7e2ba99 [textInput]
+    pos=(21721,848)
+    outputText=<6636 chars> ## Identity You are a highly specialized scene lighting analyst, designed to examine a ref
+    text=<6636 chars> ## Identity You are a highly specialized scene lighting analyst, designed to examine a ref
+    prompt=<6636 chars> ## Identity You are a highly specialized scene lighting analyst, designed to examine a ref
+
+llm-56796a98 [llm]
+    pos=(22353,1008)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<3319 chars> ```json | { |   "ID:1": "Apply the following lighting to the scene, but do not alter the s
+    text=<6985 chars> <thinking> | **Lighting Directives: A Scene Illumination Analysis** |  | Alright, let's br
+    showThinking=False
+
+jsonParser-124e64a7 [jsonParser]
+    pos=(22651,1008)
+    jsonPath=''
+    outputText=<596 chars> Apply the following lighting to the scene, but do not alter the subject or the composition
+    outputPins={1 keys}: ['text-0']
+    parseMode='json'
+    outputFormat='values'
+    flatten=False
+    overrides={0 keys}: []
+    excludedKeys=[4 items]
+    excludedSections=[0 items]
+    outputLimit=0
+    maxDepth=0
+    outputOverride=None
+    pinsCollapsed=False
+    previewCollapsed=True
+    textCollapsed=False
+
+generateImage-ab9fe79d [generateImage]
+    pos=(22950,1088)
+    selectedModel='gemini-3-pro-image-preview'
+    aspectRatio='16:9'
+    resolution='2K'
+    mediaId='media-1779206403917-0r3ouy'
+    historyIds=[3 items]
+    outputMediaIds=None
+
+auto-cb958e9d [imageUpload]
+    pos=(21845,567)
+    mediaId='media-1779206235156-zlbuyl'
+    outputMediaIds={1 keys}: ['image-out']
+
+imageUpload-00b30f2b [imageUpload]
+    pos=(21406,567)
+    outputMediaIds={1 keys}: ['image-out']
+
+llm-fd805da5 [llm]
+    pos=(17134,1311)
+    selectedModel='gemini-3.1-pro-preview'
+    outputText=<1622 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+    text=<4345 chars> <thinking> | **Summary of the Process** |  | Alright, let's break this down. First, I need
+    showThinking=False
+
+textInput-7fd2047a [textInput]
+    pos=(16613,1314)
+    outputText=<6604 chars> # SYSTEM — Base Scene Neutralization (Enumerated, PAO-proportioned, prior-frame editing) |
+    text=<5281 chars> # SYSTEM — Base Scene Neutralization (Enumerated, PAO-proportioned, prior-frame editing) |
+    prompt=<5281 chars> # SYSTEM — Base Scene Neutralization (Enumerated, PAO-proportioned, prior-frame editing) |
+
+textInput-346c5ddf [textInput]
+    pos=(17423,1336)
+    outputText=<1622 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+    autoUpdate=True
+    text=<1622 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+    prompt=<1622 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+
+textInput-86240d58 [textInput]  name='NICE TO HAVE'
+    pos=(17921,1059)
+    outputText=<1301 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+    text=<2332 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+    prompt=<2332 chars> Edit input1 in place: replace every product visible in the scene with a numbered identical
+
+imageCompare-6a13c0c5 [imageCompare]
+    pos=(22215,2010)
+
+=== EDGES ===
+  textInput-34e328f9[textInput]:text-out  ->  llm-88b3d9fb[llm]:prompt-in
+  llm-88b3d9fb[llm]:text-out  ->  jsonParser-b238c2d0[jsonParser]:text-in
+  imageUpload-94b90f4d[imageUpload]:image-out  ->  generateImage-682bd6a4[generateImage]:image-0
+  imageUpload-94b90f4d[imageUpload]:image-out  ->  llm-88b3d9fb[llm]:media-0
+  jsonParser-b238c2d0[jsonParser]:text-out  ->  bracketParser-5e27cacf[bracketParser]:text-in
+  imageUpload-cda9d505[imageUpload]:image-out  ->  generateImage-682bd6a4[generateImage]:image-1
+  imageUpload-930b1343[imageUpload]:image-out  ->  generateImage-682bd6a4[generateImage]:image-2
+  imageUpload-06498b5e[imageUpload]:image-out  ->  generateImage-682bd6a4[generateImage]:image-3
+  textInput-16ddea93[textInput]:text-out  ->  generateImage-682bd6a4[generateImage]:prompt-in
+  textInput-af106976[textInput]:text-out  ->  llm-3759faa4[llm]:text-system
+  llm-3759faa4[llm]:text-out  ->  textInput-16ddea93[textInput]:text-in
+  imageUpload-94b90f4d[imageUpload]:image-out  ->  llm-3759faa4[llm]:media-0
+  imageUpload-cda9d505[imageUpload]:image-out  ->  llm-3759faa4[llm]:media-1
+  imageUpload-930b1343[imageUpload]:image-out  ->  llm-3759faa4[llm]:media-2
+  imageUpload-06498b5e[imageUpload]:image-out  ->  llm-3759faa4[llm]:media-3
+  imageUpload-94b90f4d[imageUpload]:image-out  ->  imageUpload-06498b5e[imageUpload]:image-in
+  bracketParser-5e27cacf[bracketParser]:text-out  ->  llm-3759faa4[llm]:prompt-in
+  generateImage-682bd6a4[generateImage]:image-out  ->  generateImage-2ba27644[generateImage]:image-0
+  generateImage-682bd6a4[generateImage]:image-out  ->  llm-8b33dbeb[llm]:media-0
+  textInput-42d3c798[textInput]:text-out  ->  llm-8b33dbeb[llm]:text-system
+  textInput-e8779408[textInput]:text-out  ->  llm-8b33dbeb[llm]:prompt-in
+  llm-8b33dbeb[llm]:text-out  ->  generateImage-2ba27644[generateImage]:prompt-in
+  imageUpload-930b1343[imageUpload]:image-out  ->  llm-8b33dbeb[llm]:media-1
+  llm-4cf1fae7[llm]:text-out  ->  jsonParser-eca42a68[jsonParser]:text-in
+  imageUpload-e12a0e2b[imageUpload]:image-out  ->  generateImage-d45fc9ab[generateImage]:image-0
+  imageUpload-e12a0e2b[imageUpload]:image-out  ->  llm-4cf1fae7[llm]:media-0
+  jsonParser-eca42a68[jsonParser]:text-out  ->  bracketParser-adf6f3bf[bracketParser]:text-in
+  imageUpload-0e9ef328[imageUpload]:image-out  ->  generateImage-d45fc9ab[generateImage]:image-1
+  imageUpload-2d0eb1ca[imageUpload]:image-out  ->  generateImage-d45fc9ab[generateImage]:image-2
+  imageUpload-7e01286c[imageUpload]:image-out  ->  generateImage-d45fc9ab[generateImage]:image-3
+  textInput-56d11f89[textInput]:text-out  ->  generateImage-d45fc9ab[generateImage]:prompt-in
+  textInput-bc394f13[textInput]:text-out  ->  llm-0fc0b745[llm]:text-system
+  llm-0fc0b745[llm]:text-out  ->  textInput-56d11f89[textInput]:text-in
+  imageUpload-e12a0e2b[imageUpload]:image-out  ->  llm-0fc0b745[llm]:media-0
+  imageUpload-0e9ef328[imageUpload]:image-out  ->  llm-0fc0b745[llm]:media-1
+  imageUpload-2d0eb1ca[imageUpload]:image-out  ->  llm-0fc0b745[llm]:media-2
+  imageUpload-7e01286c[imageUpload]:image-out  ->  llm-0fc0b745[llm]:media-3
+  imageUpload-e12a0e2b[imageUpload]:image-out  ->  imageUpload-7e01286c[imageUpload]:image-in
+  bracketParser-adf6f3bf[bracketParser]:text-out  ->  llm-0fc0b745[llm]:prompt-in
+  generateImage-d45fc9ab[generateImage]:image-out  ->  generateImage-4e9bf64c[generateImage]:image-0
+  generateImage-d45fc9ab[generateImage]:image-out  ->  llm-ea4efcb2[llm]:media-0
+  textInput-34dd522b[textInput]:text-out  ->  llm-ea4efcb2[llm]:text-system
+  textInput-1e018e62[textInput]:text-out  ->  llm-ea4efcb2[llm]:prompt-in
+  llm-ea4efcb2[llm]:text-out  ->  generateImage-4e9bf64c[generateImage]:prompt-in
+  imageUpload-2d0eb1ca[imageUpload]:image-out  ->  llm-ea4efcb2[llm]:media-1
+  paste-e611e207[imageUpload]:image-out  ->  generateImage-d29ec166[generateImage]:image-0
+  textInput-23ef9021[textInput]:text-out  ->  bracketParser-c4e75a2a[bracketParser]:text-in
+  bracketParser-c4e75a2a[bracketParser]:text-out  ->  generateImage-d29ec166[generateImage]:prompt-in
+  generateImage-d29ec166[generateImage]:image-out  ->  generateImage-1a1fb1d5[generateImage]:image-0
+  generateImage-1a1fb1d5[generateImage]:image-out  ->  imageUpload-e12a0e2b[imageUpload]:image-in
+  textInput-b7e2ba99[textInput]:text-out  ->  llm-56796a98[llm]:prompt-in
+  llm-56796a98[llm]:text-out  ->  jsonParser-124e64a7[jsonParser]:text-in
+  generateImage-d45fc9ab[generateImage]:image-out  ->  generateImage-ab9fe79d[generateImage]:image-0
+  jsonParser-124e64a7[jsonParser]:text-out  ->  generateImage-ab9fe79d[generateImage]:prompt-in
+  auto-cb958e9d[imageUpload]:image-out  ->  llm-56796a98[llm]:media-0
+  generateImage-d29ec166[generateImage]:image-out  ->  imageUpload-00b30f2b[imageUpload]:image-in
+  imageUpload-00b30f2b[imageUpload]:image-out  ->  auto-cb958e9d[imageUpload]:image-in
+  generateImage-d29ec166[generateImage]:image-out  ->  llm-fd805da5[llm]:media-0
+  llm-fd805da5[llm]:text-out  ->  textInput-346c5ddf[textInput]:text-in
+  textInput-7fd2047a[textInput]:text-out  ->  llm-fd805da5[llm]:prompt-in
+  textInput-346c5ddf[textInput]:text-out  ->  generateImage-1a1fb1d5[generateImage]:prompt-in
+  generateImage-d29ec166[generateImage]:image-out  ->  imageCompare-6a13c0c5[imageCompare]:image-0
+  generateImage-d45fc9ab[generateImage]:image-out  ->  imageCompare-6a13c0c5[imageCompare]:image-1
+  textInput-9255526b[textInput]:text-out  ->  llm-4cf1fae7[llm]:prompt-in

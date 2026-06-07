@@ -224,6 +224,36 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16"),
         tooltip="Run on your GPU (24GB+ VRAM)",
     ),
+    # Google Imagen 4 — text-to-image only (no refs). Sunset 2026-06-24.
+    Model(
+        id="imagen-4.0-ultra-generate-001",
+        name="Imagen 4 Ultra",
+        provider="imagen",
+        capability="image",
+        cost_per_call=0.06,
+        aspect_ratios=("1:1", "16:9", "9:16", "4:3", "3:4"),
+        tooltip="Imagen 4 Ultra — max detail, up to 2K (sunset 2026-06-24)",
+    ),
+    Model(
+        id="imagen-4.0-fast-generate-001",
+        name="Imagen 4 Fast",
+        provider="imagen",
+        capability="image",
+        cost_per_call=0.02,
+        aspect_ratios=("1:1", "16:9", "9:16", "4:3", "3:4"),
+        tooltip="Imagen 4 Fast — quick iterations (sunset 2026-06-24)",
+    ),
+    # Atlas Cloud — Flux 2 Pro (Black Forest Labs, 32B). T2I + I2I (single ref).
+    Model(
+        id="atlas-flux-2-pro",
+        name="Flux 2 Pro (Atlas)",
+        provider="atlas",
+        capability="image",
+        cost_per_call=0.04,
+        aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16"),
+        max_ref_images=1,
+        tooltip="Atlas Cloud — Flux 2 Pro 32B, T2I + I2I (single ref), up to 2048x2048",
+    ),
 )
 
 

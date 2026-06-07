@@ -115,6 +115,8 @@ MODELS = {
 IMAGE_MODELS = {
     "Gemini 3.1 Flash Image": "gemini-3.1-flash-image-preview",
     "Gemini 3 Pro Image": "gemini-3-pro-image-preview",
+    "Imagen 4 Ultra": "imagen-4.0-ultra-generate-001",
+    "Imagen 4 Fast": "imagen-4.0-fast-generate-001",
 }
 
 # Cost per 1M tokens (USD): (input_per_1M, output_per_1M)
@@ -133,6 +135,9 @@ MODEL_PRICING = {
     "claude-sonnet-4-6-20250620": (3.00, 15.00),
     "claude-opus-4-6-20250620": (15.00, 75.00),
     "claude-haiku-4-5-20251001": (0.80, 4.00),
+    # Imagen 4: per-image pricing (stored as output cost, input=0). Sunset 2026-06-24.
+    "imagen-4.0-ultra-generate-001": (0, 60.00),        # $0.06/image
+    "imagen-4.0-fast-generate-001": (0, 20.00),         # $0.02/image
 }
 
 

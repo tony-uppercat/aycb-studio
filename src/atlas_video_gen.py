@@ -25,7 +25,7 @@ BASE_URL = "https://api.atlascloud.ai/api/v1"
 def _build_models_dict() -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for m in REGISTRY.values():
-        if m.provider != "atlas":
+        if m.provider != "atlas" or m.capability != "video":
             continue
         out[m.id] = {
             "name": m.name,

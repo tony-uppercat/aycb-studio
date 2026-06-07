@@ -23,6 +23,8 @@ const MODEL_MAP: Record<string, string> = {
   'Gemini 3 Flash Thinking': 'gemini-3-flash-preview:thinking',
   'Gemini 3.1 Flash Image': 'gemini-3.1-flash-image-preview',
   'Gemini 3 Pro Image': 'gemini-3-pro-image-preview',
+  'Imagen 4 Ultra': 'imagen-4.0-ultra-generate-001',
+  'Imagen 4 Fast': 'imagen-4.0-fast-generate-001',
   // Migration aliases — saved canvases serialized before 2026-05-14 carry the
   // -preview id; rewrite to GA before the HTTP call so the API still resolves.
   // Safe to remove after 2026-06-30.
@@ -194,6 +196,35 @@ const geminiImageProvider: ImageProvider = {
   },
 }
 
+// ── Imagen provider (generateImages API) ────────────────────────────────────
+// Sunset 2026-06-24. Text-to-image only — refs not supported by the API.
+
+const imagenImageProvider: ImageProvider = {
+  id: 'imagen',
+  async generateImage(prompt: string, modelNameOrId: string, apiKey: string, _refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
+    const ai = new GoogleGenAI({ apiKey })
+    const modelId = resolveModel(modelNameOrId)
+
+    const response = await ai.models.generateImages({
+      model: modelId,
+      prompt,
+      config: {
+        numberOfImages: 1,
+        ...(options?.aspectRatio ? { aspectRatio: options.aspectRatio } : {}),
+      },
+    })
+
+    const perImageCost = imageCostFor(modelId) ?? 0
+    const usage: UsageInfo = { input_tokens: 0, output_tokens: 0, cost_usd: perImageCost }
+
+    const img = response.generatedImages?.[0]
+    if (img?.image?.imageBytes) {
+      return { image_b64: img.image.imageBytes, status: 'OK', usage }
+    }
+    return { image_b64: null, status: 'No image generated', usage }
+  },
+}
+
 // ── Gemini LLM provider ─────────────────────────────────────────────────────
 
 const geminiLLMProvider: LLMProvider = {
@@ -284,4 +315,5 @@ const geminiLLMProvider: LLMProvider = {
 // ── Register all providers at module scope ──────────────────────────────────
 
 registerImageProvider(geminiImageProvider)
+registerImageProvider(imagenImageProvider)
 registerLLMProvider(geminiLLMProvider)

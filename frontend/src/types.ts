@@ -215,3 +215,50 @@ export interface MetapromptNodeData extends Record<string, unknown> {
   selectedModel?: string
   _stop?: boolean
 }
+
+// ── Generate Image Batch (Gemini Batch API async) ─────────────────────────────
+
+export interface BatchPendingRequest {
+  key: string
+  prompt: string
+  refs_b64: string[]
+  refs_mime: string[]
+  aspect_ratio: string
+  resolution: string
+  thinking: boolean
+  grounding: boolean
+  added_at: number
+}
+
+export interface BatchJobView {
+  id: string
+  google_job_name: string
+  node_id: string
+  model: string
+  submitted_at: string
+  updated_at: string
+  state: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'expired'
+  requests: { key: string; prompt: string }[]
+  results: {
+    request_key: string
+    media_path: string | null
+    media_id: string | null
+    cost: number
+    error: string | null
+  }[]
+  cost_estimate: number
+  error: string | null
+}
+
+export interface GenerateImageBatchNodeData {
+  prompt: string
+  selectedModel: string
+  aspectRatio: string
+  resolution: string
+  thinking?: boolean
+  grounding?: boolean
+  bundleN?: number
+  bundleT?: number
+  pending?: BatchPendingRequest[]
+  knownResultIds?: string[]
+}

@@ -59,7 +59,29 @@ async def lifespan(app: FastAPI):
             _log(f"WARNING: shared media dir not available: {e}")
     from src.review_hub.app import rh_startup
     await rh_startup()
+
+    # ── Batch generation poller ──
+    app.state.batch_poller = None
+    try:
+        from src.plugins.batch_gen import _get_provider, get_store
+        from src.batch_gen.poller import BatchPoller
+        provider = _get_provider()
+        poller = BatchPoller(
+            store=get_store(),
+            provider=provider,
+            media_dir=settings.media_dir,
+        )
+        poller.start()
+        app.state.batch_poller = poller
+    except Exception as e:
+        _log(f"batch_gen: poller NOT started ({e})")
+
     yield
+
+    # ── Shutdown ──
+    poller = getattr(app.state, "batch_poller", None)
+    if poller is not None:
+        await poller.stop()
 
 
 # ── App ─────────────────────────────────────────────────────────────────────

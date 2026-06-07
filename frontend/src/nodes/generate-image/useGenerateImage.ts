@@ -36,6 +36,8 @@ const GEMINI_PRO_AR = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9']
 const OPENAI_AR = ['1:1', '3:2', '2:3', '16:9', '9:16', '21:9']
 const RECRAFT_AR = ['1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16']
 const FLUX_AR = ['1:1', '4:3', '3:4', '16:9', '9:16']
+const IMAGEN_AR = ['1:1', '16:9', '9:16', '4:3', '3:4']
+const ATLAS_FLUX_AR = ['1:1', '4:3', '3:4', '16:9', '9:16']
 
 const IMAGE_MODELS_FALLBACK: ImageModelDef[] = [
   // Google Gemini — text-to-image & image-to-image (pass ref images for editing)
@@ -54,6 +56,11 @@ const IMAGE_MODELS_FALLBACK: ImageModelDef[] = [
   // Flux (Local GPU)
   { id: 'local/flux-2-klein-4b', name: 'Flux 2 Klein 4B (Local)', provider: 'local', tooltip: 'Run on your GPU', price: 'Free', cost: 0, deprecated: false, aspect_ratios: FLUX_AR },
   { id: 'local/flux-2-klein-9b', name: 'Flux 2 Klein 9B (Local)', provider: 'local', tooltip: 'Run on your GPU (24GB+ VRAM)', price: 'Free', cost: 0, deprecated: false, aspect_ratios: FLUX_AR },
+  // Google Imagen 4 — text-to-image only, sunset 2026-06-24
+  { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4 Ultra', provider: 'imagen', tooltip: 'Imagen 4 Ultra — max detail, up to 2K (sunset 2026-06-24)', price: '$0.06', cost: 0.06, deprecated: false, aspect_ratios: IMAGEN_AR },
+  { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4 Fast', provider: 'imagen', tooltip: 'Imagen 4 Fast — quick iterations (sunset 2026-06-24)', price: '$0.02', cost: 0.02, deprecated: false, aspect_ratios: IMAGEN_AR },
+  // Atlas Cloud
+  { id: 'atlas-flux-2-pro', name: 'Flux 2 Pro (Atlas)', provider: 'atlas', tooltip: 'Atlas Cloud — Flux 2 Pro 32B, T2I + I2I (single ref), up to 2048x2048', price: '$0.04', cost: 0.04, deprecated: false, aspect_ratios: ATLAS_FLUX_AR },
 ]
 
 export const IMAGE_MODELS: ImageModelDef[] = IMAGE_MODELS_FALLBACK
@@ -124,7 +131,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const { updateNodeData, getNodes, getEdges, setEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const { openPreview } = useMediaPreview()
-  const { apiKey, openaiApiKey, recraftApiKey, bflApiKey, localServerUrl } = useSettings()
+  const { apiKey, openaiApiKey, recraftApiKey, bflApiKey, atlasApiKey, localServerUrl } = useSettings()
 
   // Dynamic image pins (same pattern as LLM media pins)
   const connectedImageCount = useStore(state =>
@@ -519,6 +526,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
                      : modelInfo.provider === 'local' ? localServerUrl
                      : modelInfo.provider === 'openai' ? openaiApiKey
                      : modelInfo.provider === 'recraft' ? recraftApiKey
+                     : modelInfo.provider === 'atlas' ? atlasApiKey
                      : apiKey
     const currentAspectRatio = aspectRatioRef.current
     const currentResolution = resolutionRef.current

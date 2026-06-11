@@ -15,6 +15,7 @@ import { useCanvasStore } from '../../stores/canvasStore'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
 import { fetchReviewStatus, registerBridgeStem, saveMediaMeta, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
 import { cropImageFileToAspectRatio } from '../../utils/cropToAspectRatio'
+import { geminiSupportsBatch } from '../../providers/geminiBatchPath'
 
 export interface ImageModelDef {
   id: string
@@ -189,6 +190,11 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // chain and you want input/output to stay byte-aligned).
   const [cropRefs, setCropRefs, cropRefsRef] = useStateRef(
     Boolean((data as Record<string, unknown>).cropRefs),
+  )
+  // Async mode: Batch API at 50% cost. run() awaits the result, so cascades
+  // stay correct; latency is unbounded (24h SLA, usually minutes).
+  const [asyncGen, setAsyncGen, asyncGenRef] = useStateRef(
+    Boolean((data as Record<string, unknown>).asyncGen),
   )
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64, imageB64Ref] = useStateRef<string | null>(null)
@@ -472,10 +478,24 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const promptForEstimate = pullText(id, 'prompt-in', getNodes, getEdges) || activePrompt
   const editRefCount = (editMode && currentMediaId) ? 1 : 0
   const estimate = estimateCost(selectedModel, 'generate_image', promptForEstimate, connectedImageCount + editRefCount, 0, 1, resolution, thinking)
-  const estimatedLabel = formatCostEstimate(estimate.costUsd)
+  // Async (Batch API) capability gates the ASY toggle and halves the estimate.
+  const asyncCapable = modelInfo.provider === 'openai'
+    || (modelInfo.provider === 'gemini' && geminiSupportsBatch(selectedModel))
+  const asyncActive = asyncGen && asyncCapable
+  const estimatedLabel = formatCostEstimate(estimate.costUsd * (asyncActive ? 0.5 : 1))
 
   const [batchCount, setBatchCount] = useState(1)
   const [batchProgress, setBatchProgress] = useState(0)
+
+  // Elapsed seconds while an async (batch) run is in flight — drives the
+  // "Batch Xm Ys" status label.
+  const [asyncElapsed, setAsyncElapsed] = useState(0)
+  useEffect(() => {
+    if (!(loading && asyncGen)) { setAsyncElapsed(0); return }
+    const t0 = Date.now()
+    const iv = setInterval(() => setAsyncElapsed(Math.floor((Date.now() - t0) / 1000)), 1000)
+    return () => clearInterval(iv)
+  }, [loading, asyncGen])
 
   // Dynamic output slots: one per batch slot when ×2/×4
   const outputSlots: SlotDef[] = useMemo(() => {
@@ -530,11 +550,14 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
                      : apiKey
     const currentAspectRatio = aspectRatioRef.current
     const currentResolution = resolutionRef.current
+    const asyncCapableRun = modelInfo.provider === 'openai'
+      || (modelInfo.provider === 'gemini' && geminiSupportsBatch(selectedModel))
     const imageOptions = {
       ...(currentAspectRatio ? { aspectRatio: currentAspectRatio } : {}),
       ...(currentResolution ? { imageSize: currentResolution } : {}),
       ...(groundingRef.current ? { useGrounding: true } : {}),
       ...(thinkingRef.current === false ? { thinking: false } : {}),
+      ...(asyncGenRef.current && asyncCapableRun ? { async: true } : {}),
     }
     // Pre-crop refs to output AR only when the user opted in via the CROP
     // toggle. Default: send refs intact and let the model handle AR mismatch.
@@ -674,6 +697,9 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     editMode, setEditMode,
     thinking, setThinking,
     cropRefs, setCropRefs,
+    asyncGen, setAsyncGen,
+    asyncCapable,
+    asyncElapsed,
     localPrompt, setLocalPrompt,
     imageB64,
     compareSourceUrl,

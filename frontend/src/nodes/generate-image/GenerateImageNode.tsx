@@ -139,6 +139,15 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             onClick={() => { h.setEditMode(!h.editMode); h.updateNodeData(id, { editMode: !h.editMode }) }}
             title="Edit Mode — reuses last generation as iterative base. Without a prior gen, the connected input image (Ref 1) acts as the implicit edit target."
           >EDIT</button>
+          {h.asyncCapable && (
+            <button
+              className={`${styles.batchBtn} ${h.asyncGen ? styles.batchBtnActive : ''}`}
+              onClick={() => { h.setAsyncGen(!h.asyncGen); h.updateNodeData(id, { asyncGen: !h.asyncGen }) }}
+              title={h.asyncGen
+                ? 'Async ON — Batch API at 50% cost; run waits for the result (minutes to hours)'
+                : 'Async OFF — sync generation at full price'}
+            >ASY</button>
+          )}
         </div>
         {h.connectedImageCount >= 2 && (
           <button className={styles.swapBtn} onClick={h.swapRefs} title="Swap Ref 1 ↔ Ref 2">⇄</button>
@@ -156,6 +165,11 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         )}
         {h.loading && h.batchCount > 1 && (
           <div className={styles.batchProgress}>{h.batchProgress}/{h.batchCount}</div>
+        )}
+        {h.loading && h.asyncGen && h.asyncCapable && (
+          <div className={styles.batchProgress}>
+            Batch {Math.floor(h.asyncElapsed / 60)}m {h.asyncElapsed % 60}s
+          </div>
         )}
         {h.error && <p className={styles.error}>{h.error}</p>}
         <div className={styles.previewArea}>

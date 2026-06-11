@@ -7,6 +7,7 @@ import type { GenerateImageResult, UsageInfo } from '../types'
 import { registerImageProvider, registerLLMProvider, type ImageProvider, type ImageGenerationOptions, type LLMProvider } from './index'
 import { MODEL_PRICING } from '../utils/costEstimate'
 import { imageCostFor, parseGenerateContentResponse } from './geminiShared'
+import { runGeminiBatch, geminiSupportsBatch } from './geminiBatchPath'
 
 /**
  * Legacy display-name aliases — old callers could pass a human label
@@ -114,6 +115,12 @@ const geminiImageProvider: ImageProvider = {
           },
         },
       }]
+    }
+
+    // Async mode: same request body via Batch API at 50% cost (awaits result).
+    // Gate on model support — flash-lite-image 404s on batchGenerateContent.
+    if (options?.async && geminiSupportsBatch(modelId)) {
+      return runGeminiBatch(modelId, body, apiKey)
     }
 
     // Direct REST call — bypasses @google/genai SDK which silently drops

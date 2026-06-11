@@ -6,6 +6,8 @@ export interface ImageGenerationOptions {
   useGrounding?: boolean
   /** When undefined or true, the provider passes thinkingConfig HIGH (Gemini only). */
   thinking?: boolean
+  /** Route through the provider's Batch API at 50% cost; awaits the result (Gemini + OpenAI only). */
+  async?: boolean
 }
 
 export interface ImageProvider {

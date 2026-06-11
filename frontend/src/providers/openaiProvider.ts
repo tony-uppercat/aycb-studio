@@ -9,6 +9,7 @@
  */
 import type { GenerateImageResult, UsageInfo } from '../types'
 import { registerImageProvider, type ImageProvider, type ImageGenerationOptions } from './index'
+import { runOpenAIBatch } from './openaiBatchPath'
 
 const OPENAI_BASE = 'https://api.openai.com/v1'
 
@@ -71,8 +72,8 @@ function resolutionToQuality(res?: string): string {
   return 'high'
 }
 
-/** Token-based pricing per OpenAI public rates (2026-04-21). */
-function computeCost(usage: {
+/** Token-based pricing per OpenAI public rates (2026-04-21). Exported for the Batch path. */
+export function computeCost(usage: {
   input_tokens?: number
   output_tokens?: number
   input_tokens_details?: { text_tokens?: number; image_tokens?: number }
@@ -175,6 +176,10 @@ const openaiImageProvider: ImageProvider = {
     if (!apiKey) throw new Error('OpenAI API key not configured — Settings > API Keys')
     const size = computeSize(options?.aspectRatio, options?.imageSize)
     const quality = resolutionToQuality(options?.imageSize)
+    // Async mode: Batch API at 50% cost (awaits result, can take minutes-hours).
+    if (options?.async) {
+      return runOpenAIBatch({ prompt, modelId, apiKey, size, quality, refs })
+    }
     if (refs && refs.length > 0) {
       return generateFromEdits(prompt, modelId, apiKey, refs, size, quality)
     }

@@ -6,7 +6,7 @@ import { GoogleGenAI } from '@google/genai'
 import type { GenerateImageResult, UsageInfo } from '../types'
 import { registerImageProvider, registerLLMProvider, type ImageProvider, type ImageGenerationOptions, type LLMProvider } from './index'
 import { MODEL_PRICING } from '../utils/costEstimate'
-import { getCachedRegistry } from '../hooks/useModelRegistry'
+import { imageCostFor, parseGenerateContentResponse } from './geminiShared'
 
 /**
  * Legacy display-name aliases — old callers could pass a human label
@@ -49,37 +49,8 @@ export async function fileToBase64(file: File): Promise<string> {
 }
 
 // ── Gemini image provider (generateContent with IMAGE modality) ─────────────
-
-/**
- * Official Google per-image pricing (fallback, used when the backend
- * registry hasn't loaded yet — e.g. cold start or cloud mode without
- * backend). Kept in sync with src/registry.py cost_per_call; a backend
- * drift test alarms if src/registry.py diverges from the provider
- * MODELS dicts.
- */
-const GEMINI_IMAGE_COST_FALLBACK: Record<string, number> = {
-  'gemini-3.1-flash-image-preview': 0.067,   // $0.045@0.5K, $0.067@1K, $0.101@2K, $0.151@4K
-  'gemini-3-pro-image-preview': 0.134,        // $0.134@1K-2K, $0.240@4K
-}
-
-function imageCostFor(modelId: string): number | null {
-  const cached = getCachedRegistry()
-  if (cached) {
-    const entry = cached.find((m) => m.id === modelId)
-    if (entry?.cost_per_call != null) return entry.cost_per_call
-  }
-  return GEMINI_IMAGE_COST_FALLBACK[modelId] ?? null
-}
-
-/** Compute cost: fixed per-image for image gen, per-token for text/LLM */
-function computeGeminiCost(modelId: string, inputTokens: number, outputTokens: number): number {
-  // Image generation: use official fixed per-image price
-  const perImage = imageCostFor(modelId)
-  if (perImage !== null && outputTokens > 0) return perImage
-  // Text/LLM fallback: per-token rates
-  const rates = MODEL_PRICING[modelId] ?? [0, 0]
-  return (inputTokens / 1_000_000) * rates[0] + (outputTokens / 1_000_000) * rates[1]
-}
+// Per-image pricing + response parsing live in ./geminiShared (also used by
+// the async Batch API path in ./geminiBatchPath).
 
 const geminiImageProvider: ImageProvider = {
   id: 'gemini',
@@ -169,30 +140,7 @@ const geminiImageProvider: ImageProvider = {
     }
 
     const data = await response.json()
-
-    // Extract usage metadata for cost tracking (REST shape uses snake_case in
-    // some fields, camelCase in others — try both).
-    const um = data.usageMetadata ?? data.usage_metadata ?? {}
-    const inputTokens = um.promptTokenCount ?? um.prompt_token_count ?? 0
-    const outputTokens = um.candidatesTokenCount ?? um.candidates_token_count ?? 0
-    const costUsd = computeGeminiCost(modelId, inputTokens, outputTokens)
-    const usage: UsageInfo | undefined = (inputTokens > 0 || outputTokens > 0)
-      ? { input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: costUsd }
-      : undefined
-
-    // Extract first inline image part. Try both camelCase (SDK style) and
-    // snake_case (REST raw) field names.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const candidate = data.candidates?.[0]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const partsResp: any[] = candidate?.content?.parts ?? []
-    for (const part of partsResp) {
-      const inline = part.inlineData ?? part.inline_data
-      if (inline?.data) {
-        return { image_b64: inline.data, status: 'OK', usage }
-      }
-    }
-    return { image_b64: null, status: 'No image generated', usage }
+    return parseGenerateContentResponse(data, modelId)
   },
 }
 

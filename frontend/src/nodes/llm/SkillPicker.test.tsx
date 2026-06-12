@@ -13,10 +13,18 @@ describe('SkillPicker', () => {
     })
   })
 
-  it('renders fetched skills and toggles selection', async () => {
+  it('starts collapsed with a summary of the selection', async () => {
+    render(<SkillPicker value={['caveman']} onChange={vi.fn()} />)
+    await waitFor(() => screen.getByText(/Skills \(1\): caveman/))
+    expect(screen.queryByLabelText('react-patterns')).toBeNull()
+  })
+
+  it('expands on click, toggles a skill', async () => {
     const onChange = vi.fn()
     render(<SkillPicker value={['caveman']} onChange={onChange} />)
-    await waitFor(() => screen.getByText('react-patterns'))
+    await waitFor(() => screen.getByRole('button', { expanded: false }))
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    await waitFor(() => screen.getByLabelText('react-patterns'))
     fireEvent.click(screen.getByLabelText('react-patterns'))
     expect(onChange).toHaveBeenCalledWith(['caveman', 'react-patterns'])
   })
@@ -24,6 +32,7 @@ describe('SkillPicker', () => {
   it('unchecks a selected skill', async () => {
     const onChange = vi.fn()
     render(<SkillPicker value={['caveman']} onChange={onChange} />)
+    fireEvent.click(await waitFor(() => screen.getByRole('button', { expanded: false })))
     await waitFor(() => screen.getByLabelText('caveman'))
     fireEvent.click(screen.getByLabelText('caveman'))
     expect(onChange).toHaveBeenCalledWith([])

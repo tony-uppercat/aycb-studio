@@ -32,6 +32,19 @@ def test_build_command_basics():
     assert cmd[cmd.index("--max-turns") + 1] == "2"
 
 
+def test_build_command_no_images_disables_all_tools():
+    # A generation node is not an agent: with no images the model gets NO tools,
+    # so it cannot wander into tool calls (and blow --max-turns) or auto-fire skills.
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 0)
+    assert cmd[cmd.index("--tools") + 1] == ""
+
+
+def test_build_command_with_images_allows_only_read():
+    # Images are loaded via the Read tool; nothing else is exposed.
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 2)
+    assert cmd[cmd.index("--tools") + 1] == "Read"
+
+
 def test_build_command_system_appended():
     cmd = claude_cli.build_command("claude-opus-4-8", "Be terse", 0)
     assert cmd[cmd.index("--append-system-prompt") + 1] == "Be terse"
@@ -62,7 +75,7 @@ def test_run_instruction_via_stdin_not_argv():
     captured = {}
     def fake(cmd, stdin):
         captured["cmd"], captured["stdin"] = cmd, stdin
-        return (0, _ok_payload())
+        return (0, _ok_payload(), "")
     claude_cli.run("my long prompt", "cli-claude-opus-4-8", None, [], run_fn=fake)
     assert "my long prompt" in captured["stdin"]
     assert "my long prompt" not in " ".join(captured["cmd"])
@@ -70,32 +83,48 @@ def test_run_instruction_via_stdin_not_argv():
 
 def test_run_parses_ok_result():
     r = claude_cli.run("hi", "cli-claude-sonnet-4-6", None, [],
-                       run_fn=lambda cmd, stdin: (0, _ok_payload("hello", 0.02, 3, 4)))
+                       run_fn=lambda cmd, stdin: (0, _ok_payload("hello", 0.02, 3, 4), ""))
     assert r["status"] == "OK"
     assert r["text"] == "hello"
     assert r["usage"] == {"input_tokens": 3, "output_tokens": 4, "cost_usd": 0.02}
 
 
-def test_run_nonzero_rc_is_error():
-    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (1, ""))
+def test_parse_result_max_turns_surfaces_reason():
+    # claude exits 1 BUT prints a valid JSON envelope. The reason must reach the user,
+    # not be masked as a generic "claude exited 1".
+    payload = json.dumps({
+        "is_error": True, "subtype": "error_max_turns", "result": "",
+        "errors": ["Reached maximum number of turns (2)"],
+        "usage": {}, "total_cost_usd": 0.14,
+    })
+    r = claude_cli.parse_result(1, payload, "")
+    assert r["status"] == "ERROR"
+    assert "error_max_turns" in r["error"]
+    assert "Reached maximum number of turns" in r["error"]
+
+
+def test_run_nonzero_rc_no_json_uses_stderr():
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [],
+                       run_fn=lambda cmd, stdin: (1, "", "Invalid API key"))
     assert r["status"] == "ERROR"
     assert r["text"] == ""
+    assert "Invalid API key" in r["error"]
 
 
 def test_run_is_error_true():
-    payload = json.dumps({"is_error": True, "subtype": "error_max_turns", "result": "", "usage": {}})
-    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, payload))
+    payload = json.dumps({"is_error": True, "subtype": "error_during_execution", "result": "", "usage": {}})
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, payload, ""))
     assert r["status"] == "ERROR"
 
 
 def test_run_empty_result_is_error():
     payload = json.dumps({"is_error": False, "result": "  ", "total_cost_usd": 0, "usage": {}})
-    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, payload))
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, payload, ""))
     assert r["status"] == "ERROR"
 
 
 def test_run_non_json_is_error():
-    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, "boom"))
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, "boom", ""))
     assert r["status"] == "ERROR"
 
 
@@ -130,10 +159,11 @@ def test_route_cli_error_returns_422(monkeypatch):
     import src.routers.llm as llm
 
     def fake_run(prompt, model_id, system, image_paths, run_fn=None):
-        return {"text": "", "status": "ERROR", "error": "claude exited 1",
+        return {"text": "", "status": "ERROR", "error": "Claude CLI error_max_turns: Reached maximum number of turns (2)",
                 "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}}
 
     monkeypatch.setattr(llm.claude_cli, "run", fake_run)
     client = TestClient(app)
     r = client.post("/api/llm/chat", data={"prompt": "yo", "model": "cli-claude-opus-4-8"})
     assert r.status_code == 422
+    assert "error_max_turns" in r.json()["detail"]

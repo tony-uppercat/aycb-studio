@@ -32,12 +32,18 @@ def build_command(model: str, system: str | None, n_images: int) -> list[str]:
     """`claude -p` invocation. JSON output so we can read usage + cost. --max-turns scales
     with image count: each Read of an image consumes one agentic turn, plus one for the
     final response. --bare is omitted (it forces ANTHROPIC_API_KEY-only auth, breaking the
-    subscription/OAuth session)."""
+    subscription/OAuth session).
+
+    --tools restricts the available tool pool: this is a GENERATION node, not an agent. With
+    no images the model gets NO tools ('') so it answers directly and cannot wander into
+    tool calls (which exhaust --max-turns -> error_max_turns) or auto-fire discovered skills.
+    With images it gets ONLY Read, to load each image before responding."""
     max_turns = max(2, n_images + 2)
     cmd = ["claude", "-p", "--output-format", "json",
            "--max-turns", str(max_turns),
            "--model", model,
-           "--permission-mode", "bypassPermissions"]
+           "--permission-mode", "bypassPermissions",
+           "--tools", ("Read" if n_images > 0 else "")]
     if system:
         cmd += ["--append-system-prompt", system]
     return cmd
@@ -69,50 +75,65 @@ def _win_exec(cmd: list[str]) -> list[str]:
     return [exe, *cmd[1:]]
 
 
-def _default_run(cmd: list[str], stdin: str) -> tuple[int, str]:
+def _default_run(cmd: list[str], stdin: str) -> tuple[int, str, str]:
     """Production seam: resolve the shim on Windows, run with the instruction piped to
-    STDIN, capture stdout. Returns (returncode, stdout_str)."""
+    STDIN, capture stdout + stderr. Returns (returncode, stdout_str, stderr_str). stderr is
+    the only diagnostic when claude fails before emitting its JSON envelope."""
     if sys.platform == "win32":
         cmd = _win_exec(cmd)
     proc = subprocess.run(cmd, input=stdin, capture_output=True, text=True,
                           encoding="utf-8", timeout=_TIMEOUT)
-    return proc.returncode, (proc.stdout or "")
+    return proc.returncode, (proc.stdout or ""), (proc.stderr or "")
 
 
-def parse_result(rc: int, stdout: str) -> dict:
+def parse_result(rc: int, stdout: str, stderr: str = "") -> dict:
     """Map claude's JSON result envelope to the AYCB node shape
-    {text, status, usage{input_tokens, output_tokens, cost_usd}}. A non-zero rc, invalid
-    JSON, is_error, or empty result => status 'ERROR' (with an `error` message)."""
+    {text, status, usage{input_tokens, output_tokens, cost_usd}}.
+
+    claude prints its JSON envelope even when it exits non-zero (e.g. error_max_turns
+    emits is_error=true on stdout AND exits 1). So we parse the envelope FIRST regardless
+    of rc and surface its real reason (subtype + errors[]) — masking that as a generic
+    'claude exited 1' was the original blind-spot bug. Only when there is no parseable
+    JSON do we fall back to rc + stderr."""
     err = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
-    if rc != 0:
-        return {"text": "", "status": "ERROR", "error": f"claude exited {rc}", "usage": err}
     try:
         obj = json.loads(stdout)
     except (ValueError, TypeError):
-        return {"text": "", "status": "ERROR", "error": "claude returned non-JSON output", "usage": err}
-    if obj.get("is_error") or not (obj.get("result") or "").strip():
-        msg = obj.get("subtype") or obj.get("result") or "claude reported an error"
-        return {"text": "", "status": "ERROR", "error": msg, "usage": err}
-    u = obj.get("usage") or {}
-    return {
-        "text": obj["result"],
-        "status": "OK",
-        "usage": {
-            "input_tokens": u.get("input_tokens", 0),
-            "output_tokens": u.get("output_tokens", 0),
-            "cost_usd": round(obj.get("total_cost_usd", 0.0), 6),
-        },
-    }
+        obj = None
+
+    if isinstance(obj, dict):
+        if obj.get("is_error") or not (obj.get("result") or "").strip():
+            reason = obj.get("subtype") or "error"
+            errs = obj.get("errors") or []
+            detail = "; ".join(errs) if errs else (obj.get("result") or "claude reported an error")
+            return {"text": "", "status": "ERROR", "error": f"Claude CLI {reason}: {detail}", "usage": err}
+        u = obj.get("usage") or {}
+        return {
+            "text": obj["result"],
+            "status": "OK",
+            "usage": {
+                "input_tokens": u.get("input_tokens", 0),
+                "output_tokens": u.get("output_tokens", 0),
+                "cost_usd": round(obj.get("total_cost_usd", 0.0), 6),
+            },
+        }
+
+    # No parseable JSON: claude died before emitting its envelope. Use rc + stderr tail.
+    tail = (stderr or "").strip()[-400:]
+    msg = f"claude exited {rc}" if rc != 0 else "claude returned non-JSON output"
+    if tail:
+        msg += f": {tail}"
+    return {"text": "", "status": "ERROR", "error": msg, "usage": err}
 
 
 def run(prompt: str, model_id: str, system: str | None,
         image_paths: list[str], run_fn=None) -> dict:
     """Invoke claude once for a prompt (+ optional images already on disk) and return the
-    AYCB node-shape dict. `run_fn(cmd, stdin) -> (rc, stdout)` is injected in tests so no
-    real claude is spawned."""
+    AYCB node-shape dict. `run_fn(cmd, stdin) -> (rc, stdout, stderr)` is injected in tests
+    so no real claude is spawned."""
     if run_fn is None:
         run_fn = _default_run
     cmd = build_command(real_model(model_id), (system or "").strip() or None, len(image_paths))
     instruction = build_instruction(prompt, image_paths)
-    rc, stdout = run_fn(cmd, instruction)
-    return parse_result(rc, stdout)
+    rc, stdout, stderr = run_fn(cmd, instruction)
+    return parse_result(rc, stdout, stderr)

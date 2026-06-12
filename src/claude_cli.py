@@ -28,28 +28,34 @@ def real_model(model_id: str) -> str:
     return model_id[len(_CLI_PREFIX):] if model_id.startswith(_CLI_PREFIX) else model_id
 
 
-def build_command(model: str, system_file: str | None, n_images: int) -> list[str]:
-    """`claude -p` invocation. JSON output so we can read usage + cost. --max-turns scales
-    with image count: each Read of an image consumes one agentic turn, plus one for the
-    final response. --bare is omitted (it forces ANTHROPIC_API_KEY-only auth, breaking the
-    subscription/OAuth session).
+def build_command(model: str, system_file: str | None, n_images: int,
+                  skills_enabled: bool = False) -> list[str]:
+    """`claude -p` invocation. JSON output so we can read usage + cost.
 
-    --tools restricts the available tool pool: this is a GENERATION node, not an agent. With
-    no images the model gets NO tools ('') so it answers directly and cannot wander into
-    tool calls (which exhaust --max-turns -> error_max_turns) or auto-fire discovered skills.
-    With images it gets ONLY Read, to load each image before responding.
+    Default (generation node): NO tools ('' / 'Read' for images), --max-turns
+    scales with image count, so the model answers directly without wandering
+    into tool calls or auto-firing skills.
 
-    The system prompt is passed as a FILE (`--append-system-prompt-file`), never inline: a
-    large system prompt as an argv string blows Windows' ~8191-char command-line limit
-    ("The command line is too long"). The user prompt is likewise piped via STDIN, so argv
-    stays short regardless of prompt/system size. `system_file` is a path (caller-owned) or
-    None."""
-    max_turns = max(2, n_images + 2)
+    skills_enabled (knowledge-skills mode): the pool gains Skill + read-only
+    helpers ('Skill Read Glob Grep WebSearch') so the model can discover and
+    load Agent Skills, and --max-turns rises to leave room for skill load + a
+    couple of reads + the final answer. Still NO Bash/Write/Edit — knowledge
+    skills only, no shell, no file writes.
+
+    --bare is omitted (it forces ANTHROPIC_API_KEY-only auth, breaking the
+    subscription session). System prompt passed as a FILE; user prompt via
+    STDIN — both off argv (Windows ~8191-char command-line limit)."""
+    if skills_enabled:
+        max_turns = max(8, n_images + 4)
+        tools = "Skill Read Glob Grep WebSearch"
+    else:
+        max_turns = max(2, n_images + 2)
+        tools = "Read" if n_images > 0 else ""
     cmd = ["claude", "-p", "--output-format", "json",
            "--max-turns", str(max_turns),
            "--model", model,
            "--permission-mode", "bypassPermissions",
-           "--tools", ("Read" if n_images > 0 else "")]
+           "--tools", tools]
     if system_file:
         cmd += ["--append-system-prompt-file", system_file]
     return cmd

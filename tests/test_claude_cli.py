@@ -172,3 +172,21 @@ def test_route_cli_error_returns_422(monkeypatch):
     r = client.post("/api/llm/chat", data={"prompt": "yo", "model": "cli-claude-opus-4-8"})
     assert r.status_code == 422
     assert "error_max_turns" in r.json()["detail"]
+
+
+def test_build_command_skills_enabled_widens_tools_and_turns():
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 0, skills_enabled=True)
+    assert cmd[cmd.index("--tools") + 1] == "Skill Read Glob Grep WebSearch"
+    assert cmd[cmd.index("--max-turns") + 1] == "8"
+
+
+def test_build_command_skills_with_images_keeps_min_turns():
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 6, skills_enabled=True)
+    # max(8, n_images + 4) = max(8, 10) = 10
+    assert cmd[cmd.index("--max-turns") + 1] == "10"
+
+
+def test_build_command_skills_disabled_unchanged():
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 0, skills_enabled=False)
+    assert cmd[cmd.index("--tools") + 1] == ""
+    assert cmd[cmd.index("--max-turns") + 1] == "2"

@@ -11,6 +11,7 @@ import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { useOllamaModels } from '../../hooks/useOllamaModels'
 import type { LLMNodeData } from '../../types'
+import { SkillPicker } from './SkillPicker'
 import styles from '../_shared/Node.module.css'
 
 type LLMNodeType = Node<LLMNodeData, 'llm'>
@@ -21,9 +22,6 @@ const LLM_MODELS = [
   { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', api: 'gemini', tooltip: 'Latest, thinking always on, advanced agentic reasoning', price: '$2/$12', cost: 2, deprecated: false },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', api: 'gemini', tooltip: '1M context, fast balanced performance, multimodal', price: '$0.50/$3', cost: 0.50, deprecated: false },
   { id: 'gemini-3-flash-preview:thinking', name: 'Gemini 3 Flash Thinking', api: 'gemini', tooltip: 'Gemini 3 Flash with high thinking level', price: '$0.50/$3', cost: 0.50, deprecated: false },
-  { id: 'claude-sonnet-4-6-20250620', name: 'Claude Sonnet 4.6', api: 'anthropic', tooltip: 'Strong all-around model with excellent coding and analysis', price: '$3/$15', cost: 3, deprecated: false },
-  { id: 'claude-opus-4-6-20250620', name: 'Claude Opus 4.6', api: 'anthropic', tooltip: 'Most capable Claude model for advanced reasoning and creativity', price: '$15/$75', cost: 15, deprecated: false },
-  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', api: 'anthropic', tooltip: 'Fast and cost-effective for lightweight tasks', price: '$0.80/$4', cost: 0.80, deprecated: false },
   { id: 'cli-claude-opus-4-8', name: 'Opus 4.8 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
   { id: 'cli-claude-opus-4-6', name: 'Opus 4.6 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
   { id: 'cli-claude-sonnet-4-6', name: 'Sonnet 4.6 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
@@ -75,6 +73,12 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   const [prependMode, setPrependMode] = useState(
     typeof data.prependPrompt === 'boolean' ? data.prependPrompt : true
   )
+  const [skillsMode, setSkillsMode] = useState(
+    typeof data.skillsMode === 'boolean' ? data.skillsMode : false
+  )
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(
+    Array.isArray(data.selectedSkills) ? data.selectedSkills as string[] : []
+  )
 
   useEffect(() => { if (data._stop) { setLoading(false); setError('') } }, [data._stop])
 
@@ -87,6 +91,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   }, [data.outputText, data.text])
 
   const isThinkingModel = selectedModel.includes(':thinking') || selectedModel.includes('3.1-pro')
+  const isClaudeCli = selectedModel.startsWith('cli-claude-')
 
   // Strip <thinking>...</thinking> tags from output when toggle is off
   const displayOutput = !showThinking && output.includes('<thinking>')
@@ -124,7 +129,12 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
         modelInfo.api === 'anthropic' ? (anthropicKey || '')
         : modelInfo.api === 'claude-cli' ? ''
         : (apiKey || '')
-      const r = await api.llmChat(prompt, modelInfo.id, effectiveKey, files.length ? files : undefined, systemPrompt)
+      const r = await api.llmChat(
+        prompt, modelInfo.id, effectiveKey,
+        files.length ? files : undefined, systemPrompt,
+        isClaudeCli && skillsMode,
+        isClaudeCli && skillsMode ? selectedSkills : undefined,
+      )
       const text = r.text || ''
       setOutput(text)
       // Propagate filtered output (without thinking) to downstream nodes
@@ -151,7 +161,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       reportNodeError(id, msg)
     }
     finally { setLoading(false) }
-  }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, id, getNodes, getEdges, updateNodeData])
+  }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, isClaudeCli, skillsMode, selectedSkills, id, getNodes, getEdges, updateNodeData])
 
   const inputSlots: SlotDef[] = [
     { id: 'text-system', label: 'System', type: 'text' },
@@ -183,7 +193,6 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
         >
           {[
             { label: 'Gemini (Google)', items: LLM_MODELS.filter(m => m.api === 'gemini') },
-            { label: 'Claude (Anthropic)', items: LLM_MODELS.filter(m => m.api === 'anthropic') },
             { label: 'Claude (Local CLI)', items: LLM_MODELS.filter(m => m.api === 'claude-cli') },
           ].map(g => (
             <optgroup key={g.label} label={g.label}>
@@ -228,7 +237,31 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h12v2H3v-2z"/><path d="M19 15l-4-3v6l4-3z"/></svg>
           </button>
+          {isClaudeCli && (
+            <button
+              className={`${styles.subtleToggle} ${skillsMode ? styles.subtleToggleOn : ''}`}
+              onClick={() => {
+                const next = !skillsMode
+                const seeded = next && selectedSkills.length === 0 ? ['caveman'] : selectedSkills
+                setSkillsMode(next)
+                if (seeded !== selectedSkills) setSelectedSkills(seeded)
+                updateNodeData(id, { skillsMode: next, selectedSkills: seeded })
+              }}
+              title={skillsMode ? 'Skills ON' : 'Skills OFF'}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h13a3 3 0 0 1 3 3v13l-3-2-3 2-3-2-3 2-3-2V4zm3 4h9v2H7V8zm0 4h7v2H7v-2z"/></svg>
+            </button>
+          )}
         </div>
+        {isClaudeCli && skillsMode && (
+          <SkillPicker
+            value={selectedSkills}
+            onChange={next => {
+              setSelectedSkills(next)
+              updateNodeData(id, { selectedSkills: next })
+            }}
+          />
+        )}
         {/* System prompt — shown when no text-system pin connected */}
         {!pullText(id, 'text-system', getNodes, getEdges).trim() && (
           <textarea

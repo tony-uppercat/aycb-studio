@@ -54,3 +54,46 @@ def _parse_frontmatter(text: str) -> dict:
             buf.append(ln.strip())
     flush()
     return data
+
+
+def scan_skills(base_paths: list[Path]) -> list[dict]:
+    """Return [{name, description, source}] for every SKILL.md under each base
+    (`<base>/*/SKILL.md`). Dedups by name (first wins). A base that does not
+    exist is skipped; an unreadable/malformed SKILL.md is logged and skipped —
+    never raised (rule 12)."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for base in base_paths:
+        if not base.exists():
+            continue
+        for skill_md in sorted(base.glob("*/SKILL.md")):
+            try:
+                text = skill_md.read_text(encoding="utf-8")
+            except OSError as exc:
+                _log(f"skill_scanner: cannot read {skill_md}: {exc}")
+                continue
+            fm = _parse_frontmatter(text)
+            name = (fm.get("name") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            out.append({
+                "name": name,
+                "description": (fm.get("description") or "").strip(),
+                "source": base.parent.name or str(base),
+            })
+    return out
+
+
+def default_skill_paths() -> list[Path]:
+    """The skill roots headless `claude -p` actually discovers: every plugin
+    marketplace's `skills/` dir, the user skills dir, and the cwd project skills
+    dir. cwd = backend process cwd = repo root."""
+    home = Path.home()
+    paths: list[Path] = []
+    marketplaces = home / ".claude" / "plugins" / "marketplaces"
+    if marketplaces.exists():
+        paths.extend(sorted(marketplaces.glob("*/skills")))
+    paths.append(home / ".claude" / "skills")
+    paths.append(Path.cwd() / ".claude" / "skills")
+    return paths

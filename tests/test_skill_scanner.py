@@ -33,3 +33,40 @@ def test_parse_frontmatter_folded_description():
 
 def test_parse_frontmatter_no_fence_returns_empty():
     assert skill_scanner._parse_frontmatter("no frontmatter here") == {}
+
+
+def test_scan_skills_lists_name_and_description(tmp_path):
+    base = tmp_path / "skills"
+    _write_skill(base, "caveman", "---\nname: caveman\ndescription: Talk short.\n---\n")
+    _write_skill(base, "react", "---\nname: react-patterns\ndescription: React 19.\n---\n")
+    out = skill_scanner.scan_skills([base])
+    names = {s["name"] for s in out}
+    assert names == {"caveman", "react-patterns"}
+    cave = next(s for s in out if s["name"] == "caveman")
+    assert cave["description"] == "Talk short."
+    assert "source" in cave
+
+
+def test_scan_skills_dedups_by_name(tmp_path):
+    b1, b2 = tmp_path / "a", tmp_path / "b"
+    _write_skill(b1, "caveman", "---\nname: caveman\ndescription: First.\n---\n")
+    _write_skill(b2, "caveman2", "---\nname: caveman\ndescription: Second.\n---\n")
+    out = skill_scanner.scan_skills([b1, b2])
+    assert [s["name"] for s in out] == ["caveman"]
+    assert out[0]["description"] == "First."  # first occurrence wins
+
+
+def test_scan_skills_skips_missing_name(tmp_path):
+    base = tmp_path / "skills"
+    _write_skill(base, "bad", "---\ndescription: no name.\n---\n")
+    assert skill_scanner.scan_skills([base]) == []
+
+
+def test_scan_skills_ignores_nonexistent_path(tmp_path):
+    assert skill_scanner.scan_skills([tmp_path / "nope"]) == []
+
+
+def test_default_skill_paths_includes_user_and_cwd():
+    paths = skill_scanner.default_skill_paths()
+    strs = [str(p) for p in paths]
+    assert any(p.endswith(".claude/skills") or p.endswith(".claude\\skills") for p in strs)

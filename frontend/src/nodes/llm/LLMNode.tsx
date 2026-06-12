@@ -24,6 +24,9 @@ const LLM_MODELS = [
   { id: 'claude-sonnet-4-6-20250620', name: 'Claude Sonnet 4.6', api: 'anthropic', tooltip: 'Strong all-around model with excellent coding and analysis', price: '$3/$15', cost: 3, deprecated: false },
   { id: 'claude-opus-4-6-20250620', name: 'Claude Opus 4.6', api: 'anthropic', tooltip: 'Most capable Claude model for advanced reasoning and creativity', price: '$15/$75', cost: 15, deprecated: false },
   { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', api: 'anthropic', tooltip: 'Fast and cost-effective for lightweight tasks', price: '$0.80/$4', cost: 0.80, deprecated: false },
+  { id: 'cli-claude-opus-4-8', name: 'Opus 4.8 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
+  { id: 'cli-claude-opus-4-6', name: 'Opus 4.6 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
+  { id: 'cli-claude-sonnet-4-6', name: 'Sonnet 4.6 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
 ] as const
 
 
@@ -117,7 +120,10 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
     const files = await pullAllMedia(id, 'media-', getNodes, getEdges)
 
     try {
-      const effectiveKey = modelInfo.api === 'anthropic' ? (anthropicKey || '') : (apiKey || '')
+      const effectiveKey =
+        modelInfo.api === 'anthropic' ? (anthropicKey || '')
+        : modelInfo.api === 'claude-cli' ? ''
+        : (apiKey || '')
       const r = await api.llmChat(prompt, modelInfo.id, effectiveKey, files.length ? files : undefined, systemPrompt)
       const text = r.text || ''
       setOutput(text)
@@ -178,6 +184,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
           {[
             { label: 'Gemini (Google)', items: LLM_MODELS.filter(m => m.api === 'gemini') },
             { label: 'Claude (Anthropic)', items: LLM_MODELS.filter(m => m.api === 'anthropic') },
+            { label: 'Claude (Local CLI)', items: LLM_MODELS.filter(m => m.api === 'claude-cli') },
           ].map(g => (
             <optgroup key={g.label} label={g.label}>
               {g.items.map(m => (

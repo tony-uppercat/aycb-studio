@@ -11,6 +11,7 @@ from src.shared import (
     _estimate_cost, _classify_error,
     MODELS, MAX_IMAGE_BYTES,
 )
+from src import claude_cli
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 
@@ -32,6 +33,8 @@ async def llm_chat_endpoint(
     clean_prompt = _require_prompt(prompt)
     model_id = MODELS.get(model, model)
 
+    if claude_cli.is_claude_cli_model(model_id):
+        return await _chat_claude_cli(clean_prompt, system_prompt, model_id, media_files, time.time())
     if _is_claude_model(model_id):
         return await _chat_claude(clean_prompt, system_prompt, api_key, model_id, media_files, time.time())
     return await _chat_gemini(clean_prompt, system_prompt, api_key, model_id, media_files, time.time())
@@ -95,6 +98,48 @@ async def _chat_claude(
     except Exception as exc:
         dt = time.time() - t0
         _log(f"LLM chat (Claude) FAILED — {exc} ({dt:.1f}s)")
+        code, detail = _classify_error(exc)
+        raise HTTPException(code, detail=detail)
+
+
+async def _chat_claude_cli(
+    prompt: str, system_prompt: str, model_id: str,
+    media_files: list[UploadFile] | None, t0: float,
+):
+    """Handle Claude via the local `claude` CLI — subscription auth, no API key. Uploaded
+    media are written to a temp dir so claude can Read them; the dir is removed after."""
+    import time
+    import tempfile
+    from pathlib import Path
+
+    media_count = len(media_files) if media_files else 0
+    _log(f"LLM chat (Claude CLI) — model={model_id}, {media_count} media, prompt={prompt[:80]}...")
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="aycb_claude_") as tmp:
+            image_paths: list[str] = []
+            if media_files:
+                for i, f in enumerate(media_files):
+                    raw = await _read_upload(f, MAX_IMAGE_BYTES, "Media")
+                    name = f.filename or ""
+                    ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
+                    p = Path(tmp) / f"media_{i}.{ext}"
+                    p.write_bytes(raw)
+                    image_paths.append(str(p))
+            result = await asyncio.to_thread(
+                claude_cli.run, prompt, model_id, system_prompt, image_paths
+            )
+        dt = time.time() - t0
+        if result.get("status") != "OK":
+            _log(f"LLM chat (Claude CLI) FAILED — {result.get('error')} ({dt:.1f}s)")
+            raise HTTPException(422, detail=result.get("error") or "Claude CLI failed")
+        _log(f"LLM chat (Claude CLI) complete — {len(result['text'])} chars ({dt:.1f}s)")
+        return {"text": result["text"], "status": "OK", "usage": result["usage"]}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        dt = time.time() - t0
+        _log(f"LLM chat (Claude CLI) FAILED — {exc} ({dt:.1f}s)")
         code, detail = _classify_error(exc)
         raise HTTPException(code, detail=detail)
 

@@ -1,0 +1,139 @@
+import json
+
+from src import claude_cli
+
+
+def _ok_payload(result="OK", cost=0.02, inp=3, out=4):
+    return json.dumps({
+        "type": "result", "subtype": "success", "is_error": False,
+        "result": result, "total_cost_usd": cost,
+        "usage": {"input_tokens": inp, "output_tokens": out},
+    })
+
+
+def test_is_claude_cli_model():
+    assert claude_cli.is_claude_cli_model("cli-claude-opus-4-8")
+    assert not claude_cli.is_claude_cli_model("claude-opus-4-6-20250620")
+    assert not claude_cli.is_claude_cli_model("gemini-3-flash-preview")
+
+
+def test_real_model_strips_prefix():
+    assert claude_cli.real_model("cli-claude-opus-4-8") == "claude-opus-4-8"
+    assert claude_cli.real_model("claude-opus-4-6") == "claude-opus-4-6"
+
+
+def test_build_command_basics():
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 0)
+    assert cmd[:2] == ["claude", "-p"]
+    assert "--output-format" in cmd and "json" in cmd
+    assert cmd[cmd.index("--model") + 1] == "claude-opus-4-8"
+    assert cmd[cmd.index("--permission-mode") + 1] == "bypassPermissions"
+    assert "--bare" not in cmd
+    assert cmd[cmd.index("--max-turns") + 1] == "2"
+
+
+def test_build_command_system_appended():
+    cmd = claude_cli.build_command("claude-opus-4-8", "Be terse", 0)
+    assert cmd[cmd.index("--append-system-prompt") + 1] == "Be terse"
+
+
+def test_build_command_no_system_omits_flag():
+    assert "--append-system-prompt" not in claude_cli.build_command("claude-opus-4-8", None, 0)
+
+
+def test_max_turns_scales_with_images():
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 3)
+    assert cmd[cmd.index("--max-turns") + 1] == "5"  # 3 images + 2
+
+
+def test_build_instruction_print_only_trailer():
+    instr = claude_cli.build_instruction("Summarize", [])
+    assert "Summarize" in instr
+    assert "Do NOT write any files" in instr
+
+
+def test_build_instruction_reads_each_image():
+    instr = claude_cli.build_instruction("Describe", ["/tmp/a.png", "/tmp/b.png"])
+    assert "Read and analyze the image at /tmp/a.png" in instr
+    assert "Read and analyze the image at /tmp/b.png" in instr
+
+
+def test_run_instruction_via_stdin_not_argv():
+    captured = {}
+    def fake(cmd, stdin):
+        captured["cmd"], captured["stdin"] = cmd, stdin
+        return (0, _ok_payload())
+    claude_cli.run("my long prompt", "cli-claude-opus-4-8", None, [], run_fn=fake)
+    assert "my long prompt" in captured["stdin"]
+    assert "my long prompt" not in " ".join(captured["cmd"])
+
+
+def test_run_parses_ok_result():
+    r = claude_cli.run("hi", "cli-claude-sonnet-4-6", None, [],
+                       run_fn=lambda cmd, stdin: (0, _ok_payload("hello", 0.02, 3, 4)))
+    assert r["status"] == "OK"
+    assert r["text"] == "hello"
+    assert r["usage"] == {"input_tokens": 3, "output_tokens": 4, "cost_usd": 0.02}
+
+
+def test_run_nonzero_rc_is_error():
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (1, ""))
+    assert r["status"] == "ERROR"
+    assert r["text"] == ""
+
+
+def test_run_is_error_true():
+    payload = json.dumps({"is_error": True, "subtype": "error_max_turns", "result": "", "usage": {}})
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, payload))
+    assert r["status"] == "ERROR"
+
+
+def test_run_empty_result_is_error():
+    payload = json.dumps({"is_error": False, "result": "  ", "total_cost_usd": 0, "usage": {}})
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, payload))
+    assert r["status"] == "ERROR"
+
+
+def test_run_non_json_is_error():
+    r = claude_cli.run("hi", "cli-claude-opus-4-8", None, [], run_fn=lambda cmd, stdin: (0, "boom"))
+    assert r["status"] == "ERROR"
+
+
+def test_route_dispatches_to_cli(monkeypatch):
+    from fastapi.testclient import TestClient
+    from src.api import app
+    import src.routers.llm as llm
+
+    captured = {}
+    def fake_run(prompt, model_id, system, image_paths, run_fn=None):
+        captured["model_id"] = model_id
+        captured["prompt"] = prompt
+        captured["images"] = image_paths
+        return {"text": "hi", "status": "OK",
+                "usage": {"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0}}
+
+    monkeypatch.setattr(llm.claude_cli, "run", fake_run)
+    client = TestClient(app)
+    r = client.post("/api/llm/chat", data={"prompt": "yo", "model": "cli-claude-opus-4-8"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["text"] == "hi"
+    assert body["status"] == "OK"
+    assert captured["model_id"] == "cli-claude-opus-4-8"
+    assert captured["prompt"] == "yo"
+    assert captured["images"] == []
+
+
+def test_route_cli_error_returns_422(monkeypatch):
+    from fastapi.testclient import TestClient
+    from src.api import app
+    import src.routers.llm as llm
+
+    def fake_run(prompt, model_id, system, image_paths, run_fn=None):
+        return {"text": "", "status": "ERROR", "error": "claude exited 1",
+                "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}}
+
+    monkeypatch.setattr(llm.claude_cli, "run", fake_run)
+    client = TestClient(app)
+    r = client.post("/api/llm/chat", data={"prompt": "yo", "model": "cli-claude-opus-4-8"})
+    assert r.status_code == 422

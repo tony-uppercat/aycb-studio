@@ -268,7 +268,10 @@ export const api = {
       if (!llm) throw new Error('Ollama provider not available')
       return llm.chat(prompt, model, apiKey, mediaFiles)
     }
-    if (!isBackendAvailable()) {
+    // Local-CLI Claude models run a backend subprocess — never reroute to the cloud fallback
+    if (model.startsWith('cli-claude-')) {
+      if (!isBackendAvailable()) throw new Error('Claude (Local CLI) requires the local backend to be running')
+    } else if (!isBackendAvailable()) {
       const llm = getLLMProvider('gemini')
       if (!llm) throw new Error('Cloud mode: Gemini LLM provider not available')
       return llm.chat(prompt, model, apiKey, mediaFiles)

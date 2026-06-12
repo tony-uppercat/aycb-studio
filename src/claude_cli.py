@@ -61,13 +61,21 @@ def build_command(model: str, system_file: str | None, n_images: int,
     return cmd
 
 
-def build_instruction(prompt: str, image_paths: list[str]) -> str:
-    """PRINT-ONLY instruction piped to claude via STDIN. A per-image Read directive makes
-    the agent load each image before responding; the trailer forbids file writes."""
+def build_instruction(prompt: str, image_paths: list[str],
+                      skill_names: list[str] | None = None) -> str:
+    """PRINT-ONLY instruction piped to claude via STDIN. Per-image Read directive
+    loads each image before responding. When skill_names is non-empty, the trailer
+    restricts the model to those Agent Skills (soft allowlist — the CLI has no hard
+    per-skill flag). Both trailers forbid file writes (knowledge-only)."""
     parts = [prompt or ""]
     for p in image_paths:
         parts.append(f"\n\nRead and analyze the image at {p}.")
-    parts.append("\n\nRespond with ONLY the result text. Do NOT write any files.")
+    if skill_names:
+        names = ", ".join(skill_names)
+        parts.append(f"\n\nUse only these Agent Skills if relevant: {names}. "
+                     "Then respond with ONLY the result text. Do NOT write any files.")
+    else:
+        parts.append("\n\nRespond with ONLY the result text. Do NOT write any files.")
     return "".join(parts)
 
 
@@ -139,14 +147,14 @@ def parse_result(rc: int, stdout: str, stderr: str = "") -> dict:
 
 
 def run(prompt: str, model_id: str, system_file: str | None,
-        image_paths: list[str], run_fn=None) -> dict:
-    """Invoke claude once for a prompt (+ optional images and a system-prompt file, both
-    already on disk) and return the AYCB node-shape dict. `system_file` is a path or None.
-    `run_fn(cmd, stdin) -> (rc, stdout, stderr)` is injected in tests so no real claude is
-    spawned."""
+        image_paths: list[str], run_fn=None,
+        skills_enabled: bool = False, skill_names: list[str] | None = None) -> dict:
+    """Invoke claude once and return the AYCB node-shape dict. `system_file` is a
+    path or None. `run_fn(cmd, stdin) -> (rc, stdout, stderr)` is injected in tests.
+    skills_enabled widens the tool pool; skill_names soft-restricts which skills."""
     if run_fn is None:
         run_fn = _default_run
-    cmd = build_command(real_model(model_id), system_file, len(image_paths))
-    instruction = build_instruction(prompt, image_paths)
+    cmd = build_command(real_model(model_id), system_file, len(image_paths), skills_enabled)
+    instruction = build_instruction(prompt, image_paths, skill_names)
     rc, stdout, stderr = run_fn(cmd, instruction)
     return parse_result(rc, stdout, stderr)

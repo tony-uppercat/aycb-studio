@@ -190,3 +190,29 @@ def test_build_command_skills_disabled_unchanged():
     cmd = claude_cli.build_command("claude-opus-4-8", None, 0, skills_enabled=False)
     assert cmd[cmd.index("--tools") + 1] == ""
     assert cmd[cmd.index("--max-turns") + 1] == "2"
+
+
+def test_build_instruction_with_skill_names_lists_them():
+    instr = claude_cli.build_instruction("Hi", [], skill_names=["caveman", "react-patterns"])
+    assert "Use only these Agent Skills if relevant: caveman, react-patterns." in instr
+    assert "Do NOT write any files." in instr
+
+
+def test_build_instruction_no_skill_names_unchanged():
+    instr = claude_cli.build_instruction("Hi", [])
+    assert "Respond with ONLY the result text. Do NOT write any files." in instr
+    assert "Agent Skills" not in instr
+
+
+def test_run_plumbs_skill_flags():
+    captured = {}
+
+    def fake_run(cmd, stdin):
+        captured["cmd"] = cmd
+        captured["stdin"] = stdin
+        return 0, _ok_payload(), ""
+
+    claude_cli.run("Hi", "cli-claude-opus-4-8", None, [],
+                   run_fn=fake_run, skills_enabled=True, skill_names=["caveman"])
+    assert captured["cmd"][captured["cmd"].index("--tools") + 1] == "Skill Read Glob Grep WebSearch"
+    assert "caveman" in captured["stdin"]

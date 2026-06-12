@@ -74,8 +74,8 @@ async function request<T>(
 const post = <T>(path: string, body: FormData): Promise<T> =>
   request<T>(path, 'POST', { body })
 
-const get = <T>(path: string): Promise<T> =>
-  request<T>(path, 'GET')
+const get = <T>(path: string, signal?: AbortSignal): Promise<T> =>
+  request<T>(path, 'GET', signal ? { signal } : undefined)
 
 const put = <T>(path: string, body: unknown): Promise<T> =>
   request<T>(path, 'PUT', {
@@ -261,7 +261,11 @@ export const api = {
     return post('/edit/image', fd)
   },
 
-  llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[], systemPrompt?: string): Promise<{ text: string; status: string; usage?: UsageInfo }> {
+  listSkills(signal?: AbortSignal): Promise<{ skills: { name: string; description: string; source: string }[] }> {
+    return get('/llm/skills', signal)
+  },
+
+  llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[], systemPrompt?: string, skillsMode?: boolean, skills?: string[]): Promise<{ text: string; status: string; usage?: UsageInfo }> {
     // Route Ollama models directly to client-side provider (no backend proxy needed)
     if (model.startsWith('ollama/')) {
       const llm = getLLMProvider('ollama')
@@ -281,6 +285,10 @@ export const api = {
     fd.append('model', model)
     fd.append('api_key', apiKey)
     if (systemPrompt) fd.append('system_prompt', systemPrompt)
+    if (skillsMode) {
+      fd.append('skills_mode', 'true')
+      if (skills && skills.length) fd.append('skills', skills.join(','))
+    }
     mediaFiles?.forEach(f => fd.append('media_files', f))
     return post('/llm/chat', fd)
   },

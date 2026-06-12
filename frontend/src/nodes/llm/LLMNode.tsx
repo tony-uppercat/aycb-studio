@@ -252,10 +252,8 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
               className={`${styles.subtleToggle} ${skillsMode ? styles.subtleToggleOn : ''}`}
               onClick={() => {
                 const next = !skillsMode
-                const seeded = next && selectedSkills.length === 0 ? ['caveman'] : selectedSkills
                 setSkillsMode(next)
-                if (seeded !== selectedSkills) setSelectedSkills(seeded)
-                updateNodeData(id, { skillsMode: next, selectedSkills: seeded })
+                updateNodeData(id, { skillsMode: next })
               }}
               title={skillsMode ? 'Skills ON' : 'Skills OFF'}
             >

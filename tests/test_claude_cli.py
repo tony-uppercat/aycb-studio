@@ -45,13 +45,18 @@ def test_build_command_with_images_allows_only_read():
     assert cmd[cmd.index("--tools") + 1] == "Read"
 
 
-def test_build_command_system_appended():
-    cmd = claude_cli.build_command("claude-opus-4-8", "Be terse", 0)
-    assert cmd[cmd.index("--append-system-prompt") + 1] == "Be terse"
+def test_build_command_system_via_file():
+    # The system prompt is passed as a FILE path, never inline — a large system prompt as
+    # an argv string blows Windows' ~8191-char command-line limit ("command line too long").
+    cmd = claude_cli.build_command("claude-opus-4-8", "/tmp/sys.txt", 0)
+    assert cmd[cmd.index("--append-system-prompt-file") + 1] == "/tmp/sys.txt"
+    assert "--append-system-prompt" not in cmd  # never the inline string variant
 
 
 def test_build_command_no_system_omits_flag():
-    assert "--append-system-prompt" not in claude_cli.build_command("claude-opus-4-8", None, 0)
+    cmd = claude_cli.build_command("claude-opus-4-8", None, 0)
+    assert "--append-system-prompt-file" not in cmd
+    assert "--append-system-prompt" not in cmd
 
 
 def test_max_turns_scales_with_images():

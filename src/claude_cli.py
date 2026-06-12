@@ -28,7 +28,7 @@ def real_model(model_id: str) -> str:
     return model_id[len(_CLI_PREFIX):] if model_id.startswith(_CLI_PREFIX) else model_id
 
 
-def build_command(model: str, system: str | None, n_images: int) -> list[str]:
+def build_command(model: str, system_file: str | None, n_images: int) -> list[str]:
     """`claude -p` invocation. JSON output so we can read usage + cost. --max-turns scales
     with image count: each Read of an image consumes one agentic turn, plus one for the
     final response. --bare is omitted (it forces ANTHROPIC_API_KEY-only auth, breaking the
@@ -37,15 +37,21 @@ def build_command(model: str, system: str | None, n_images: int) -> list[str]:
     --tools restricts the available tool pool: this is a GENERATION node, not an agent. With
     no images the model gets NO tools ('') so it answers directly and cannot wander into
     tool calls (which exhaust --max-turns -> error_max_turns) or auto-fire discovered skills.
-    With images it gets ONLY Read, to load each image before responding."""
+    With images it gets ONLY Read, to load each image before responding.
+
+    The system prompt is passed as a FILE (`--append-system-prompt-file`), never inline: a
+    large system prompt as an argv string blows Windows' ~8191-char command-line limit
+    ("The command line is too long"). The user prompt is likewise piped via STDIN, so argv
+    stays short regardless of prompt/system size. `system_file` is a path (caller-owned) or
+    None."""
     max_turns = max(2, n_images + 2)
     cmd = ["claude", "-p", "--output-format", "json",
            "--max-turns", str(max_turns),
            "--model", model,
            "--permission-mode", "bypassPermissions",
            "--tools", ("Read" if n_images > 0 else "")]
-    if system:
-        cmd += ["--append-system-prompt", system]
+    if system_file:
+        cmd += ["--append-system-prompt-file", system_file]
     return cmd
 
 
@@ -126,14 +132,15 @@ def parse_result(rc: int, stdout: str, stderr: str = "") -> dict:
     return {"text": "", "status": "ERROR", "error": msg, "usage": err}
 
 
-def run(prompt: str, model_id: str, system: str | None,
+def run(prompt: str, model_id: str, system_file: str | None,
         image_paths: list[str], run_fn=None) -> dict:
-    """Invoke claude once for a prompt (+ optional images already on disk) and return the
-    AYCB node-shape dict. `run_fn(cmd, stdin) -> (rc, stdout, stderr)` is injected in tests
-    so no real claude is spawned."""
+    """Invoke claude once for a prompt (+ optional images and a system-prompt file, both
+    already on disk) and return the AYCB node-shape dict. `system_file` is a path or None.
+    `run_fn(cmd, stdin) -> (rc, stdout, stderr)` is injected in tests so no real claude is
+    spawned."""
     if run_fn is None:
         run_fn = _default_run
-    cmd = build_command(real_model(model_id), (system or "").strip() or None, len(image_paths))
+    cmd = build_command(real_model(model_id), system_file, len(image_paths))
     instruction = build_instruction(prompt, image_paths)
     rc, stdout, stderr = run_fn(cmd, instruction)
     return parse_result(rc, stdout, stderr)

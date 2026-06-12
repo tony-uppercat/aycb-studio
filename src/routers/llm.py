@@ -126,8 +126,15 @@ async def _chat_claude_cli(
                     p = Path(tmp) / f"media_{i}.{ext}"
                     p.write_bytes(raw)
                     image_paths.append(str(p))
+            # System prompt goes to a file, not argv — a large one blows the Windows
+            # ~8191-char command-line limit ("The command line is too long").
+            system_file: str | None = None
+            if system_prompt and system_prompt.strip():
+                sf = Path(tmp) / "system.txt"
+                sf.write_text(system_prompt.strip(), encoding="utf-8")
+                system_file = str(sf)
             result = await asyncio.to_thread(
-                claude_cli.run, prompt, model_id, system_prompt, image_paths
+                claude_cli.run, prompt, model_id, system_file, image_paths
             )
         dt = time.time() - t0
         if result.get("status") != "OK":

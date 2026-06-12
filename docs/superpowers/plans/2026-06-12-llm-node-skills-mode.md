@@ -551,7 +551,7 @@ def test_chat_forwards_skills_to_claude_cli():
     captured = {}
 
     def fake_run(prompt, model_id, system_file, image_paths,
-                 skills_enabled=False, skill_names=None):
+                 run_fn=None, skills_enabled=False, skill_names=None):
         captured["skills_enabled"] = skills_enabled
         captured["skill_names"] = skill_names
         return {"text": "ok", "status": "OK",

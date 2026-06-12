@@ -30,6 +30,9 @@ const LLM_MODELS = [
 
 const MAX_MEDIA = 8
 
+const fmtTokens = (n: number): string =>
+  n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+
 export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   const { updateNodeData, getNodes, getEdges } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
@@ -61,6 +64,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lastCost, setLastCost] = useState<number | undefined>()
+  const [lastTokens, setLastTokens] = useState<{ input: number; output: number } | undefined>()
   const [showThinking, setShowThinking] = useState(
     typeof data.showThinking === 'boolean' ? data.showThinking : false
   )
@@ -146,6 +150,11 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       const fallback = estimateCost(selectedModel, 'llm_chat', prompt, files.length)
       const costUsd = r.usage?.cost_usd ?? fallback.costUsd
       setLastCost(costUsd)
+      if (isClaudeCli && r.usage) {
+        setLastTokens({ input: r.usage.input_tokens ?? 0, output: r.usage.output_tokens ?? 0 })
+      } else {
+        setLastTokens(undefined)
+      }
       useCanvasStore.getState().addCost({
         timestamp: new Date().toISOString(),
         nodeId: id,
@@ -179,8 +188,9 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       ]}
       onRun={run}
       running={loading}
-      lastCost={lastCost}
-      estimatedCost={estimatedLabel}
+      lastCost={isClaudeCli ? undefined : lastCost}
+      lastLabel={isClaudeCli && lastTokens ? `${fmtTokens(lastTokens.input + lastTokens.output)} tok` : undefined}
+      estimatedCost={isClaudeCli ? undefined : estimatedLabel}
     >
       <div className={styles.nodeContent}>
         <select

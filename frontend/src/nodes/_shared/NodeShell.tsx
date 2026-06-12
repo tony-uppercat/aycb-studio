@@ -31,6 +31,7 @@ interface Props {
   onSettings?: () => void
   onMenu?: () => void
   lastCost?: number
+  lastLabel?: string      // overrides the cost badge, e.g. "14.3k tok" (subscription models)
   estimatedCost?: string  // e.g. "~$0.0012"
   footerExtra?: React.ReactNode
 }
@@ -108,6 +109,7 @@ export function NodeShell({
   onSettings,
   onMenu,
   lastCost,
+  lastLabel,
   estimatedCost,
   footerExtra,
 }: Props): React.ReactElement {
@@ -275,7 +277,11 @@ export function NodeShell({
 
       {onRun && (
         <div className={styles.footer}>
-          {lastCost !== undefined && lastCost > 0 ? (
+          {lastLabel ? (
+            <span className={styles.costBadge} title="Tokens used (subscription — no per-call cost)" data-s>
+              {lastLabel}
+            </span>
+          ) : lastCost !== undefined && lastCost > 0 ? (
             <span className={styles.costBadge} title="Actual cost" data-s>
               ${lastCost < 0.01 ? lastCost.toFixed(4) : lastCost.toFixed(3)}
             </span>

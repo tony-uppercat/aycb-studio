@@ -139,7 +139,8 @@ def test_route_dispatches_to_cli(monkeypatch):
     import src.routers.llm as llm
 
     captured = {}
-    def fake_run(prompt, model_id, system, image_paths, run_fn=None):
+    def fake_run(prompt, model_id, system, image_paths, run_fn=None,
+                 skills_enabled=False, skill_names=None):
         captured["model_id"] = model_id
         captured["prompt"] = prompt
         captured["images"] = image_paths
@@ -163,7 +164,8 @@ def test_route_cli_error_returns_422(monkeypatch):
     from src.api import app
     import src.routers.llm as llm
 
-    def fake_run(prompt, model_id, system, image_paths, run_fn=None):
+    def fake_run(prompt, model_id, system, image_paths, run_fn=None,
+                 skills_enabled=False, skill_names=None):
         return {"text": "", "status": "ERROR", "error": "Claude CLI error_max_turns: Reached maximum number of turns (2)",
                 "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}}
 

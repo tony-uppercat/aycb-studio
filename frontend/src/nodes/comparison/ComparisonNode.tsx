@@ -7,6 +7,7 @@ import { api } from '../../api'
 import { pullMedia, pullText } from '../../hooks/useDataPropagation'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
+import { resolveModel } from '../../providers/geminiProvider'
 import { useCanvasStore } from '../../stores/canvasStore'
 import styles from '../_shared/Node.module.css'
 
@@ -22,7 +23,8 @@ export function ComparisonNode({ id, data, selected }: NodeProps) {
   const [error, setError] = useState('')
   const [lastCost, setLastCost] = useState<number | undefined>()
 
-  const estimate = estimateCost(model, 'analyze_image', DEFAULT_PROMPT, 2)
+  const modelId = resolveModel(model)
+  const estimate = estimateCost(modelId, 'llm_chat', DEFAULT_PROMPT, 2)
   const estimatedLabel = formatCostEstimate(estimate.costUsd)
 
   const run = useCallback(async () => {
@@ -48,14 +50,14 @@ export function ComparisonNode({ id, data, selected }: NodeProps) {
       updateNodeData(id, { outputText: text, text })
 
       // Track cost from API response or fall back to client-side estimate
-      const fallback = estimateCost(model, 'llm_chat', prompt, 2)
+      const fallback = estimateCost(modelId, 'llm_chat', prompt, 2)
       const costUsd = r.usage?.cost_usd ?? fallback.costUsd
       setLastCost(costUsd)
       useCanvasStore.getState().addCost({
         timestamp: new Date().toISOString(),
         nodeId: id,
         nodeName: 'Comparison',
-        model,
+        model: modelId,
         inputTokens: r.usage?.input_tokens ?? fallback.inputTokens,
         outputTokens: r.usage?.output_tokens ?? fallback.outputTokens,
         costUsd,

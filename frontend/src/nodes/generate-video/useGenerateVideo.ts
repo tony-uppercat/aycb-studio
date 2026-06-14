@@ -315,7 +315,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
             timestamp: new Date().toISOString(),
             nodeId: id,
             nodeName: 'Generate Video',
-            model: modelInfo.name,
+            model: selectedModel,
             inputTokens: 0,
             outputTokens: 0,
             costUsd,

@@ -465,6 +465,10 @@ export function useActiveProject(): UseActiveProject {
       }
     }
 
+    // Purge this project's recorded cost entries (cost view scopes by
+    // activeProjectId; orphaned entries would otherwise linger in the store).
+    useCanvasStore.getState().removeCostsForProject(targetId)
+
     await deleteProjectRecord(targetId)
 
     if (targetId === projectId) {

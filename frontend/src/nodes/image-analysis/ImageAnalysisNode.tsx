@@ -8,6 +8,7 @@ import { api } from '../../api'
 import { pullMedia } from '../../hooks/useDataPropagation'
 import { reportNodeError } from '../../utils/nodeErrors'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
+import { resolveModel } from '../../providers/geminiProvider'
 import { useCanvasStore } from '../../stores/canvasStore'
 import type { ImageAnalysisNodeData, AnalyzeImageResult } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
@@ -25,7 +26,8 @@ export function ImageAnalysisNode({ id, data, selected }: NodeProps) {
   const [error, setError] = useState('')
   const [lastCost, setLastCost] = useState<number | undefined>()
 
-  const estimate = estimateCost(model, 'analyze_image', '', file ? 1 : 0)
+  const modelId = resolveModel(model)
+  const estimate = estimateCost(modelId, 'analyze_image', '', file ? 1 : 0)
   const estimatedLabel = formatCostEstimate(estimate.costUsd)
 
   useEffect(() => { if (d._stop) { setLoading(false); setError('') } }, [d._stop])
@@ -59,14 +61,14 @@ export function ImageAnalysisNode({ id, data, selected }: NodeProps) {
       setPreview('data:image/png;base64,' + r.preview_b64)
       updateNodeData(id, { text: r.text, outputText: r.text, json: r.json, result: r })
       // Track cost from API response or fall back to client-side estimate
-      const fallback = estimateCost(model, 'analyze_image', '', 1)
+      const fallback = estimateCost(modelId, 'analyze_image', '', 1)
       const costUsd = r.usage?.cost_usd ?? fallback.costUsd
       setLastCost(costUsd)
       useCanvasStore.getState().addCost({
         timestamp: new Date().toISOString(),
         nodeId: id,
         nodeName: 'Image Analysis',
-        model: model,
+        model: modelId,
         inputTokens: r.usage?.input_tokens ?? fallback.inputTokens,
         outputTokens: r.usage?.output_tokens ?? fallback.outputTokens,
         costUsd,

@@ -3,11 +3,13 @@ import { useReactFlow, useStore } from '@xyflow/react';
 import { api } from '../../api';
 import { listMedia } from '../../mediaStore';
 import type { MediaEntry } from '../../mediaStore';
-import { useCanvasStore, getTotalCost } from '../../stores/canvasStore';
+import { useCanvasStore } from '../../stores/canvasStore';
 import { sendSessionReport } from '../../hooks/useAutosave';
 import { downloadJSON } from '../../utils/downloadManager';
 import { STORAGE_KEYS } from '../../storage/keys';
+import { useProjectCosts } from '../../hooks/useProjectCosts';
 import { ReviewTab } from './ReviewTab';
+import { CostsTab } from './CostsTab';
 import styles from './ConsolePanel.module.css';
 
 type Tab = 'server' | 'network' | 'media' | 'errors' | 'costs';
@@ -132,15 +134,14 @@ export function ConsolePanel({ open, onToggle }: Props) {
     if (el) el.scrollTop = el.scrollHeight
   }, [storeErrors]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Costs tab ──────────────────────────────────────────────────────────────
-  const storeCosts = useCanvasStore((s) => s.costs);
-  const clearStoreCosts = useCanvasStore((s) => s.clearCosts);
+  // ── Costs tab (per-project) ───────────────────────────────────────────────
+  const { projectCosts, totalCost: projectTotalCost, count: costCount, activeProjectId, clearProjectCosts } = useProjectCosts();
 
   useEffect(() => {
     if (activeTab !== 'costs') return
     const el = consoleBodyRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [storeCosts]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectCosts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Feedback tab ──────────────────────────────────────────────────────────────
   // Subscribe to just the selected node's id (primitive) so ConsolePanel doesn't
@@ -243,13 +244,14 @@ export function ConsolePanel({ open, onToggle }: Props) {
       date: new Date().toISOString().slice(0, 10),
       feedback: feedbackEntries,
       costs: {
-        entries: storeCosts,
-        total: getTotalCost(storeCosts),
-        count: storeCosts.length,
+        projectId: activeProjectId,
+        entries: projectCosts,
+        total: projectTotalCost,
+        count: projectCosts.length,
       },
     };
     downloadJSON(report, `report_${report.date}.json`);
-  }, [feedbackEntries, storeCosts]);
+  }, [feedbackEntries, projectCosts, projectTotalCost, activeProjectId]);
 
   // ── Clear active tab ─────────────────────────────────────────────────────────
   const handleClear = useCallback((e: React.MouseEvent) => {
@@ -264,13 +266,11 @@ export function ConsolePanel({ open, onToggle }: Props) {
     } else if (activeTab === 'errors') {
       clearStoreErrors();
     } else if (activeTab === 'costs') {
-      clearStoreCosts();
+      clearProjectCosts();
     }
-  }, [activeTab, clearNetworkLog, clearStoreErrors, clearStoreCosts]);
+  }, [activeTab, clearNetworkLog, clearStoreErrors, clearProjectCosts]);
 
   const errCount = storeErrors.length;
-  const costCount = storeCosts.length;
-  const totalCost = getTotalCost(storeCosts);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -283,12 +283,6 @@ export function ConsolePanel({ open, onToggle }: Props) {
     if (status >= 400 && status < 500) return styles.netYellow;
     if (status >= 500) return styles.netRed;
     return '';
-  }
-
-  function costColor(usd: number): string {
-    if (usd >= 0.10) return styles.costRed;
-    if (usd >= 0.01) return styles.costYellow;
-    return styles.costGreen;
   }
 
   function shortTime(iso: string): string {
@@ -338,7 +332,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
                 <span className={styles.badge}>{errCount}</span>
               )}
               {tab === 'costs' && costCount > 0 && (
-                <span className={styles.costBadgeTab} data-s>${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}</span>
+                <span className={styles.costBadgeTab} data-s>${projectTotalCost < 0.01 ? projectTotalCost.toFixed(4) : projectTotalCost.toFixed(3)}</span>
               )}
             </button>
           ))}
@@ -473,43 +467,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
             )}
 
             {/* Costs tab */}
-            {activeTab === 'costs' && (
-              <>
-                {storeCosts.length === 0 && <p className={styles.consoleEmpty}>No cost entries yet...</p>}
-                {storeCosts.map((entry, i) => {
-                  const key = `c-${i}`;
-                  const text = `${entry.nodeName} | ${entry.model} | in:${entry.inputTokens} out:${entry.outputTokens} | $${entry.costUsd.toFixed(4)}`;
-                  return (
-                    <div key={i}
-                      className={`${styles.costRow} ${costColor(entry.costUsd)} ${styles.clickable} ${copiedLine === key ? styles.copied : ''}`}
-                      onClick={() => copyText(text, key)}
-                      title="Click to copy"
-                    >
-                      {copiedLine === key
-                        ? <span className={styles.copiedLabel}>✓ copied</span>
-                        : <>
-                            <span className={styles.costTime}>{shortTime(entry.timestamp)}</span>
-                            <span className={styles.costNode}>{entry.nodeName}</span>
-                            <span className={styles.costModel}>{entry.model}</span>
-                            <span className={styles.costTokens} data-s>{entry.inputTokens}+{entry.outputTokens}</span>
-                            <span className={styles.costUsd} data-s>${entry.costUsd < 0.01 ? entry.costUsd.toFixed(4) : entry.costUsd.toFixed(3)}</span>
-                          </>
-                      }
-                    </div>
-                  );
-                })}
-                {storeCosts.length > 0 && (
-                  <div className={styles.costTotalRow}>
-                    <button className={styles.fbExportBtn} onClick={() => {
-                      downloadJSON(storeCosts, `costs_${new Date().toISOString().slice(0, 10)}.json`);
-                    }} title="Export costs JSON">Export</button>
-                    <span className={styles.costTotal} data-s>
-                      Total: ${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(3)}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
+            {activeTab === 'costs' && <CostsTab />}
 
 
           </div>

@@ -16,6 +16,9 @@ export interface ErrorEntry {
   message: string;
 }
 
+// NOTE: pre-existing deviation — CostEntry fields are camelCase, not the
+// project-wide snake_case convention. New fields match the surrounding code
+// (camelCase) for local consistency; existing fields are left untouched.
 export interface CostEntry {
   timestamp: string;
   nodeId: string;
@@ -24,6 +27,7 @@ export interface CostEntry {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  projectId: string;
 }
 
 interface CanvasState {
@@ -56,6 +60,7 @@ interface CanvasState {
   costs: CostEntry[];
   addCost: (entry: CostEntry) => void;
   clearCosts: () => void;
+  removeCostsForProject: (projectId: string) => void;
 
   exportStatus: string;
   setExportStatus: (status: string) => void;
@@ -78,7 +83,7 @@ interface CanvasState {
 
 export const useCanvasStore = create<CanvasState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       settingsOpen: false,
       addMenuOpen: false,
       consoleOpen: false,
@@ -108,9 +113,25 @@ export const useCanvasStore = create<CanvasState>()(
       clearErrors: () => set({ errors: [] }),
 
       costs: [],
-      addCost: (entry) =>
-        set((s) => ({ costs: [...s.costs, entry].slice(-500) })),
+      addCost: (entry) => {
+        const stamped: CostEntry = {
+          ...entry,
+          projectId: entry.projectId ?? get().activeProjectId ?? 'unknown',
+        };
+        set((s) => {
+          // Append, then cap per-project: keep the last 500 entries that share
+          // the new entry's projectId, leaving other projects' entries intact.
+          const next = [...s.costs, stamped];
+          const sameProject = next.filter((c) => c.projectId === stamped.projectId);
+          if (sameProject.length <= 500) return { costs: next };
+          const dropCount = sameProject.length - 500;
+          const toDrop = new Set(sameProject.slice(0, dropCount));
+          return { costs: next.filter((c) => !toDrop.has(c)) };
+        });
+      },
       clearCosts: () => set({ costs: [] }),
+      removeCostsForProject: (projectId) =>
+        set((s) => ({ costs: s.costs.filter((c) => c.projectId !== projectId) })),
 
       exportStatus: '',
       setExportStatus: (exportStatus) => set({ exportStatus }),
@@ -143,4 +164,9 @@ export const useCanvasStore = create<CanvasState>()(
 
 export function getTotalCost(costs: CostEntry[]): number {
   return costs.reduce((sum, c) => sum + c.costUsd, 0);
+}
+
+/** Filter a cost list down to a single project's entries. */
+export function getProjectCosts(costs: CostEntry[], projectId: string | null): CostEntry[] {
+  return costs.filter((c) => c.projectId === projectId);
 }

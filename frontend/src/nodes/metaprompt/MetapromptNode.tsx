@@ -102,7 +102,7 @@ export function MetapromptNode({ id, data, selected }: NodeProps) {
         timestamp: new Date().toISOString(),
         nodeId: id,
         nodeName: 'Metaprompt',
-        model: modelInfo.name,
+        model: selectedModel,
         inputTokens: r.usage?.input_tokens ?? fallback.inputTokens,
         outputTokens: r.usage?.output_tokens ?? fallback.outputTokens,
         costUsd,

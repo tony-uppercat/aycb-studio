@@ -141,7 +141,7 @@ export function useVideoAnalysis(id: string, data: Record<string, unknown>) {
         timestamp: new Date().toISOString(),
         nodeId: id,
         nodeName: 'Video Analysis',
-        model: modelInfo.name,
+        model: selectedModel,
         inputTokens: r.usage?.input_tokens ?? fallback.inputTokens,
         outputTokens: r.usage?.output_tokens ?? fallback.outputTokens,
         costUsd,

@@ -631,7 +631,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       timestamp: new Date().toISOString(),
       nodeId: id,
       nodeName: 'Generate Image',
-      model: modelInfo.name,
+      model: selectedModel,
       inputTokens: actualUsage?.input_tokens ?? fallback.inputTokens,
       outputTokens: actualUsage?.output_tokens ?? fallback.outputTokens,
       costUsd,

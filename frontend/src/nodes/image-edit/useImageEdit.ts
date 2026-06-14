@@ -5,6 +5,7 @@ import { api } from '../../api'
 import { useSettings } from '../../components/SettingsContext'
 import { pullMedia, pullAllMedia } from '../../hooks/useDataPropagation'
 import { reportNodeError } from '../../utils/nodeErrors'
+import { estimateCost } from '../../utils/costEstimate'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { saveMediaForProject, generateMediaId } from '../../mediaStore'
 
@@ -112,15 +113,21 @@ export function useImageEdit(id: string, data: Record<string, unknown>) {
       await saveMediaForProject(mediaId, file)
       updateNodeData(id, { mediaId })
 
-      const costUsd = r.usage?.cost_usd ?? 0.02
+      // Model-aware fallback: estimate per-image cost for the selected model.
+      // Models absent from MODEL_PRICING (e.g. imagen-3.0-capability-001) yield
+      // 0 — keep the 0.02 generic floor for those so the entry isn't free.
+      const fallback = estimateCost(
+        selectedModel, 'generate_image', prompt, subjects.length,
+      )
+      const costUsd = r.usage?.cost_usd ?? (fallback.costUsd || 0.02)
       setLastCost(costUsd)
       useCanvasStore.getState().addCost({
         timestamp: new Date().toISOString(),
         nodeId: id,
         nodeName: 'Image Edit',
-        model: 'imagen-3.0-capability-001',
-        inputTokens: 0,
-        outputTokens: 0,
+        model: selectedModel,
+        inputTokens: fallback.inputTokens,
+        outputTokens: fallback.outputTokens,
         costUsd,
       })
     } catch (e: unknown) {
@@ -130,7 +137,7 @@ export function useImageEdit(id: string, data: Record<string, unknown>) {
     } finally {
       setLoading(false)
     }
-  }, [localPrompt, editMode, maskMode, maskDilation, aspectRatio, numberOfImages, id, getNodes, getEdges, updateNodeData])
+  }, [localPrompt, selectedModel, editMode, maskMode, maskDilation, aspectRatio, numberOfImages, id, getNodes, getEdges, updateNodeData])
 
   return {
     selectedModel, setSelectedModel,

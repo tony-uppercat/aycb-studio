@@ -1,6 +1,6 @@
 import { vi, test, expect, beforeEach } from 'vitest'
 import { useAsyncJobStore } from '../stores/asyncJobStore'
-import { pollJobOnce } from './asyncJobPoller'
+import { pollJobOnce, pollOpenAIJobOnce } from './asyncJobPoller'
 
 vi.mock('../mediaStore', () => ({ saveMediaForProject: vi.fn().mockResolvedValue(undefined), generateMediaId: () => 'm-x' }))
 vi.mock('../providers/geminiBatchPath', () => ({
@@ -11,9 +11,15 @@ vi.mock('../providers/geminiBatchPath', () => ({
 vi.mock('../providers/geminiShared', () => ({
   parseGenerateContentResponse: vi.fn(() => ({ image_b64: 'AAAA', status: 'ok', usage: { cost_usd: 0.02 } })),
 }))
+vi.mock('../providers/openaiBatchPath', () => ({
+  pollOpenAIBatch: vi.fn(),
+  fetchOpenAIBatchResults: vi.fn(),
+  cleanupOpenAIBatch: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { pollGeminiBatch } from '../providers/geminiBatchPath'
 import { parseGenerateContentResponse } from '../providers/geminiShared'
+import { pollOpenAIBatch, fetchOpenAIBatchResults, cleanupOpenAIBatch } from '../providers/openaiBatchPath'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -73,4 +79,34 @@ test('pollJobOnce flips to failed after MAX_POLL_ERRORS rejecting ticks', async 
   const job = useAsyncJobStore.getState().jobs[0]
   expect(job.status).toBe('failed')
   expect(job.error).toBe('poll retries exhausted')
+})
+
+function seedOpenAIJob() {
+  useAsyncJobStore.setState({ jobs: [{
+    id: 'b1', projectId: 'p1', provider: 'openai', modelId: 'gpt-image-2',
+    opName: '', status: 'submitted', submittedAt: 0,
+    requests: [{ nodeId: 'nA', key: 'nA' }],
+    openai: { batchId: 'b1', inputFileId: 'f1', refFileIds: [] },
+  }] })
+}
+
+test('pollOpenAIJobOnce routes a completed batch result to a mediaId + cleans up', async () => {
+  seedOpenAIJob()
+  ;(pollOpenAIBatch as any).mockResolvedValue({ done: true, status: 'completed', outputFileId: 'out1' })
+  ;(fetchOpenAIBatchResults as any).mockResolvedValue(new Map([['nA', { image_b64: 'AAAA', status: 'OK' }]]))
+  await pollOpenAIJobOnce(useAsyncJobStore.getState().jobs[0], 'key')
+  const job = useAsyncJobStore.getState().jobs[0]
+  expect(job.requests[0].resultMediaId).toBe('m-x')
+  expect(job.status).toBe('done')
+  expect(cleanupOpenAIBatch).toHaveBeenCalledWith('key', expect.objectContaining({ inputFileId: 'f1', outputFileId: 'out1', refFileIds: [] }))
+})
+
+test('pollOpenAIJobOnce marks an expired batch as failed + cleans up', async () => {
+  seedOpenAIJob()
+  ;(pollOpenAIBatch as any).mockResolvedValue({ done: true, status: 'expired', outputFileId: null })
+  await pollOpenAIJobOnce(useAsyncJobStore.getState().jobs[0], 'key')
+  const job = useAsyncJobStore.getState().jobs[0]
+  expect(job.status).toBe('failed')
+  expect(job.error).toBe('OpenAI batch expired')
+  expect(cleanupOpenAIBatch).toHaveBeenCalled()
 })

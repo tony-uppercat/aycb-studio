@@ -35,10 +35,10 @@ export function chunkBySize<T extends { bytes: number }>(items: T[]): T[][] {
 
 const buckets = new Map<string, PendingRequest[]>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
-let _keyGetter: () => string = () => ''
+let _keyGetter: (p: 'gemini' | 'openai') => string = () => ''
 
-/** Inject the Gemini API key source (called once from App). */
-export function configureBundler(getKey: () => string) { _keyGetter = getKey }
+/** Inject the provider-aware API key source (called once from App). */
+export function configureBundler(getKey: (p: 'gemini' | 'openai') => string) { _keyGetter = getKey }
 
 /** Enqueue one ASY request; schedules a debounced flush for its bundle bucket. */
 export function enqueueAsyncRequest(req: PendingRequest): void {
@@ -57,7 +57,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
   const t = timers.get(bundleKey); if (t) clearTimeout(t); timers.delete(bundleKey)
   if (list.length === 0) return
   const projectId = useCanvasStore.getState().activeProjectId ?? 'unknown'
-  const apiKey = _keyGetter()
+  const apiKey = _keyGetter(list[0].provider)
   const chunks = chunkBySize(list)
   for (const chunk of chunks) {
     const modelId = chunk[0].modelId

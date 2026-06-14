@@ -3,13 +3,15 @@ import { useSettings } from './SettingsContext'
 import { configurePoller, startAsyncJobPoller } from '../services/asyncJobPoller'
 import { configureBundler } from '../services/asyncBundler'
 
-/** Wires the async batch queue (poller + bundler) to the live Gemini API key and starts the background poller. Renders nothing. */
+/** Wires the async batch queue (poller + bundler) to the live Gemini + OpenAI API keys and starts the background poller. Renders nothing. */
 export function AsyncQueueBootstrap() {
   const settings = useSettings()
-  const keyRef = useRef('')
-  keyRef.current = settings.apiKey ?? ''
+  const geminiKeyRef = useRef('')
+  const openaiKeyRef = useRef('')
+  geminiKeyRef.current = settings.apiKey ?? ''
+  openaiKeyRef.current = settings.openaiApiKey ?? ''
   useEffect(() => {
-    const getKey = () => keyRef.current
+    const getKey = (p: 'gemini' | 'openai') => p === 'openai' ? openaiKeyRef.current : geminiKeyRef.current
     configureBundler(getKey)
     configurePoller(getKey)
     startAsyncJobPoller()

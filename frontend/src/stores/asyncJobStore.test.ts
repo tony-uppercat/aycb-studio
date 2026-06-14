@@ -39,6 +39,12 @@ test('markConsumed removes one request entry', () => {
   expect(useAsyncJobStore.getState().jobs[0].requests.map(r => r.key)).toEqual(['nodeB'])
 })
 
+test('markConsumed drops the job when its last request is consumed', () => {
+  useAsyncJobStore.getState().addJob({ ...baseJob, requests: [{ nodeId: 'solo', key: 'solo' }] })
+  useAsyncJobStore.getState().markConsumed('job1', 'solo')
+  expect(useAsyncJobStore.getState().jobs).toEqual([])
+})
+
 test('a failed job stays failed when a request later resolves', () => {
   useAsyncJobStore.getState().addJob(baseJob)
   useAsyncJobStore.getState().updateJob('job1', { status: 'failed' })

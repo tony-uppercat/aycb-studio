@@ -58,7 +58,11 @@ export const useAsyncJobStore = create<AsyncJobState>()(
         }),
       })),
       markConsumed: (id, key) => set(s => ({
-        jobs: s.jobs.map(j => j.id === id ? { ...j, requests: j.requests.filter(r => r.key !== key) } : j),
+        jobs: s.jobs.flatMap(j => {
+          if (j.id !== id) return [j]
+          const requests = j.requests.filter(r => r.key !== key)
+          return requests.length === 0 ? [] : [{ ...j, requests }]
+        }),
       })),
       removeJob: (id) => set(s => ({ jobs: s.jobs.filter(j => j.id !== id) })),
       jobsForProject: (projectId) => get().jobs.filter(j => j.projectId === projectId),

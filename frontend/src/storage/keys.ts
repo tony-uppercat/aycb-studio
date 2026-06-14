@@ -31,6 +31,9 @@ export const STORAGE_KEYS = {
 
   // Media metadata cache (cloud/offline mode fallback)
   MEDIA_META: 'aycb_media_meta',
+
+  // Async batch image-gen job queue
+  ASYNC_JOBS: 'aycb_async_jobs',
 } as const
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS]

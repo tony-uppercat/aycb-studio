@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, useStore, useUpdateNodeInternals } from '@xyflow/react'
 import type { SlotDef } from '../_shared/NodeShell'
 import { useSettings } from '../../components/SettingsContext'
-import { api, bridgeMedia } from '../../api'
+import { api } from '../../api'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
-import { saveMediaForProject, generateMediaId, loadMedia } from '../../mediaStore'
+import { loadMedia, generateMediaId } from '../../mediaStore'
 import { pullText, pullAllMedia, resolveSourceText, resolveSourceMediaId } from '../../hooks/useDataPropagation'
 import { useGenerateImageHistory } from '../../hooks/useGenerateImageHistory'
 import { useStateRef } from '../../hooks/useStateRef'
@@ -13,9 +13,10 @@ import { useModelRegistry, type RegistryModel } from '../../hooks/useModelRegist
 import { reportNodeError } from '../../utils/nodeErrors'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
-import { fetchReviewStatus, registerBridgeStem, saveMediaMeta, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
+import { fetchReviewStatus, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
 import { cropImageFileToAspectRatio } from '../../utils/cropToAspectRatio'
 import { geminiSupportsBatch } from '../../providers/geminiBatchPath'
+import { applyImageResult } from '../../services/applyImageResult'
 
 export interface ImageModelDef {
   id: string
@@ -567,43 +568,14 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, sentRefs.length ? sentRefs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }
 
-    // Generate mediaId and set it with imageB64 so both are in the same render batch
+    // Set base64 first so it's available for preview while we persist
     const mediaId = generateMediaId()
     setActiveMediaId(mediaId)
     setImageB64(r.image_b64)
-
-    const response = await fetch(`data:image/png;base64,${r.image_b64}`)
-    const blob = await response.blob()
-    const file = new File([blob], `generated_${Date.now()}.png`, { type: 'image/png' })
-    await saveMediaForProject(mediaId, file)
-
-    // Persist metadata client-side (works in cloud mode without backend)
-    saveMediaMeta(mediaId, {
-      prompt,
-      model: selectedModel,
-      model_name: modelInfo.name,
-      aspect_ratio: currentAspectRatio || undefined,
-      image_size: currentResolution || undefined,
-      cost_usd: r.usage?.cost_usd,
-      generated_at: new Date().toISOString(),
+    await applyImageResult({
+      nodeId: id, mediaId, result: r, prompt, model: selectedModel, modelName: modelInfo.name,
+      resolution: currentResolution || undefined, aspectRatio: currentAspectRatio || undefined,
     })
-
-    // Register mediaId → bridge stem so reviewStatus can find the .review.json sidecar.
-    // Backend path: bridge_stem is already in the response (server handled the bridge).
-    // Provider path (client-side): send to bridge now that we have the mediaId.
-    if (r.bridge_stem) {
-      registerBridgeStem(mediaId, r.bridge_stem)
-    } else {
-      // Fire-and-forget — does not block UI
-      bridgeMedia(r.image_b64, mediaId, {
-        prompt,
-        model: selectedModel,
-        modelName: modelInfo.name,
-        aspectRatio: currentAspectRatio || undefined,
-        imageSize: currentResolution || undefined,
-        costUsd: r.usage?.cost_usd,
-      }).catch(() => { /* silent */ })
-    }
 
     if (batchAccum) {
       // Batch mode: append to shared mutable array; caller merges later

@@ -3,18 +3,21 @@ import { chunkBySize, MAX_BUNDLE_BYTES, enqueueAsyncRequest, flushModel } from '
 
 const addJobSpy = vi.fn()
 vi.mock('../providers/geminiBatchPath', () => ({ submitGeminiBatch: vi.fn().mockResolvedValue('operations/x') }))
+vi.mock('../providers/openaiBatchPath', () => ({ submitOpenAIBatch: vi.fn().mockResolvedValue({ batchId: 'batch_x', inputFileId: 'f_in', refFileIds: [], endpoint: '/v1/images/generations' }) }))
 vi.mock('../stores/asyncJobStore', () => ({ useAsyncJobStore: { getState: () => ({ addJob: addJobSpy }) } }))
 vi.mock('../stores/canvasStore', () => ({ useCanvasStore: { getState: () => ({ activeProjectId: 'p1' }) } }))
 
 import { submitGeminiBatch } from '../providers/geminiBatchPath'
+import { submitOpenAIBatch } from '../providers/openaiBatchPath'
 
 beforeEach(() => {
   addJobSpy.mockClear()
   vi.mocked(submitGeminiBatch).mockReset().mockResolvedValue('operations/x')
+  vi.mocked(submitOpenAIBatch).mockReset().mockResolvedValue({ batchId: 'batch_x', inputFileId: 'f_in', refFileIds: [], endpoint: '/v1/images/generations' })
 })
 
 test('enqueueAsyncRequest de-dupes by nodeId — re-run replaces the pending request', async () => {
-  const base = { nodeId: 'nodeA', key: 'nodeA', body: { v: 1 }, bytes: 1, modelId: 'gemini-3.1-flash-image-preview' }
+  const base = { nodeId: 'nodeA', key: 'nodeA', body: { v: 1 }, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini' as const, bundleKey: 'gemini-3.1-flash-image-preview' }
   enqueueAsyncRequest(base)
   enqueueAsyncRequest({ ...base, body: { v: 2 } })   // same nodeId, newer body
   await flushModel('gemini-3.1-flash-image-preview')
@@ -52,10 +55,21 @@ test('chunkBySize puts an oversize single item in its own chunk', () => {
 test('flushModel records a failed job when submit throws', async () => {
   addJobSpy.mockClear()
   ;(submitGeminiBatch as any).mockRejectedValueOnce(new Error('429 rate limit'))
-  enqueueAsyncRequest({ nodeId: 'nX', key: 'nX', body: {}, bytes: 1, modelId: 'gemini-3.1-flash-image-preview' })
+  enqueueAsyncRequest({ nodeId: 'nX', key: 'nX', body: {}, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini', bundleKey: 'gemini-3.1-flash-image-preview' })
   await flushModel('gemini-3.1-flash-image-preview')
   expect(addJobSpy).toHaveBeenCalledWith(expect.objectContaining({
     status: 'failed',
     requests: [expect.objectContaining({ nodeId: 'nX', error: '429 rate limit' })],
+  }))
+})
+
+test('an OpenAI request flushes via submitOpenAIBatch and records an openai job', async () => {
+  enqueueAsyncRequest({ nodeId: 'oA', key: 'oA', body: { prompt: 'cat' }, bytes: 1, modelId: 'gpt-image-2', provider: 'openai', bundleKey: 'gpt-image-2|gen' })
+  await flushModel('gpt-image-2|gen')
+  expect(submitOpenAIBatch).toHaveBeenCalledTimes(1)
+  expect(submitGeminiBatch).not.toHaveBeenCalled()
+  expect(addJobSpy).toHaveBeenCalledWith(expect.objectContaining({
+    provider: 'openai',
+    openai: expect.objectContaining({ batchId: 'batch_x' }),
   }))
 })

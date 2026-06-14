@@ -4,6 +4,7 @@ import { SettingsProvider } from './components/SettingsContext'
 import { FlowCanvas } from './components/canvas/FlowCanvas'
 import { MediaPreviewProvider } from './components/media/MediaPreview'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
+import { AsyncQueueBootstrap } from './components/AsyncQueueBootstrap'
 
 const ReviewApp = lazy(() => import('./review/ReviewApp'))
 
@@ -89,6 +90,7 @@ export default function App() {
       )}
     >
       <SettingsProvider>
+        <AsyncQueueBootstrap />
         <ToastProvider>
           <MediaPreviewProvider>
             <FlowCanvas />

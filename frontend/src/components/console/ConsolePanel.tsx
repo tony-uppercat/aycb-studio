@@ -4,6 +4,8 @@ import { api } from '../../api';
 import { listMedia } from '../../mediaStore';
 import type { MediaEntry } from '../../mediaStore';
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useAsyncJobStore } from '../../stores/asyncJobStore';
+import { flushAll } from '../../services/asyncBundler';
 import { sendSessionReport } from '../../hooks/useAutosave';
 import { downloadJSON } from '../../utils/downloadManager';
 import { STORAGE_KEYS } from '../../storage/keys';
@@ -271,6 +273,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
   }, [activeTab, clearNetworkLog, clearStoreErrors, clearProjectCosts]);
 
   const errCount = storeErrors.length;
+  const asyncCount = useAsyncJobStore(s => s.jobs.filter(j => j.status === 'submitted' || j.status === 'polling').length);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -340,6 +343,12 @@ export function ConsolePanel({ open, onToggle }: Props) {
         {resolvedEntries.length > 0 && (
           <span className={styles.fbFixedBadge} onClick={(e) => { e.stopPropagation(); setFixedOpen(o => !o) }} title="Toggle fixed feedback">
             {fixedOpen ? '▼' : '▶'} {resolvedEntries.length} fixed
+          </span>
+        )}
+        {asyncCount > 0 && (
+          <span className={styles.fbFixedBadge} onClick={(e) => e.stopPropagation()} title="Async batch queue">
+            {asyncCount} batch in corso
+            <button className={styles.fbExportBtn} onClick={(e) => { e.stopPropagation(); void flushAll() }} title="Lancia la coda batch ora">Lancia coda ora</button>
           </span>
         )}
         {errCount > 0 && (

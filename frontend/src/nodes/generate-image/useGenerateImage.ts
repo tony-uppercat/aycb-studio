@@ -17,6 +17,7 @@ import { fetchReviewStatus, toggleFavorite, type ReviewStatus } from '../../util
 import { cropImageFileToAspectRatio } from '../../utils/cropToAspectRatio'
 import { geminiSupportsBatch } from '../../providers/geminiBatchPath'
 import { buildGeminiImageBody, resolveModel } from '../../providers/geminiProvider'
+import { computeSize, resolutionToQuality } from '../../providers/openaiProvider'
 import { enqueueAsyncRequest } from '../../services/asyncBundler'
 import { useAsyncJobStore } from '../../stores/asyncJobStore'
 import { applyImageResult } from '../../services/applyImageResult'
@@ -578,6 +579,21 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       const body = await buildGeminiImageBody(prompt, resolvedModelId, sentRefs.length ? sentRefs : undefined, imageOptions)
       enqueueAsyncRequest({
         nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: resolvedModelId, provider: 'gemini', bundleKey: resolvedModelId,
+        meta: { prompt, modelName: modelInfo.name, resolution: currentResolution || undefined, aspectRatio: currentAspectRatio || undefined },
+      })
+      updateNodeData(id, { asyncPending: true })
+      return
+    }
+    if (asyncGenRef.current && asyncCapableRun && modelInfo.provider === 'openai') {
+      const size = computeSize(currentAspectRatio || undefined, currentResolution || undefined)
+      const quality = resolutionToQuality(currentResolution || undefined)
+      const body = { model: selectedModel, prompt, n: 1, size, quality }
+      const hasRefs = sentRefs.length > 0
+      enqueueAsyncRequest({
+        nodeId: id, key: id, body, bytes: JSON.stringify(body).length,
+        modelId: selectedModel, provider: 'openai',
+        bundleKey: `${selectedModel}|${hasRefs ? 'edits' : 'gen'}`,
+        refs: hasRefs ? sentRefs : undefined,
         meta: { prompt, modelName: modelInfo.name, resolution: currentResolution || undefined, aspectRatio: currentAspectRatio || undefined },
       })
       updateNodeData(id, { asyncPending: true })

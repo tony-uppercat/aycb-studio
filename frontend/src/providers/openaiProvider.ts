@@ -21,7 +21,7 @@ const OPENAI_BASE = 'https://api.openai.com/v1'
  *  Compute the largest size at the requested AR that fits the target MP
  *  bucket (1K ≈ 1.05 MP, FHD ≈ 2.09 MP / 1920×1088 for 16:9, 2K ≈ 2.4 MP,
  *  4K ≈ 8 MP clamped to 3840 max edge). */
-function computeSize(aspect?: string, resolution?: string): string {
+export function computeSize(aspect?: string, resolution?: string): string {
   if (!aspect) return 'auto'
   const [a, b] = aspect.split(':').map(Number)
   if (!a || !b) return 'auto'
@@ -65,7 +65,7 @@ function computeSize(aspect?: string, resolution?: string): string {
 }
 
 /** Quality knob — Draft=low (~$0.006/img at 1K), 1K=medium, FHD/2K/4K=high. */
-function resolutionToQuality(res?: string): string {
+export function resolutionToQuality(res?: string): string {
   if (!res) return 'auto'
   if (res === 'Draft') return 'low'
   if (res === '1K') return 'medium'

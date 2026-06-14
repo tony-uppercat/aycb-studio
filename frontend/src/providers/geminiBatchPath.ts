@@ -56,6 +56,61 @@ export function extractInlineEntry(op: any): any | null {
   return Array.isArray(arr) && arr.length > 0 ? arr[0] : null
 }
 
+/** All inlined entries from a finished op, keyed by metadata.key (fallback: index). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function extractAllInlineEntries(op: any): Map<string, any> {
+  const inlined = op?.response?.inlinedResponses
+  const arr = Array.isArray(inlined) ? inlined : inlined?.inlinedResponses
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out = new Map<string, any>()
+  if (!Array.isArray(arr)) return out
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  arr.forEach((entry: any, i: number) => {
+    const key = entry?.metadata?.key ?? String(i)
+    out.set(String(key), entry)
+  })
+  return out
+}
+
+/** Submit N inline requests as one batch; returns the operation name. */
+export async function submitGeminiBatch(
+  modelId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  requests: { body: Record<string, any>; key: string }[],
+  apiKey: string,
+): Promise<string> {
+  const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
+  const submitResp = await fetch(`${BASE}/models/${modelId}:batchGenerateContent`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      batch: {
+        display_name: `aycb-async-${requests[0]?.key ?? requests.length}`,
+        input_config: { requests: { requests: requests.map(r => ({ request: r.body, metadata: { key: r.key } })) } },
+      },
+    }),
+  })
+  if (!submitResp.ok) throw new Error(`Gemini batch submit failed: ${await googleError(submitResp)}`)
+  const opName = (await submitResp.json()).name as string
+  if (!opName) throw new Error('Gemini batch submit returned no operation name')
+  return opName
+}
+
+/** One poll tick. Returns done flag + the raw op when terminal. */
+export async function pollGeminiBatch(
+  opName: string,
+  apiKey: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ done: boolean; op: any; state: string }> {
+  const headers = { 'x-goog-api-key': apiKey }
+  const pollResp = await fetch(`${BASE}/${opName}`, { headers })
+  if (!pollResp.ok) throw new Error(`Gemini batch poll failed: ${await googleError(pollResp)}`)
+  const op = await pollResp.json()
+  const state = op.metadata?.state ?? ''
+  const done = Boolean(op.done) || TERMINAL.has(state)
+  return { done, op, state }
+}
+
 /**
  * Submit one request body (same GenerateContentRequest the sync path builds)
  * as an inline batch, await the result. Cost ×0.5 via parse multiplier.
@@ -68,21 +123,8 @@ export async function runGeminiBatch(
   opts?: { pollMs?: number },
 ): Promise<GenerateImageResult> {
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS
-  const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
 
-  const submitResp = await fetch(`${BASE}/models/${modelId}:batchGenerateContent`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      batch: {
-        display_name: `aycb-async-${Date.now().toString(36)}`,
-        input_config: { requests: { requests: [{ request: requestBody, metadata: { key: 'r0' } }] } },
-      },
-    }),
-  })
-  if (!submitResp.ok) throw new Error(`Gemini batch submit failed: ${await googleError(submitResp)}`)
-  const opName = (await submitResp.json()).name as string
-  if (!opName) throw new Error('Gemini batch submit returned no operation name')
+  const opName = await submitGeminiBatch(modelId, [{ body: requestBody, key: 'r0' }], apiKey)
 
   // Poll until terminal. The job runs server-side; closing the tab loses the
   // result but not the job (recovery is v2 — see spec).
@@ -90,11 +132,9 @@ export async function runGeminiBatch(
   let op: any
   for (;;) {
     await sleep(pollMs)
-    const pollResp = await fetch(`${BASE}/${opName}`, { headers })
-    if (!pollResp.ok) throw new Error(`Gemini batch poll failed: ${await googleError(pollResp)}`)
-    op = await pollResp.json()
-    const state = op.metadata?.state ?? ''
-    if (op.done || TERMINAL.has(state)) break
+    const tick = await pollGeminiBatch(opName, apiKey)
+    op = tick.op
+    if (tick.done) break
   }
 
   const state = op.metadata?.state ?? ''

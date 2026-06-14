@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { runGeminiBatch, extractInlineEntry, geminiSupportsBatch } from './geminiBatchPath'
+import { runGeminiBatch, extractInlineEntry, extractAllInlineEntries, geminiSupportsBatch } from './geminiBatchPath'
 
 const SUBMIT_OK = { name: 'batches/abc123', metadata: { state: 'BATCH_STATE_PENDING' } }
 const REQUEST_BODY = { contents: [{ role: 'user', parts: [{ text: 'p' }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }
@@ -98,5 +98,26 @@ describe('extractInlineEntry', () => {
   it('returns null when missing', () => {
     expect(extractInlineEntry({ response: {} })).toBeNull()
     expect(extractInlineEntry({})).toBeNull()
+  })
+})
+
+describe('extractAllInlineEntries', () => {
+  it('maps every inlined entry by metadata key', () => {
+    const op = {
+      response: { inlinedResponses: { inlinedResponses: [
+        { metadata: { key: 'nodeA' }, response: { candidates: [{ content: { parts: [{ text: 'A' }] } }] } },
+        { metadata: { key: 'nodeB' }, response: { candidates: [{ content: { parts: [{ text: 'B' }] } }] } },
+      ] } },
+    }
+    const map = extractAllInlineEntries(op)
+    expect([...map.keys()].sort()).toEqual(['nodeA', 'nodeB'])
+    expect(map.get('nodeA')).toBeDefined()
+    expect(map.get('nodeA').response.candidates[0].content.parts[0].text).toBe('A')
+  })
+
+  it('falls back to index keys when metadata is missing', () => {
+    const op = { response: { inlinedResponses: { inlinedResponses: [{ response: {} }] } } }
+    const map = extractAllInlineEntries(op)
+    expect(map.has('0')).toBe(true)
   })
 })

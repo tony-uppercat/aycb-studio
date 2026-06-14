@@ -64,7 +64,11 @@ export async function pollOpenAIJobOnce(job: AsyncJob, apiKey: string): Promise<
       await cleanupOpenAIBatch(apiKey, { inputFileId: job.openai.inputFileId, outputFileId: outputFileId ?? undefined, refFileIds: job.openai.refFileIds })
       return
     }
-    if (!outputFileId) { store.updateJob(job.id, { status: 'failed', error: 'OpenAI batch: no output file' }); return }
+    if (!outputFileId) {
+      store.updateJob(job.id, { status: 'failed', error: 'OpenAI batch: no output file' })
+      await cleanupOpenAIBatch(apiKey, { inputFileId: job.openai.inputFileId, refFileIds: job.openai.refFileIds })
+      return
+    }
     store.updateJob(job.id, { openai: { ...job.openai, outputFileId } })
     const results = await fetchOpenAIBatchResults(outputFileId, apiKey)
     for (const req of job.requests) {
@@ -90,7 +94,11 @@ export async function pollOpenAIJobOnce(job: AsyncJob, apiKey: string): Promise<
   } catch {
     const live = useAsyncJobStore.getState().jobs.find(j => j.id === job.id)
     const errs = (live?.pollErrors ?? 0) + 1
-    store.updateJob(job.id, { pollErrors: errs, ...(errs >= MAX_POLL_ERRORS ? { status: 'failed', error: 'poll retries exhausted' } : {}) })
+    const exhausted = errs >= MAX_POLL_ERRORS
+    store.updateJob(job.id, { pollErrors: errs, ...(exhausted ? { status: 'failed', error: 'poll retries exhausted' } : {}) })
+    if (exhausted && job.openai) {
+      await cleanupOpenAIBatch(apiKey, { inputFileId: job.openai.inputFileId, outputFileId: job.openai.outputFileId, refFileIds: job.openai.refFileIds })
+    }
   }
 }
 

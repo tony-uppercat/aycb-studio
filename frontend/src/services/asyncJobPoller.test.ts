@@ -113,3 +113,14 @@ test('pollOpenAIJobOnce marks an expired batch as failed + cleans up', async () 
   expect(job.error).toBe('OpenAI batch expired')
   expect(cleanupOpenAIBatch).toHaveBeenCalled()
 })
+
+test('pollOpenAIJobOnce marks a completed batch with no output file as failed + cleans up', async () => {
+  seedOpenAIJob()
+  ;(pollOpenAIBatch as any).mockResolvedValue({ done: true, status: 'completed', outputFileId: null })
+  await pollOpenAIJobOnce(useAsyncJobStore.getState().jobs[0], 'key')
+  const job = useAsyncJobStore.getState().jobs[0]
+  expect(job.status).toBe('failed')
+  expect(job.error).toBe('OpenAI batch: no output file')
+  expect(fetchOpenAIBatchResults).not.toHaveBeenCalled()
+  expect(cleanupOpenAIBatch).toHaveBeenCalledWith('key', expect.objectContaining({ inputFileId: 'f1', refFileIds: [] }))
+})

@@ -17,7 +17,7 @@ beforeEach(() => {
 })
 
 test('enqueueAsyncRequest de-dupes by nodeId — re-run replaces the pending request', async () => {
-  const base = { nodeId: 'nodeA', key: 'nodeA', body: { v: 1 }, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini' as const, bundleKey: 'gemini-3.1-flash-image-preview' }
+  const base = { nodeId: 'nodeA', key: 'nodeA', body: { v: 1 }, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini' as const, bundleKey: 'gemini-3.1-flash-image-preview', apiKey: 'KEY123' }
   enqueueAsyncRequest(base)
   enqueueAsyncRequest({ ...base, body: { v: 2 } })   // same nodeId, newer body
   await flushModel('gemini-3.1-flash-image-preview')
@@ -26,6 +26,8 @@ test('enqueueAsyncRequest de-dupes by nodeId — re-run replaces the pending req
   const reqs = (submitGeminiBatch as any).mock.calls[0][1]
   expect(reqs).toHaveLength(1)
   expect(reqs[0].body).toEqual({ v: 2 })
+  // The live key carried on the request reaches submit as the 3rd arg
+  expect(submitGeminiBatch).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'KEY123')
 })
 
 test('chunkBySize splits when estimated bytes exceed the cap', () => {
@@ -55,7 +57,7 @@ test('chunkBySize puts an oversize single item in its own chunk', () => {
 test('flushModel records a failed job when submit throws', async () => {
   addJobSpy.mockClear()
   ;(submitGeminiBatch as any).mockRejectedValueOnce(new Error('429 rate limit'))
-  enqueueAsyncRequest({ nodeId: 'nX', key: 'nX', body: {}, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini', bundleKey: 'gemini-3.1-flash-image-preview' })
+  enqueueAsyncRequest({ nodeId: 'nX', key: 'nX', body: {}, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini', bundleKey: 'gemini-3.1-flash-image-preview', apiKey: 'k' })
   await flushModel('gemini-3.1-flash-image-preview')
   expect(addJobSpy).toHaveBeenCalledWith(expect.objectContaining({
     status: 'failed',
@@ -64,7 +66,7 @@ test('flushModel records a failed job when submit throws', async () => {
 })
 
 test('an OpenAI request flushes via submitOpenAIBatch and records an openai job', async () => {
-  enqueueAsyncRequest({ nodeId: 'oA', key: 'oA', body: { prompt: 'cat' }, bytes: 1, modelId: 'gpt-image-2', provider: 'openai', bundleKey: 'gpt-image-2|gen' })
+  enqueueAsyncRequest({ nodeId: 'oA', key: 'oA', body: { prompt: 'cat' }, bytes: 1, modelId: 'gpt-image-2', provider: 'openai', bundleKey: 'gpt-image-2|gen', apiKey: 'k' })
   await flushModel('gpt-image-2|gen')
   expect(submitOpenAIBatch).toHaveBeenCalledTimes(1)
   expect(submitGeminiBatch).not.toHaveBeenCalled()

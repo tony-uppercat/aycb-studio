@@ -16,6 +16,7 @@ export interface PendingRequest {
   modelId: string
   provider: 'gemini' | 'openai'
   bundleKey: string           // bucket key: gemini=modelId, openai=`${modelId}|gen|edits`
+  apiKey: string              // live provider key captured at enqueue time (used at flush)
   refs?: File[]               // openai edits refs
   /** Generation metadata forwarded onto the job request so the poller can persist meta + bridge. */
   meta?: { prompt: string; modelName: string; resolution?: string; aspectRatio?: string }
@@ -37,10 +38,6 @@ export function chunkBySize<T extends { bytes: number }>(items: T[]): T[][] {
 
 const buckets = new Map<string, PendingRequest[]>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
-let _keyGetter: (p: 'gemini' | 'openai') => string = () => ''
-
-/** Inject the provider-aware API key source (called once from App). */
-export function configureBundler(getKey: (p: 'gemini' | 'openai') => string) { _keyGetter = getKey }
 
 /** Enqueue one ASY request; schedules a debounced flush for its bundle bucket. */
 export function enqueueAsyncRequest(req: PendingRequest): void {
@@ -59,7 +56,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
   const t = timers.get(bundleKey); if (t) clearTimeout(t); timers.delete(bundleKey)
   if (list.length === 0) return
   const projectId = useCanvasStore.getState().activeProjectId ?? 'unknown'
-  const apiKey = _keyGetter(list[0].provider)
+  const apiKey = list[0].apiKey
   const chunks = chunkBySize(list)
   for (const chunk of chunks) {
     const modelId = chunk[0].modelId

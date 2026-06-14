@@ -579,6 +579,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       const body = await buildGeminiImageBody(prompt, resolvedModelId, sentRefs.length ? sentRefs : undefined, imageOptions)
       enqueueAsyncRequest({
         nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: resolvedModelId, provider: 'gemini', bundleKey: resolvedModelId,
+        apiKey,
         meta: { prompt, modelName: modelInfo.name, resolution: currentResolution || undefined, aspectRatio: currentAspectRatio || undefined },
       })
       updateNodeData(id, { asyncPending: true })
@@ -593,6 +594,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
         nodeId: id, key: id, body, bytes: JSON.stringify(body).length,
         modelId: selectedModel, provider: 'openai',
         bundleKey: `${selectedModel}|${hasRefs ? 'edits' : 'gen'}`,
+        apiKey: openaiApiKey,
         refs: hasRefs ? sentRefs : undefined,
         meta: { prompt, modelName: modelInfo.name, resolution: currentResolution || undefined, aspectRatio: currentAspectRatio || undefined },
       })

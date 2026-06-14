@@ -16,7 +16,7 @@ import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
 import { fetchReviewStatus, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
 import { cropImageFileToAspectRatio } from '../../utils/cropToAspectRatio'
 import { geminiSupportsBatch } from '../../providers/geminiBatchPath'
-import { buildGeminiImageBody } from '../../providers/geminiProvider'
+import { buildGeminiImageBody, resolveModel } from '../../providers/geminiProvider'
 import { enqueueAsyncRequest } from '../../services/asyncBundler'
 import { useAsyncJobStore } from '../../stores/asyncJobStore'
 import { applyImageResult } from '../../services/applyImageResult'
@@ -516,6 +516,11 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // Ref to accumulate history IDs atomically during batch runs
   const batchHistoryRef = useRef<string[]>([])
 
+  // Idempotency guard for the async consumer effect — StrictMode double-
+  // invokes the effect with the same closure while req.resultMediaId is still
+  // truthy, which would double-fire addCost. Keyed by mediaId.
+  const asyncConsumedRef = useRef<Set<string>>(new Set())
+
   /**
    * Run a single generation. When `batchAccum` is provided (batch mode),
    * results are appended there instead of calling setHistoryIds/updateNodeData
@@ -569,8 +574,9 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       ? await Promise.all(refs.map(f => cropImageFileToAspectRatio(f, currentAspectRatio)))
       : refs
     if (asyncGenRef.current && asyncCapableRun && modelInfo.provider === 'gemini') {
-      const body = await buildGeminiImageBody(prompt, selectedModel, sentRefs.length ? sentRefs : undefined, imageOptions)
-      enqueueAsyncRequest({ nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: selectedModel })
+      const resolvedModelId = resolveModel(selectedModel)
+      const body = await buildGeminiImageBody(prompt, resolvedModelId, sentRefs.length ? sentRefs : undefined, imageOptions)
+      enqueueAsyncRequest({ nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: resolvedModelId })
       updateNodeData(id, { asyncPending: true })
       return
     }
@@ -682,6 +688,8 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     }
     if (!req.resultMediaId) return
     const mediaId = req.resultMediaId
+    if (asyncConsumedRef.current.has(mediaId)) return
+    asyncConsumedRef.current.add(mediaId)
     const currentIds = (getNodes().find(n => n.id === id)?.data as Record<string, unknown>)?.historyIds as string[] ?? historyIds
     const newHistory = [...currentIds, mediaId].slice(-MAX_HISTORY)
     updateNodeData(id, { mediaId, historyIds: newHistory, outputMediaIds: null, asyncPending: false })

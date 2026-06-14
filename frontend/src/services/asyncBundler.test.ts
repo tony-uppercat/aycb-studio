@@ -1,11 +1,17 @@
-import { test, expect, vi } from 'vitest'
+import { test, expect, vi, beforeEach } from 'vitest'
 import { chunkBySize, MAX_BUNDLE_BYTES, enqueueAsyncRequest, flushModel } from './asyncBundler'
 
+const addJobSpy = vi.fn()
 vi.mock('../providers/geminiBatchPath', () => ({ submitGeminiBatch: vi.fn().mockResolvedValue('operations/x') }))
-vi.mock('../stores/asyncJobStore', () => ({ useAsyncJobStore: { getState: () => ({ addJob: vi.fn() }) } }))
+vi.mock('../stores/asyncJobStore', () => ({ useAsyncJobStore: { getState: () => ({ addJob: addJobSpy }) } }))
 vi.mock('../stores/canvasStore', () => ({ useCanvasStore: { getState: () => ({ activeProjectId: 'p1' }) } }))
 
 import { submitGeminiBatch } from '../providers/geminiBatchPath'
+
+beforeEach(() => {
+  addJobSpy.mockClear()
+  vi.mocked(submitGeminiBatch).mockReset().mockResolvedValue('operations/x')
+})
 
 test('enqueueAsyncRequest de-dupes by nodeId — re-run replaces the pending request', async () => {
   const base = { nodeId: 'nodeA', key: 'nodeA', body: { v: 1 }, bytes: 1, modelId: 'gemini-3.1-flash-image-preview' }
@@ -41,4 +47,15 @@ test('chunkBySize puts an oversize single item in its own chunk', () => {
   const chunks = chunkBySize(items)
   expect(chunks[0].map(i => i.key)).toEqual(['a'])
   expect(chunks[1].map(i => i.key)).toEqual(['b'])
+})
+
+test('flushModel records a failed job when submit throws', async () => {
+  addJobSpy.mockClear()
+  ;(submitGeminiBatch as any).mockRejectedValueOnce(new Error('429 rate limit'))
+  enqueueAsyncRequest({ nodeId: 'nX', key: 'nX', body: {}, bytes: 1, modelId: 'gemini-3.1-flash-image-preview' })
+  await flushModel('gemini-3.1-flash-image-preview')
+  expect(addJobSpy).toHaveBeenCalledWith(expect.objectContaining({
+    status: 'failed',
+    requests: [expect.objectContaining({ nodeId: 'nX', error: '429 rate limit' })],
+  }))
 })

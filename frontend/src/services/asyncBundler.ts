@@ -59,6 +59,13 @@ export async function flushModel(modelId: string): Promise<void> {
       })
     } catch (e) {
       console.warn('[AYCB] async bundle submit failed:', e)
+      const msg = e instanceof Error ? e.message : 'submit failed'
+      useAsyncJobStore.getState().addJob({
+        id: `failed-${chunk.map(c => c.key).join('-')}`,
+        projectId, provider: 'gemini', modelId, opName: '',
+        status: 'failed', submittedAt: performance.now(),
+        requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, error: msg })),
+      })
     }
   }
 }

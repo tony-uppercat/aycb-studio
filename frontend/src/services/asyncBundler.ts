@@ -17,6 +17,8 @@ export interface PendingRequest {
   provider: 'gemini' | 'openai'
   bundleKey: string           // bucket key: gemini=modelId, openai=`${modelId}|gen|edits`
   refs?: File[]               // openai edits refs
+  /** Generation metadata forwarded onto the job request so the poller can persist meta + bridge. */
+  meta?: { prompt: string; modelName: string; resolution?: string; aspectRatio?: string }
 }
 
 /** Group items into chunks under the byte/count cap. Order preserved. An oversize single item gets its own chunk. */
@@ -69,7 +71,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
         useAsyncJobStore.getState().addJob({
           id: batchId, projectId, provider: 'openai', modelId, opName: '',
           status: 'submitted', submittedAt: performance.now(),
-          requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key })),
+          requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta })),
           openai: { batchId, inputFileId, refFileIds },
         })
       } else {
@@ -77,7 +79,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
         useAsyncJobStore.getState().addJob({
           id: opName, projectId, provider: 'gemini', modelId, opName,
           status: 'submitted', submittedAt: performance.now(),
-          requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key })),
+          requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta })),
         })
       }
     } catch (e) {
@@ -87,7 +89,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
         id: `failed-${chunk.map(c => c.key).join('-')}`,
         projectId, provider, modelId, opName: '',
         status: 'failed', submittedAt: performance.now(),
-        requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, error: msg })),
+        requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta, error: msg })),
       })
     }
   }

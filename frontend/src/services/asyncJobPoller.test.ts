@@ -3,6 +3,7 @@ import { useAsyncJobStore } from '../stores/asyncJobStore'
 import { pollJobOnce, pollOpenAIJobOnce } from './asyncJobPoller'
 
 vi.mock('../mediaStore', () => ({ saveMediaForProject: vi.fn().mockResolvedValue(undefined), generateMediaId: () => 'm-x' }))
+vi.mock('./applyImageResult', () => ({ applyImageResult: vi.fn().mockResolvedValue({ mediaId: 'm-x' }) }))
 vi.mock('../providers/geminiBatchPath', () => ({
   pollGeminiBatch: vi.fn(),
   extractAllInlineEntries: (op: any) => new Map(Object.entries(op.entries)),
@@ -20,13 +21,14 @@ vi.mock('../providers/openaiBatchPath', () => ({
 import { pollGeminiBatch } from '../providers/geminiBatchPath'
 import { parseGenerateContentResponse } from '../providers/geminiShared'
 import { pollOpenAIBatch, fetchOpenAIBatchResults, cleanupOpenAIBatch } from '../providers/openaiBatchPath'
+import { applyImageResult } from './applyImageResult'
 
 beforeEach(() => {
   vi.clearAllMocks()
   useAsyncJobStore.setState({ jobs: [{
     id: 'j1', projectId: 'p1', provider: 'gemini', modelId: 'gemini-3.1-flash-image-preview',
     opName: 'operations/x', status: 'submitted', submittedAt: 0,
-    requests: [{ nodeId: 'nodeA', key: 'nodeA' }],
+    requests: [{ nodeId: 'nodeA', key: 'nodeA', meta: { prompt: 'cat', modelName: 'NB2' } }],
   }] })
 })
 
@@ -37,6 +39,7 @@ test('pollJobOnce routes a finished entry to a mediaId', async () => {
   const job = useAsyncJobStore.getState().jobs[0]
   expect(job.status).toBe('done')
   expect(job.requests[0].resultMediaId).toBe('m-x')
+  expect(applyImageResult).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'cat', modelName: 'NB2' }))
 })
 
 test('pollJobOnce marks a non-success terminal state as failed', async () => {

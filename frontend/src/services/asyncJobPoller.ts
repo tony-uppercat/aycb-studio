@@ -2,7 +2,7 @@ import { useAsyncJobStore, type AsyncJob } from '../stores/asyncJobStore'
 import { pollGeminiBatch, extractAllInlineEntries, GEMINI_BATCH_DISCOUNT } from '../providers/geminiBatchPath'
 import { pollOpenAIBatch, fetchOpenAIBatchResults, cleanupOpenAIBatch } from '../providers/openaiBatchPath'
 import { parseGenerateContentResponse } from '../providers/geminiShared'
-import { saveMediaForProject, generateMediaId } from '../mediaStore'
+import { applyImageResult } from './applyImageResult'
 
 const POLL_MS = 10_000
 const MAX_POLL_ERRORS = 6
@@ -31,10 +31,15 @@ export async function pollJobOnce(job: AsyncJob, apiKey: string): Promise<void> 
       const result = parseGenerateContentResponse(entry.response, job.modelId, GEMINI_BATCH_DISCOUNT)
       if (!result.image_b64) { store.setRequestResult(job.id, req.key, { error: result.status }); continue }
       try {
-        const mediaId = generateMediaId()
-        const resp = await fetch(`data:image/png;base64,${result.image_b64}`)
-        const file = new File([await resp.blob()], `generated_${req.nodeId}.png`, { type: 'image/png' })
-        await saveMediaForProject(mediaId, file)
+        const { mediaId } = await applyImageResult({
+          nodeId: req.nodeId,
+          result,
+          prompt: req.meta?.prompt ?? '',
+          model: job.modelId,
+          modelName: req.meta?.modelName ?? job.modelId,
+          resolution: req.meta?.resolution,
+          aspectRatio: req.meta?.aspectRatio,
+        })
         store.setRequestResult(job.id, req.key, { resultMediaId: mediaId })
       } catch (e) {
         store.setRequestResult(job.id, req.key, { error: e instanceof Error ? e.message : 'save failed' })
@@ -67,10 +72,15 @@ export async function pollOpenAIJobOnce(job: AsyncJob, apiKey: string): Promise<
       if (!result) { store.setRequestResult(job.id, req.key, { error: 'missing batch entry' }); continue }
       if (!result.image_b64) { store.setRequestResult(job.id, req.key, { error: result.status }); continue }
       try {
-        const mediaId = generateMediaId()
-        const resp = await fetch(`data:image/png;base64,${result.image_b64}`)
-        const file = new File([await resp.blob()], `generated_${req.nodeId}.png`, { type: 'image/png' })
-        await saveMediaForProject(mediaId, file)
+        const { mediaId } = await applyImageResult({
+          nodeId: req.nodeId,
+          result,
+          prompt: req.meta?.prompt ?? '',
+          model: job.modelId,
+          modelName: req.meta?.modelName ?? job.modelId,
+          resolution: req.meta?.resolution,
+          aspectRatio: req.meta?.aspectRatio,
+        })
         store.setRequestResult(job.id, req.key, { resultMediaId: mediaId })
       } catch (e) {
         store.setRequestResult(job.id, req.key, { error: e instanceof Error ? e.message : 'save failed' })

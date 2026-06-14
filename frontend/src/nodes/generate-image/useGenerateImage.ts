@@ -576,7 +576,10 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     if (asyncGenRef.current && asyncCapableRun && modelInfo.provider === 'gemini') {
       const resolvedModelId = resolveModel(selectedModel)
       const body = await buildGeminiImageBody(prompt, resolvedModelId, sentRefs.length ? sentRefs : undefined, imageOptions)
-      enqueueAsyncRequest({ nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: resolvedModelId, provider: 'gemini', bundleKey: resolvedModelId })
+      enqueueAsyncRequest({
+        nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: resolvedModelId, provider: 'gemini', bundleKey: resolvedModelId,
+        meta: { prompt, modelName: modelInfo.name, resolution: currentResolution || undefined, aspectRatio: currentAspectRatio || undefined },
+      })
       updateNodeData(id, { asyncPending: true })
       return
     }

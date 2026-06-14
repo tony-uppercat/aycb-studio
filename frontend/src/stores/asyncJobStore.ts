@@ -7,6 +7,8 @@ export interface AsyncJobRequest {
   key: string
   resultMediaId?: string
   error?: string
+  /** Generation metadata carried from enqueue time so the poller can persist PNG meta + bridge. */
+  meta?: { prompt: string; modelName: string; resolution?: string; aspectRatio?: string }
 }
 
 export type AsyncJobStatus = 'submitted' | 'polling' | 'done' | 'failed'

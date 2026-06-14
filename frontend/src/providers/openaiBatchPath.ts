@@ -55,74 +55,92 @@ async function deleteFileQuiet(apiKey: string, fileId: string | null | undefined
   }
 }
 
-export interface OpenAIBatchParams {
-  prompt: string
-  modelId: string
-  apiKey: string
-  size: string
-  quality: string
-  refs?: File[]
+export interface OpenAIBatchRequest {
+  customId: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  body: Record<string, any>   // /v1/images/generations body: { model, prompt, n, size, quality }
+  refs?: File[]               // when present → edits endpoint, refs uploaded as vision files
 }
 
-export async function runOpenAIBatch(
-  params: OpenAIBatchParams,
-  opts?: { pollMs?: number },
-): Promise<GenerateImageResult> {
-  const { prompt, modelId, apiKey, size, quality, refs } = params
-  const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS
+/**
+ * Submit N requests as ONE batch. ALL requests must target the SAME endpoint —
+ * the caller guarantees this (groups gen vs edits separately). Endpoint is
+ * decided by whether the FIRST request has refs. For an edits batch, every
+ * request's refs are uploaded as vision files and injected as body.images
+ * [{file_id}] + output_format:'png'. Returns ids for polling + cleanup.
+ */
+export async function submitOpenAIBatch(
+  requests: OpenAIBatchRequest[],
+  apiKey: string,
+): Promise<{ batchId: string; inputFileId: string; refFileIds: string[]; endpoint: string }> {
   const auth = { 'Authorization': `Bearer ${apiKey}` }
+  const endpoint = requests[0]?.refs?.length ? '/v1/images/edits' : '/v1/images/generations'
   const refFileIds: string[] = []
-  let inputFileId: string | null = null
-  let outputFileId: string | null = null
+  const lines: string[] = []
 
-  try {
-    // 1. vision uploads when editing with refs
-    let url = '/v1/images/generations'
-    const body: Record<string, unknown> = { model: modelId, prompt, n: 1, size, quality }
-    if (refs && refs.length > 0) {
-      url = '/v1/images/edits'
-      for (const ref of refs) {
-        refFileIds.push(await uploadFile(apiKey, ref, ref.name || 'ref.png', 'vision'))
+  for (const req of requests) {
+    if (endpoint === '/v1/images/edits') {
+      const thisRefIds: string[] = []
+      for (const ref of req.refs ?? []) {
+        const id = await uploadFile(apiKey, ref, ref.name || 'ref.png', 'vision')
+        thisRefIds.push(id)
+        refFileIds.push(id)
       }
-      body.images = refFileIds.map(id => ({ file_id: id }))
-      body.output_format = 'png'
+      req.body.images = thisRefIds.map(id => ({ file_id: id }))
+      req.body.output_format = 'png'
     }
+    lines.push(JSON.stringify({ custom_id: req.customId, method: 'POST', url: endpoint, body: req.body }))
+  }
 
-    // 2. JSONL upload + batch create
-    const jsonl = new Blob([buildBatchLine(url, body) + '\n'], { type: 'application/jsonl' })
-    inputFileId = await uploadFile(apiKey, jsonl, 'aycb-async.jsonl', 'batch')
-    const createResp = await fetch(`${OPENAI_BASE}/batches`, {
-      method: 'POST',
-      headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input_file_id: inputFileId, endpoint: url, completion_window: '24h' }),
-    })
-    if (!createResp.ok) throw new Error(`OpenAI batch create failed: ${await openaiError(createResp)}`)
-    let batch = await createResp.json()
+  const jsonl = new Blob([lines.join('\n') + '\n'], { type: 'application/jsonl' })
+  const inputFileId = await uploadFile(apiKey, jsonl, 'aycb-async.jsonl', 'batch')
+  const createResp = await fetch(`${OPENAI_BASE}/batches`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input_file_id: inputFileId, endpoint, completion_window: '24h' }),
+  })
+  if (!createResp.ok) throw new Error(`OpenAI batch create failed: ${await openaiError(createResp)}`)
+  const batch = await createResp.json()
+  return { batchId: batch.id, inputFileId, refFileIds, endpoint }
+}
 
-    // 3. poll to terminal. The job runs server-side; closing the tab loses
-    //    the result but not the job (recovery is v2 — see spec).
-    while (!TERMINAL.has(batch.status)) {
-      await sleep(pollMs)
-      const pollResp = await fetch(`${OPENAI_BASE}/batches/${batch.id}`, { headers: auth })
-      if (!pollResp.ok) throw new Error(`OpenAI batch poll failed: ${await openaiError(pollResp)}`)
-      batch = await pollResp.json()
-    }
-    outputFileId = batch.output_file_id ?? null
+/** One poll tick. */
+export async function pollOpenAIBatch(
+  batchId: string,
+  apiKey: string,
+): Promise<{ done: boolean; status: string; outputFileId: string | null; errorDetail?: string }> {
+  const resp = await fetch(`${OPENAI_BASE}/batches/${batchId}`, {
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  })
+  if (!resp.ok) throw new Error(`OpenAI batch poll failed: ${await openaiError(resp)}`)
+  const batch = await resp.json()
+  return {
+    done: TERMINAL.has(batch.status),
+    status: batch.status,
+    outputFileId: batch.output_file_id ?? null,
+    errorDetail: batch.errors?.data?.[0]?.message,
+  }
+}
 
-    if (batch.status !== 'completed') {
-      const detail = batch.errors?.data?.[0]?.message ?? batch.status
-      return { image_b64: null, status: `OpenAI batch ${batch.status}: ${detail}`, usage: undefined }
-    }
-    if (!outputFileId) return { image_b64: null, status: 'OpenAI batch: no output file', usage: undefined }
-
-    // 4. download + decode (single line)
-    const dlResp = await fetch(`${OPENAI_BASE}/files/${outputFileId}/content`, { headers: auth })
-    if (!dlResp.ok) throw new Error(`OpenAI batch download failed: ${await openaiError(dlResp)}`)
-    const line = (await dlResp.text()).split('\n').find(l => l.trim())
-    if (!line) return { image_b64: null, status: 'OpenAI batch: empty output', usage: undefined }
+/** Download + decode the output file. Keyed by custom_id. usage cost ×0.5. */
+export async function fetchOpenAIBatchResults(
+  outputFileId: string,
+  apiKey: string,
+): Promise<Map<string, GenerateImageResult>> {
+  const resp = await fetch(`${OPENAI_BASE}/files/${outputFileId}/content`, {
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  })
+  if (!resp.ok) throw new Error(`OpenAI batch download failed: ${await openaiError(resp)}`)
+  const text = await resp.text()
+  const map = new Map<string, GenerateImageResult>()
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue
     const entry = JSON.parse(line)
+    const customId: string = entry.custom_id
     if (entry.error) {
-      return { image_b64: null, status: `OpenAI batch request error: ${entry.error.message ?? JSON.stringify(entry.error).slice(0, 200)}`, usage: undefined }
+      const msg = entry.error.message ?? JSON.stringify(entry.error).slice(0, 200)
+      map.set(customId, { image_b64: null, status: `OpenAI batch request error: ${msg}`, usage: undefined })
+      continue
     }
     const respBody = entry.response?.body ?? {}
     const b64 = respBody.data?.[0]?.b64_json ?? null
@@ -133,11 +151,77 @@ export async function runOpenAIBatch(
           cost_usd: computeCost(respBody.usage) * OPENAI_BATCH_DISCOUNT,
         }
       : undefined
-    return { image_b64: b64, status: b64 ? 'OK' : 'No image generated', usage }
+    map.set(customId, { image_b64: b64, status: b64 ? 'OK' : 'No image generated', usage })
+  }
+  return map
+}
+
+/** Best-effort delete of input/output/ref files. Never throws. */
+export async function cleanupOpenAIBatch(
+  apiKey: string,
+  ids: { inputFileId?: string | null; outputFileId?: string | null; refFileIds?: string[] },
+): Promise<void> {
+  for (const id of ids.refFileIds ?? []) await deleteFileQuiet(apiKey, id)
+  await deleteFileQuiet(apiKey, ids.inputFileId)
+  await deleteFileQuiet(apiKey, ids.outputFileId)
+}
+
+export interface OpenAIBatchParams {
+  prompt: string
+  modelId: string
+  apiKey: string
+  size: string
+  quality: string
+  refs?: File[]
+}
+
+/** Back-compat wrapper: one request, await to terminal, return single result. */
+export async function runOpenAIBatch(
+  params: OpenAIBatchParams,
+  opts?: { pollMs?: number },
+): Promise<GenerateImageResult> {
+  const { prompt, modelId, apiKey, size, quality, refs } = params
+  const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS
+
+  const request: OpenAIBatchRequest = {
+    customId: 'r0',
+    body: { model: modelId, prompt, n: 1, size, quality },
+    refs,
+  }
+
+  let submitted: { batchId: string; inputFileId: string; refFileIds: string[]; endpoint: string } | null = null
+  let outputFileId: string | null = null
+  try {
+    submitted = await submitOpenAIBatch([request], apiKey)
+
+    // Poll to terminal. The job runs server-side; closing the tab loses the
+    // result but not the job (recovery is v2 — see spec).
+    let status = ''
+    let errorDetail: string | undefined
+    for (;;) {
+      const tick = await pollOpenAIBatch(submitted.batchId, apiKey)
+      status = tick.status
+      outputFileId = tick.outputFileId
+      errorDetail = tick.errorDetail
+      if (tick.done) break
+      await sleep(pollMs)
+    }
+
+    if (status !== 'completed') {
+      return { image_b64: null, status: `OpenAI batch ${status}: ${errorDetail ?? status}`, usage: undefined }
+    }
+    if (!outputFileId) return { image_b64: null, status: 'OpenAI batch: no output file', usage: undefined }
+
+    const results = await fetchOpenAIBatchResults(outputFileId, apiKey)
+    return results.get('r0') ?? { image_b64: null, status: 'OpenAI batch: empty output', usage: undefined }
   } finally {
     // Best-effort cleanup — never masks the real outcome.
-    for (const id of refFileIds) await deleteFileQuiet(apiKey, id)
-    await deleteFileQuiet(apiKey, inputFileId)
-    await deleteFileQuiet(apiKey, outputFileId)
+    if (submitted) {
+      await cleanupOpenAIBatch(apiKey, {
+        inputFileId: submitted.inputFileId,
+        outputFileId,
+        refFileIds: submitted.refFileIds,
+      })
+    }
   }
 }

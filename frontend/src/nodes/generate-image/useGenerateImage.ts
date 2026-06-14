@@ -16,6 +16,9 @@ import { estimateCost, formatCostEstimate } from '../../utils/costEstimate'
 import { fetchReviewStatus, toggleFavorite, type ReviewStatus } from '../../utils/reviewStatus'
 import { cropImageFileToAspectRatio } from '../../utils/cropToAspectRatio'
 import { geminiSupportsBatch } from '../../providers/geminiBatchPath'
+import { buildGeminiImageBody } from '../../providers/geminiProvider'
+import { enqueueAsyncRequest } from '../../services/asyncBundler'
+import { useAsyncJobStore } from '../../stores/asyncJobStore'
 import { applyImageResult } from '../../services/applyImageResult'
 
 export interface ImageModelDef {
@@ -565,6 +568,12 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const sentRefs = cropRefsRef.current
       ? await Promise.all(refs.map(f => cropImageFileToAspectRatio(f, currentAspectRatio)))
       : refs
+    if (asyncGenRef.current && asyncCapableRun && modelInfo.provider === 'gemini') {
+      const body = await buildGeminiImageBody(prompt, selectedModel, sentRefs.length ? sentRefs : undefined, imageOptions)
+      enqueueAsyncRequest({ nodeId: id, key: id, body, bytes: JSON.stringify(body).length, modelId: selectedModel })
+      updateNodeData(id, { asyncPending: true })
+      return
+    }
     const r = await api.generateImage(prompt, selectedModel, modelInfo.provider, providerKey, sentRefs.length ? sentRefs : undefined, imageOptions)
     if (!r.image_b64) { throw new Error(r.status || 'No image generated') }
 
@@ -657,6 +666,34 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // or Resolution manually, auto-adapt is suppressed for the rest of the
   // node's life so node values always win over input-driven adaptation.
   const markManualOverride = useCallback(() => { userOverrodeRef.current = true }, [])
+
+  // Consume the background ASY result: when the poller resolves this node's
+  // request, render the image (or surface the error) and clear the pending flag.
+  const myJob = useAsyncJobStore(s => s.jobs.find(j => j.requests.some(r => r.nodeId === id)))
+  useEffect(() => {
+    if (!myJob) return
+    const req = myJob.requests.find(r => r.nodeId === id)
+    if (!req) return
+    if (req.error) {
+      setError(req.error)
+      updateNodeData(id, { asyncPending: false })
+      useAsyncJobStore.getState().markConsumed(myJob.id, req.key)
+      return
+    }
+    if (!req.resultMediaId) return
+    const mediaId = req.resultMediaId
+    const currentIds = (getNodes().find(n => n.id === id)?.data as Record<string, unknown>)?.historyIds as string[] ?? historyIds
+    const newHistory = [...currentIds, mediaId].slice(-MAX_HISTORY)
+    updateNodeData(id, { mediaId, historyIds: newHistory, outputMediaIds: null, asyncPending: false })
+    setHistoryIds(newHistory)
+    const est = estimateCost(selectedModel, 'generate_image', activePrompt, 0, 0, 1, resolutionRef.current, false)
+    useCanvasStore.getState().addCost({
+      timestamp: new Date().toISOString(), nodeId: id, nodeName: 'Generate Image',
+      model: selectedModel, inputTokens: est.inputTokens, outputTokens: 0, costUsd: est.costUsd * 0.5,
+    })
+    useAsyncJobStore.getState().markConsumed(myJob.id, req.key)
+    if (myJob.requests.length <= 1) useAsyncJobStore.getState().removeJob(myJob.id)
+  }, [myJob, id])   // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     // State

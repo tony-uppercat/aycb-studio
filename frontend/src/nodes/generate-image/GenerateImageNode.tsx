@@ -171,6 +171,9 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             Batch {Math.floor(h.asyncElapsed / 60)}m {h.asyncElapsed % 60}s
           </div>
         )}
+        {data.asyncPending && (
+          <div className={styles.batchProgress}>Batch · queued</div>
+        )}
         {h.error && <p className={styles.error}>{h.error}</p>}
         <div className={styles.previewArea}>
           {compareMode && canCompare ? (

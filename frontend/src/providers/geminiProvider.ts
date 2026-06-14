@@ -53,69 +53,87 @@ export async function fileToBase64(file: File): Promise<string> {
 // Per-image pricing + response parsing live in ./geminiShared (also used by
 // the async Batch API path in ./geminiBatchPath).
 
+/**
+ * Build the Gemini GenerateContentRequest body shared by the sync REST path,
+ * the awaited Batch path, and the non-blocking ASY enqueue path in the node.
+ * `modelId` must already be resolved (call resolveModel first). The
+ * thinkingConfig high-res gating encodes empirical bug workarounds — do not
+ * alter it. See memory feedback_gemini_thinking_imagesize.
+ */
+export async function buildGeminiImageBody(
+  prompt: string,
+  modelId: string,
+  refs: File[] | undefined,
+  options?: ImageGenerationOptions,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<Record<string, any>> {
+  // Build parts: text prompt + optional inline_data per ref.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parts: any[] = [{ text: prompt }]
+  if (refs) {
+    for (const ref of refs) {
+      const b64 = await fileToBase64(ref)
+      parts.push({ inline_data: { mime_type: ref.type || 'image/png', data: b64 } })
+    }
+  }
+
+  // Map 0.5K → 512 (SDK literal); other buckets pass through.
+  const mappedSize = options?.imageSize === '0.5K' ? '512' : options?.imageSize
+
+  const imageConfig: Record<string, string> = {}
+  if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
+  if (mappedSize) imageConfig.imageSize = mappedSize
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const generationConfig: Record<string, any> = {
+    responseModalities: ['IMAGE', 'TEXT'],
+    ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
+  }
+  // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
+  // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
+  // Canonical casing is lowercase ("minimal" / "high").
+  //
+  // At imageSize 2K/4K, explicit thinkingLevel=high silently degrades the
+  // output to the 1K bucket (768×1376 at 9:16) — confirmed empirically via
+  // scripts/smoke_test_nb2_imagesize.py vs in-app reports. Omit thinkingConfig
+  // at high res so the API falls back to default `minimal` which honors
+  // imageSize. See memory feedback_gemini_thinking_imagesize.
+  const isHighRes = options?.imageSize === '2K' || options?.imageSize === '4K'
+  if (
+    modelId === 'gemini-3.1-flash-image-preview'
+    && options?.thinking !== false
+    && !isHighRes
+  ) {
+    generationConfig.thinkingConfig = {
+      includeThoughts: true,
+      thinkingLevel: 'high',
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body: Record<string, any> = {
+    contents: [{ role: 'user', parts }],
+    generationConfig,
+  }
+  if (options?.useGrounding) {
+    body.tools = [{
+      googleSearch: {
+        searchTypes: {
+          webSearch: {},
+          imageSearch: {},
+        },
+      },
+    }]
+  }
+  return body
+}
+
 const geminiImageProvider: ImageProvider = {
   id: 'gemini',
   async generateImage(prompt: string, modelNameOrId: string, apiKey: string, refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
     const modelId = resolveModel(modelNameOrId)
 
-    // Build parts: text prompt + optional inline_data per ref.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parts: any[] = [{ text: prompt }]
-    if (refs) {
-      for (const ref of refs) {
-        const b64 = await fileToBase64(ref)
-        parts.push({ inline_data: { mime_type: ref.type || 'image/png', data: b64 } })
-      }
-    }
-
-    // Map 0.5K → 512 (SDK literal); other buckets pass through.
-    const mappedSize = options?.imageSize === '0.5K' ? '512' : options?.imageSize
-
-    const imageConfig: Record<string, string> = {}
-    if (options?.aspectRatio) imageConfig.aspectRatio = options.aspectRatio
-    if (mappedSize) imageConfig.imageSize = mappedSize
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const generationConfig: Record<string, any> = {
-      responseModalities: ['IMAGE', 'TEXT'],
-      ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
-    }
-    // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
-    // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
-    // Canonical casing is lowercase ("minimal" / "high").
-    //
-    // At imageSize 2K/4K, explicit thinkingLevel=high silently degrades the
-    // output to the 1K bucket (768×1376 at 9:16) — confirmed empirically via
-    // scripts/smoke_test_nb2_imagesize.py vs in-app reports. Omit thinkingConfig
-    // at high res so the API falls back to default `minimal` which honors
-    // imageSize. See memory feedback_gemini_thinking_imagesize.
-    const isHighRes = options?.imageSize === '2K' || options?.imageSize === '4K'
-    if (
-      modelId === 'gemini-3.1-flash-image-preview'
-      && options?.thinking !== false
-      && !isHighRes
-    ) {
-      generationConfig.thinkingConfig = {
-        includeThoughts: true,
-        thinkingLevel: 'high',
-      }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body: Record<string, any> = {
-      contents: [{ role: 'user', parts }],
-      generationConfig,
-    }
-    if (options?.useGrounding) {
-      body.tools = [{
-        googleSearch: {
-          searchTypes: {
-            webSearch: {},
-            imageSearch: {},
-          },
-        },
-      }]
-    }
+    const body = await buildGeminiImageBody(prompt, modelId, refs, options)
 
     // Async mode: same request body via Batch API at 50% cost (awaits result).
     // Gate on model support — flash-lite-image 404s on batchGenerateContent.

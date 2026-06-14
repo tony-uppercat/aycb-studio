@@ -39,6 +39,12 @@ export function chunkBySize<T extends { bytes: number }>(items: T[]): T[][] {
 const buckets = new Map<string, PendingRequest[]>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
+/** Push the total buffered-request count into the store so the Console can react to pending work. */
+function _syncPending(): void {
+  const total = [...buckets.values()].reduce((s, l) => s + l.length, 0)
+  useAsyncJobStore.getState().setPendingCount(total)
+}
+
 /** Enqueue one ASY request; schedules a debounced flush for its bundle bucket. */
 export function enqueueAsyncRequest(req: PendingRequest): void {
   const list = (buckets.get(req.bundleKey) ?? []).filter(r => r.nodeId !== req.nodeId)
@@ -47,12 +53,14 @@ export function enqueueAsyncRequest(req: PendingRequest): void {
   const existing = timers.get(req.bundleKey)
   if (existing) clearTimeout(existing)
   timers.set(req.bundleKey, setTimeout(() => void flushModel(req.bundleKey), DEBOUNCE_MS))
+  _syncPending()
 }
 
 /** Flush one bundle bucket now: chunk -> submit -> addJob per chunk. */
 export async function flushModel(bundleKey: string): Promise<void> {
   const list = buckets.get(bundleKey) ?? []
   buckets.delete(bundleKey)
+  _syncPending()
   const t = timers.get(bundleKey); if (t) clearTimeout(t); timers.delete(bundleKey)
   if (list.length === 0) return
   const projectId = useCanvasStore.getState().activeProjectId ?? 'unknown'

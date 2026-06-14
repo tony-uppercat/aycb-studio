@@ -35,6 +35,9 @@ export interface AsyncJob {
 
 interface AsyncJobState {
   jobs: AsyncJob[]
+  /** Reactive count of requests still buffered in the bundler (pre-submit). Runtime-only, not persisted. */
+  pendingCount: number
+  setPendingCount: (n: number) => void
   addJob: (job: AsyncJob) => void
   updateJob: (id: string, patch: Partial<AsyncJob>) => void
   setRequestResult: (id: string, key: string, patch: { resultMediaId?: string; error?: string }) => void
@@ -56,6 +59,8 @@ export const useAsyncJobStore = create<AsyncJobState>()(
   persist(
     (set, get) => ({
       jobs: [],
+      pendingCount: 0,
+      setPendingCount: (n) => set({ pendingCount: n }),
       addJob: (job) => set(s => ({ jobs: [...s.jobs, job] })),
       updateJob: (id, patch) => set(s => ({ jobs: s.jobs.map(j => j.id === id ? { ...j, ...patch } : j) })),
       setRequestResult: (id, key, patch) => set(s => ({

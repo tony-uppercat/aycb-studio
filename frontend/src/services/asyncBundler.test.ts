@@ -2,9 +2,10 @@ import { test, expect, vi, beforeEach } from 'vitest'
 import { chunkBySize, MAX_BUNDLE_BYTES, enqueueAsyncRequest, flushModel } from './asyncBundler'
 
 const addJobSpy = vi.fn()
+const setPendingCountSpy = vi.fn()
 vi.mock('../providers/geminiBatchPath', () => ({ submitGeminiBatch: vi.fn().mockResolvedValue('operations/x') }))
 vi.mock('../providers/openaiBatchPath', () => ({ submitOpenAIBatch: vi.fn().mockResolvedValue({ batchId: 'batch_x', inputFileId: 'f_in', refFileIds: [], endpoint: '/v1/images/generations' }) }))
-vi.mock('../stores/asyncJobStore', () => ({ useAsyncJobStore: { getState: () => ({ addJob: addJobSpy }) } }))
+vi.mock('../stores/asyncJobStore', () => ({ useAsyncJobStore: { getState: () => ({ addJob: addJobSpy, setPendingCount: setPendingCountSpy }) } }))
 const addLogSpy = vi.fn()
 vi.mock('../stores/canvasStore', () => ({ useCanvasStore: { getState: () => ({ activeProjectId: 'p1', addLog: addLogSpy }) } }))
 
@@ -13,6 +14,7 @@ import { submitOpenAIBatch } from '../providers/openaiBatchPath'
 
 beforeEach(() => {
   addJobSpy.mockClear()
+  setPendingCountSpy.mockClear()
   addLogSpy.mockClear()
   vi.mocked(submitGeminiBatch).mockReset().mockResolvedValue('operations/x')
   vi.mocked(submitOpenAIBatch).mockReset().mockResolvedValue({ batchId: 'batch_x', inputFileId: 'f_in', refFileIds: [], endpoint: '/v1/images/generations' })
@@ -32,6 +34,14 @@ test('enqueueAsyncRequest de-dupes by nodeId — re-run replaces the pending req
   expect(submitGeminiBatch).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'KEY123')
   // A [batch] submit log surfaces to the Console after a successful flush
   expect(addLogSpy).toHaveBeenCalledWith(expect.stringContaining('[batch] submit'))
+})
+
+test('enqueueAsyncRequest syncs pendingCount as requests accumulate in a bucket', async () => {
+  const base = { key: '', body: {}, bytes: 1, modelId: 'gemini-3.1-flash-image-preview', provider: 'gemini' as const, bundleKey: 'pending-sync-key', apiKey: 'k' }
+  enqueueAsyncRequest({ ...base, nodeId: 'n1', key: 'n1' })
+  enqueueAsyncRequest({ ...base, nodeId: 'n2', key: 'n2' })
+  expect(setPendingCountSpy).toHaveBeenLastCalledWith(2)
+  await flushModel('pending-sync-key')   // drain the bucket so it doesn't leak into later tests
 })
 
 test('chunkBySize splits when estimated bytes exceed the cap', () => {

@@ -274,6 +274,7 @@ export function ConsolePanel({ open, onToggle }: Props) {
 
   const errCount = storeErrors.length;
   const asyncCount = useAsyncJobStore(s => s.jobs.filter(j => j.status === 'submitted' || j.status === 'polling').length);
+  const pendingCount = useAsyncJobStore(s => s.pendingCount);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -345,10 +346,14 @@ export function ConsolePanel({ open, onToggle }: Props) {
             {fixedOpen ? '▼' : '▶'} {resolvedEntries.length} fixed
           </span>
         )}
-        {asyncCount > 0 && (
+        {(pendingCount > 0 || asyncCount > 0) && (
           <span className={styles.fbFixedBadge} onClick={(e) => e.stopPropagation()} title="Async batch queue">
-            {asyncCount} batch in corso
-            <button className={styles.fbExportBtn} onClick={(e) => { e.stopPropagation(); void flushAll() }} title="Lancia la coda batch ora">Lancia coda ora</button>
+            {pendingCount > 0 && <>{pendingCount} in coda</>}
+            {pendingCount > 0 && asyncCount > 0 && ' · '}
+            {asyncCount > 0 && <>{asyncCount} batch in corso</>}
+            {pendingCount > 0 && (
+              <button className={styles.fbExportBtn} onClick={(e) => { e.stopPropagation(); void flushAll() }} title="Lancia la coda batch ora">Lancia coda ora</button>
+            )}
           </span>
         )}
         {errCount > 0 && (

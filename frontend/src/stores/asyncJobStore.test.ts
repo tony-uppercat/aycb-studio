@@ -45,6 +45,11 @@ test('markConsumed drops the job when its last request is consumed', () => {
   expect(useAsyncJobStore.getState().jobs).toEqual([])
 })
 
+test('setPendingCount sets the reactive pending count', () => {
+  useAsyncJobStore.getState().setPendingCount(3)
+  expect(useAsyncJobStore.getState().pendingCount).toBe(3)
+})
+
 test('a failed job stays failed when a request later resolves', () => {
   useAsyncJobStore.getState().addJob(baseJob)
   useAsyncJobStore.getState().updateJob('job1', { status: 'failed' })

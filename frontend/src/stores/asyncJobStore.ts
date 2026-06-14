@@ -22,6 +22,13 @@ export interface AsyncJob {
   requests: AsyncJobRequest[]
   error?: string
   pollErrors?: number
+  /** OpenAI-only: file ids for polling the batch + cleaning up afterwards. */
+  openai?: {
+    batchId: string
+    inputFileId: string
+    refFileIds: string[]
+    outputFileId?: string
+  }
 }
 
 interface AsyncJobState {

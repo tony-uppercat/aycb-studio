@@ -1,5 +1,6 @@
 import { vi, test, expect, beforeEach } from 'vitest'
 import { useAsyncJobStore } from '../stores/asyncJobStore'
+import { useCanvasStore } from '../stores/canvasStore'
 import { pollJobOnce, pollOpenAIJobOnce } from './asyncJobPoller'
 
 vi.mock('../mediaStore', () => ({ saveMediaForProject: vi.fn().mockResolvedValue(undefined), generateMediaId: () => 'm-x' }))
@@ -40,6 +41,7 @@ test('pollJobOnce routes a finished entry to a mediaId', async () => {
   expect(job.status).toBe('done')
   expect(job.requests[0].resultMediaId).toBe('m-x')
   expect(applyImageResult).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'cat', modelName: 'NB2' }))
+  expect(useCanvasStore.getState().logs.some(l => l.includes('images ready'))).toBe(true)
 })
 
 test('pollJobOnce marks a non-success terminal state as failed', async () => {

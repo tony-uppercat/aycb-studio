@@ -2,10 +2,13 @@ import { useAsyncJobStore, type AsyncJob } from '../stores/asyncJobStore'
 import { pollGeminiBatch, extractAllInlineEntries, GEMINI_BATCH_DISCOUNT } from '../providers/geminiBatchPath'
 import { pollOpenAIBatch, fetchOpenAIBatchResults, cleanupOpenAIBatch } from '../providers/openaiBatchPath'
 import { parseGenerateContentResponse } from '../providers/geminiShared'
+import { useCanvasStore } from '../stores/canvasStore'
 import { applyImageResult } from './applyImageResult'
 
 const POLL_MS = 10_000
 const MAX_POLL_ERRORS = 6
+/** Last logged state per job id — guards against re-logging the same state every 10s tick. */
+const _lastState = new Map<string, string>()
 let _started = false
 let _timer: ReturnType<typeof setTimeout> | null = null
 let _keyGetter: (p: 'gemini' | 'openai') => string = () => ''
@@ -18,9 +21,15 @@ export async function pollJobOnce(job: AsyncJob, apiKey: string): Promise<void> 
   const store = useAsyncJobStore.getState()
   try {
     const { done, op, state } = await pollGeminiBatch(job.opName, apiKey)
+    if (state && state !== _lastState.get(job.id)) {
+      useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · ${state || (done ? 'done' : 'polling')}`)
+      _lastState.set(job.id, state)
+    }
     if (!done) { store.updateJob(job.id, { status: 'polling', pollErrors: 0 }); return }
     if (state !== 'BATCH_STATE_SUCCEEDED') {
       store.updateJob(job.id, { status: 'failed', error: op?.error?.message ?? state })
+      useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · FAILED ${op?.error?.message ?? state}`)
+      _lastState.delete(job.id)
       return
     }
     const entries = extractAllInlineEntries(op)
@@ -45,6 +54,8 @@ export async function pollJobOnce(job: AsyncJob, apiKey: string): Promise<void> 
         store.setRequestResult(job.id, req.key, { error: e instanceof Error ? e.message : 'save failed' })
       }
     }
+    useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · ${job.requests.length} images ready`)
+    _lastState.delete(job.id)
   } catch {
     const live = useAsyncJobStore.getState().jobs.find(j => j.id === job.id)
     const errs = (live?.pollErrors ?? 0) + 1
@@ -58,14 +69,22 @@ export async function pollOpenAIJobOnce(job: AsyncJob, apiKey: string): Promise<
   if (!job.openai) return
   try {
     const { done, status, outputFileId } = await pollOpenAIBatch(job.openai.batchId, apiKey)
+    if (status && status !== _lastState.get(job.id)) {
+      useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · ${status}`)
+      _lastState.set(job.id, status)
+    }
     if (!done) { store.updateJob(job.id, { status: 'polling', pollErrors: 0 }); return }
     if (status !== 'completed') {
       store.updateJob(job.id, { status: 'failed', error: `OpenAI batch ${status}` })
+      useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · FAILED OpenAI batch ${status}`)
+      _lastState.delete(job.id)
       await cleanupOpenAIBatch(apiKey, { inputFileId: job.openai.inputFileId, outputFileId: outputFileId ?? undefined, refFileIds: job.openai.refFileIds })
       return
     }
     if (!outputFileId) {
       store.updateJob(job.id, { status: 'failed', error: 'OpenAI batch: no output file' })
+      useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · FAILED OpenAI batch: no output file`)
+      _lastState.delete(job.id)
       await cleanupOpenAIBatch(apiKey, { inputFileId: job.openai.inputFileId, refFileIds: job.openai.refFileIds })
       return
     }
@@ -90,6 +109,8 @@ export async function pollOpenAIJobOnce(job: AsyncJob, apiKey: string): Promise<
         store.setRequestResult(job.id, req.key, { error: e instanceof Error ? e.message : 'save failed' })
       }
     }
+    useCanvasStore.getState().addLog(`[batch] ${job.id.slice(-8)} · ${job.requests.length} images ready`)
+    _lastState.delete(job.id)
     await cleanupOpenAIBatch(apiKey, { inputFileId: job.openai.inputFileId, outputFileId, refFileIds: job.openai.refFileIds })
   } catch {
     const live = useAsyncJobStore.getState().jobs.find(j => j.id === job.id)

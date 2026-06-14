@@ -5,13 +5,15 @@ const addJobSpy = vi.fn()
 vi.mock('../providers/geminiBatchPath', () => ({ submitGeminiBatch: vi.fn().mockResolvedValue('operations/x') }))
 vi.mock('../providers/openaiBatchPath', () => ({ submitOpenAIBatch: vi.fn().mockResolvedValue({ batchId: 'batch_x', inputFileId: 'f_in', refFileIds: [], endpoint: '/v1/images/generations' }) }))
 vi.mock('../stores/asyncJobStore', () => ({ useAsyncJobStore: { getState: () => ({ addJob: addJobSpy }) } }))
-vi.mock('../stores/canvasStore', () => ({ useCanvasStore: { getState: () => ({ activeProjectId: 'p1' }) } }))
+const addLogSpy = vi.fn()
+vi.mock('../stores/canvasStore', () => ({ useCanvasStore: { getState: () => ({ activeProjectId: 'p1', addLog: addLogSpy }) } }))
 
 import { submitGeminiBatch } from '../providers/geminiBatchPath'
 import { submitOpenAIBatch } from '../providers/openaiBatchPath'
 
 beforeEach(() => {
   addJobSpy.mockClear()
+  addLogSpy.mockClear()
   vi.mocked(submitGeminiBatch).mockReset().mockResolvedValue('operations/x')
   vi.mocked(submitOpenAIBatch).mockReset().mockResolvedValue({ batchId: 'batch_x', inputFileId: 'f_in', refFileIds: [], endpoint: '/v1/images/generations' })
 })
@@ -28,6 +30,8 @@ test('enqueueAsyncRequest de-dupes by nodeId — re-run replaces the pending req
   expect(reqs[0].body).toEqual({ v: 2 })
   // The live key carried on the request reaches submit as the 3rd arg
   expect(submitGeminiBatch).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'KEY123')
+  // A [batch] submit log surfaces to the Console after a successful flush
+  expect(addLogSpy).toHaveBeenCalledWith(expect.stringContaining('[batch] submit'))
 })
 
 test('chunkBySize splits when estimated bytes exceed the cap', () => {

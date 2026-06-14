@@ -71,6 +71,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
           requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta })),
           openai: { batchId, inputFileId, refFileIds },
         })
+        useCanvasStore.getState().addLog(`[batch] submit · ${chunk.length} req · ${modelId} · ${batchId.slice(-8)}`)
       } else {
         const opName = await submitGeminiBatch(modelId, chunk.map(r => ({ body: r.body, key: r.key })), apiKey)
         useAsyncJobStore.getState().addJob({
@@ -78,10 +79,12 @@ export async function flushModel(bundleKey: string): Promise<void> {
           status: 'submitted', submittedAt: performance.now(),
           requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta })),
         })
+        useCanvasStore.getState().addLog(`[batch] submit · ${chunk.length} req · ${modelId} · ${opName.slice(-8)}`)
       }
     } catch (e) {
       console.warn('[AYCB] async bundle submit failed:', e)
       const msg = e instanceof Error ? e.message : 'submit failed'
+      useCanvasStore.getState().addLog(`[batch] submit FAILED · ${modelId} · ${msg}`)
       useAsyncJobStore.getState().addJob({
         id: `failed-${chunk.map(c => c.key).join('-')}`,
         projectId, provider, modelId, opName: '',

@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { getNextNodeId } from './useCanvasDragDrop'
 import type { NodeManifest } from '../nodes/index'
-import { cloneNodeMedia } from '../mediaStore'
+import { cloneNodeMedia, loadMedia, saveMediaForProject, generateMediaId } from '../mediaStore'
+import { flipImageFile, type FlipAxis } from '../utils/flipImage'
 
 const UNPACK_W = 230, UNPACK_H = 200, UNPACK_GAP = 20, UNPACK_COLS = 5
 
@@ -75,6 +76,17 @@ export function useCanvasContextMenuActions({
     }
   }, [setNodes])
 
+  // Toggle the _blocked flag: blocked nodes (and their parents) are skipped in
+  // chain runs. If a mixed selection is toggled, drive all to the same state
+  // based on whether any are currently unblocked.
+  const ctxBlock = useCallback((nodes: Node[]) => {
+    const ids = new Set(nodes.map(n => n.id))
+    const anyUnblocked = nodes.some(n => !(n.data as Record<string, unknown>)._blocked)
+    setNodes(ns => ns.map(nn =>
+      ids.has(nn.id) ? { ...nn, data: { ...nn.data, _blocked: anyUnblocked } } : nn
+    ))
+  }, [setNodes])
+
   const ctxDuplicate = useCallback(async (nodes: Node[]) => {
     const newNodes = await Promise.all(nodes.map(async n => ({
       ...n,
@@ -84,6 +96,29 @@ export function useCanvasContextMenuActions({
       data: await cloneNodeMedia(n.data as Record<string, unknown>),
     })))
     const postNodes = [...getNodes().map(n => ({ ...n, selected: false })), ...newNodes]
+    snapshot(postNodes, getEdges())
+    setNodes(postNodes)
+  }, [getNodes, getEdges, setNodes, snapshot])
+
+  // Flip each selected image node's media in place: load the current file,
+  // mirror it on a canvas, save under a fresh mediaId so downstream re-pulls.
+  // Nodes without a mediaId are skipped. One snapshot for undo.
+  const ctxFlip = useCallback(async (nodes: Node[], axis: FlipAxis) => {
+    const updates: Record<string, string> = {}
+    for (const n of nodes) {
+      const mid = (n.data as Record<string, unknown>).mediaId
+      if (typeof mid !== 'string') continue
+      const file = await loadMedia(mid)
+      if (!file) continue
+      const flipped = await flipImageFile(file, axis)
+      const newMid = generateMediaId()
+      await saveMediaForProject(newMid, flipped)
+      updates[n.id] = newMid
+    }
+    if (Object.keys(updates).length === 0) return
+    const postNodes = getNodes().map(n =>
+      updates[n.id] ? { ...n, data: { ...n.data, mediaId: updates[n.id] } } : n
+    )
     snapshot(postNodes, getEdges())
     setNodes(postNodes)
   }, [getNodes, getEdges, setNodes, snapshot])
@@ -156,7 +191,8 @@ export function useCanvasContextMenuActions({
   }, [getNodes, getEdges, setNodes, snapshot])
 
   return {
-    ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxDuplicate,
+    ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxBlock, ctxDuplicate,
     ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
+    ctxFlip,
   }
 }

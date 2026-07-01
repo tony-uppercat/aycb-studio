@@ -9,14 +9,13 @@ function okJson(body: unknown) {
 }
 
 describe('geminiSupportsBatch', () => {
-  it('accepts pro/flash image models (preview and GA)', () => {
-    expect(geminiSupportsBatch('gemini-3-pro-image-preview')).toBe(true)
+  it('accepts pro/flash/flash-lite image models (GA ids)', () => {
     expect(geminiSupportsBatch('gemini-3-pro-image')).toBe(true)
-    expect(geminiSupportsBatch('gemini-3.1-flash-image-preview')).toBe(true)
     expect(geminiSupportsBatch('gemini-3.1-flash-image')).toBe(true)
+    expect(geminiSupportsBatch('gemini-3.1-flash-lite-image')).toBe(true)
   })
-  it('rejects flash-lite (404 on batchGenerateContent, verified 2026-06-11)', () => {
-    expect(geminiSupportsBatch('gemini-3.1-flash-lite-image-preview')).toBe(false)
+  it('rejects non-image / unknown ids', () => {
+    expect(geminiSupportsBatch('gemini-3.1-pro-preview')).toBe(false)
   })
 })
 
@@ -39,7 +38,7 @@ describe('runGeminiBatch', () => {
       .mockResolvedValueOnce(okJson(done))
     vi.stubGlobal('fetch', fetchMock)
 
-    const r = await runGeminiBatch('gemini-3.1-flash-image-preview', REQUEST_BODY, 'KEY', { pollMs: 0 })
+    const r = await runGeminiBatch('gemini-3.1-flash-image', REQUEST_BODY, 'KEY', { pollMs: 0 })
     expect(r.image_b64).toBe('IMG64')
     expect(r.status).toBe('OK')
     expect(r.usage?.cost_usd).toBeCloseTo(0.0335)   // 0.067 × 0.5

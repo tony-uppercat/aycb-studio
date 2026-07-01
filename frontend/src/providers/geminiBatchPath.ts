@@ -24,14 +24,17 @@ export const GEMINI_BATCH_DISCOUNT = 0.5
 const DEFAULT_POLL_MS = 10_000
 
 /**
- * Image models accepting batchGenerateContent — verified against
- * ListModels 2026-06-11. flash-LITE-image 404s on batch.
+ * Image models accepting batchGenerateContent. GA ids only; pre-migration
+ * preview ids are rewritten to GA by resolveModel (MODEL_MAP reverse
+ * aliases) before this gate is reached. flash-image/pro-image verified
+ * 2026-06-11; Nano Banana 2 Lite (gemini-3.1-flash-lite-image) verified
+ * live 2026-07-01 (batchGenerateContent submit accepted). Lite is 1K-only
+ * (2K/4K rejected by the model), so no high-res batch concern.
  */
 const GEMINI_BATCH_MODELS = new Set([
-  'gemini-3-pro-image-preview',
   'gemini-3-pro-image',
-  'gemini-3.1-flash-image-preview',
   'gemini-3.1-flash-image',
+  'gemini-3.1-flash-lite-image',
   'gemini-2.5-flash-image',
 ])
 
@@ -94,6 +97,20 @@ export async function submitGeminiBatch(
   const opName = (await submitResp.json()).name as string
   if (!opName) throw new Error('Gemini batch submit returned no operation name')
   return opName
+}
+
+/** Cancel a running batch operation. Best-effort: returns true on 2xx, false otherwise.
+ *  Never throws — caller still marks the local job cancelled regardless. */
+export async function cancelGeminiBatch(opName: string, apiKey: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${BASE}/${opName}:cancel`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': apiKey },
+    })
+    return resp.ok
+  } catch {
+    return false
+  }
 }
 
 /** One poll tick. Returns done flag + the raw op when terminal. */

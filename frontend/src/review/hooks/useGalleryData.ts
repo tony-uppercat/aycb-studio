@@ -4,6 +4,18 @@ import { onEvent, offEvent } from '../services/socket'
 import { useSocketStore } from '../stores/socketStore'
 import type { MediaCardMedia } from '../components/MediaCard'
 
+// Pull the generation prompt out of the metadata JSON blob (scanner stores it
+// under the top-level `prompt` key). Returns '' when absent or unparseable.
+function promptOf(metadata?: string): string {
+  if (!metadata) return ''
+  try {
+    const m = typeof metadata === 'string' ? JSON.parse(metadata) : metadata
+    return typeof m?.prompt === 'string' ? m.prompt : ''
+  } catch {
+    return ''
+  }
+}
+
 export function useGalleryData(activeDirectory: string | null) {
   const [mediaList, setMediaList] = useState<MediaCardMedia[]>([])
   const [directories, setDirectories] = useState<{ name: string; count?: number }[]>([])
@@ -94,7 +106,10 @@ export function useFilteredMedia(
     }
     if (search) {
       const q = search.toLowerCase()
-      list = list.filter(m => m.filename.toLowerCase().includes(q))
+      list = list.filter(m =>
+        m.filename.toLowerCase().includes(q) ||
+        promptOf(m.metadata).toLowerCase().includes(q)
+      )
     }
     switch (sortBy) {
       case 'newest':    list.sort((a, b) => b.id - a.id); break

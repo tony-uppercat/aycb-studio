@@ -77,8 +77,8 @@ def test_build_jsonl_lines_thinking_included_on_low_res():
 
 def test_estimate_batch_cost_uses_discount():
     """Estimated cost is 0.5 * model_cost * count for image gen."""
-    cost = estimate_batch_cost("gemini-3-pro-image-preview", count=5)
-    # gemini-3-pro-image-preview avg per-image ~= $0.134 -> batch 0.067 * 5 = 0.335
+    cost = estimate_batch_cost("gemini-3-pro-image", count=5)
+    # gemini-3-pro-image avg per-image ~= $0.134 -> batch 0.067 * 5 = 0.335
     assert 0.30 < cost < 0.40
 
 
@@ -105,7 +105,7 @@ def test_parse_result_line_success_writes_image(tmp_path: Path):
     }
     result = parse_result_line(
         line=line,
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         media_dir=media_dir,
         prompt="a cat",
     )
@@ -122,7 +122,7 @@ def test_parse_result_line_failure_captures_error(tmp_path: Path):
     line = {"key": "r0", "error": {"code": 400, "message": "bad prompt"}}
     result = parse_result_line(
         line=line,
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         media_dir=media_dir,
         prompt="x",
     )
@@ -143,14 +143,14 @@ async def test_submit_calls_google_create_with_uploaded_file(tmp_path, monkeypat
     provider = GeminiBatchProvider(client=fake_client, scratch_dir=tmp_path)
     req = BatchRequest(key="r0", prompt="hi")
     job_name = await provider.submit(
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         requests=[req],
         display_name="test",
     )
     assert job_name == "batches/xyz"
     fake_client.files.upload.assert_called_once()
     fake_client.batches.create.assert_called_once_with(
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         src="files/abc",
         config={"display_name": "test"},
     )

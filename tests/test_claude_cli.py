@@ -32,6 +32,20 @@ def test_build_command_basics():
     assert cmd[cmd.index("--max-turns") + 1] == "2"
 
 
+def test_build_command_effort_appended_when_valid():
+    for level in ("low", "medium", "high", "xhigh", "max"):
+        cmd = claude_cli.build_command("claude-opus-4-8", None, 0, effort=level)
+        assert "--effort" in cmd
+        assert cmd[cmd.index("--effort") + 1] == level
+
+
+def test_build_command_effort_omitted_for_auto_or_invalid():
+    # None, 'auto', and unknown values all omit the flag (CLI uses its own default).
+    for v in (None, "auto", "extreme", ""):
+        cmd = claude_cli.build_command("claude-opus-4-8", None, 0, effort=v)
+        assert "--effort" not in cmd
+
+
 def test_build_command_no_images_disables_all_tools():
     # A generation node is not an agent: with no images the model gets NO tools,
     # so it cannot wander into tool calls (and blow --max-turns) or auto-fire skills.
@@ -140,10 +154,11 @@ def test_route_dispatches_to_cli(monkeypatch):
 
     captured = {}
     def fake_run(prompt, model_id, system, image_paths, run_fn=None,
-                 skills_enabled=False, skill_names=None):
+                 skills_enabled=False, skill_names=None, effort=None):
         captured["model_id"] = model_id
         captured["prompt"] = prompt
         captured["images"] = image_paths
+        captured["effort"] = effort
         return {"text": "hi", "status": "OK",
                 "usage": {"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0}}
 
@@ -165,7 +180,7 @@ def test_route_cli_error_returns_422(monkeypatch):
     import src.routers.llm as llm
 
     def fake_run(prompt, model_id, system, image_paths, run_fn=None,
-                 skills_enabled=False, skill_names=None):
+                 skills_enabled=False, skill_names=None, effort=None):
         return {"text": "", "status": "ERROR", "error": "Claude CLI error_max_turns: Reached maximum number of turns (2)",
                 "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}}
 

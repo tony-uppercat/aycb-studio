@@ -12,17 +12,21 @@ export interface ApplyImageContext {
   modelName: string
   resolution?: string
   aspectRatio?: string
+  /** Pin the saved media to this project. Async batch results pass the job's
+   *  originating project so they don't land in whatever project is active when
+   *  the poll resolves. Omitted for sync runs → active project. (H5) */
+  projectId?: string
 }
 
 /** Persist a generated image (mediaStore + meta + bridge). Returns the new mediaId. */
 export async function applyImageResult(ctx: ApplyImageContext): Promise<{ mediaId: string }> {
-  const { nodeId, result, prompt, model, modelName, resolution, aspectRatio } = ctx
+  const { nodeId, result, prompt, model, modelName, resolution, aspectRatio, projectId } = ctx
   if (!result.image_b64) throw new Error(result.status || 'No image generated')
   const mediaId = ctx.mediaId ?? generateMediaId()
   const response = await fetch(`data:image/png;base64,${result.image_b64}`)
   const blob = await response.blob()
   const file = new File([blob], `generated_${nodeId}.png`, { type: 'image/png' })
-  await saveMediaForProject(mediaId, file)
+  await saveMediaForProject(mediaId, file, projectId)
   saveMediaMeta(mediaId, {
     prompt, model, model_name: modelName,
     aspect_ratio: aspectRatio || undefined,

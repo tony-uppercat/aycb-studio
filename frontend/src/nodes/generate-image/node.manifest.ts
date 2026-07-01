@@ -6,7 +6,7 @@ const manifest: NodeManifest = {
   icon: '✨',
   category: 'media-model',
   description: 'Generate an image from a prompt',
-  defaultData: { prompt: '', selectedModel: 'gemini-3-pro-image-preview', aspectRatio: '16:9', resolution: '4K' },
+  defaultData: { prompt: '', selectedModel: 'gpt-image-2', aspectRatio: '16:9', resolution: 'Draft' },
   inputs: [
     { type: 'prompt', handleId: 'prompt-in' },
     { type: 'image', handleId: 'image-0' },

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { NODE_CATALOG, CATEGORY_LABELS, getCompatibleNodes, type NodeManifest } from '../nodes/index'
+import { matchAliases, applyAlias, type QuickAlias } from '../nodes/quickAliases'
 import { PRESETS } from './project/ProjectGallery'
 import { getUserTemplates, deleteUserTemplate, updateUserTemplate, type UserTemplate } from '../presets'
 import styles from './AddNodeMenu.module.css'
@@ -46,12 +47,20 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
       : userTemplates)
     : []
 
-  // Flat list of all selectable items for keyboard navigation
+  // Quick-add aliases (e.g. "nb2" → Image with Nano Banana 2). Only when the
+  // user is typing and we're not in a connection-drag filter mode (typed model
+  // would clash with the slot-type constraint anyway).
+  const aliases = !filter && q ? matchAliases(query) : []
+
+  // Flat list of all selectable items for keyboard navigation. Aliases appear
+  // FIRST so the most-likely match takes default Enter.
   const allItems: Array<
+    | { type: 'alias'; alias: QuickAlias }
     | { type: 'node'; entry: NodeManifest }
     | { type: 'template'; preset: typeof PRESETS[0] }
     | { type: 'userTemplate'; template: UserTemplate }
   > = [
+    ...aliases.map(alias => ({ type: 'alias' as const, alias })),
     ...filtered.map(entry => ({ type: 'node' as const, entry })),
     ...templates.map(preset => ({ type: 'template' as const, preset })),
     ...filteredUserTemplates.map(template => ({ type: 'userTemplate' as const, template })),
@@ -95,6 +104,17 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
   function select(entry: NodeManifest) {
     onAdd(entry)
     onClose()
+  }
+
+  function selectAlias(alias: QuickAlias) {
+    const base = NODE_CATALOG.find(n => n.type === alias.nodeType)
+    if (!base) return
+    onAdd(applyAlias(base, alias))
+    onClose()
+  }
+
+  function getFlatIndexForAlias(alias: QuickAlias): number {
+    return allItems.findIndex(item => item.type === 'alias' && item.alias.alias === alias.alias && item.alias.nodeType === alias.nodeType)
   }
 
   function getFlatIndexForNode(entry: NodeManifest): number {
@@ -144,7 +164,9 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
       if (totalItems === 0) return
       const item = allItems[focusedIndex]
       if (!item) return
-      if (item.type === 'node') {
+      if (item.type === 'alias') {
+        selectAlias(item.alias)
+      } else if (item.type === 'node') {
         select(item.entry)
       } else if (item.type === 'template' && onAddTemplate) {
         onAddTemplate(item.preset.nodes, item.preset.edges)
@@ -178,6 +200,30 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
           />
         </div>
         <div className={styles.list} ref={listRef}>
+          {aliases.length > 0 && (
+            <div>
+              <div className={styles.categoryLabel}>Quick</div>
+              {aliases.map(a => {
+                const flatIndex = getFlatIndexForAlias(a)
+                const isFocused = flatIndex === focusedIndex
+                return (
+                  <div
+                    key={`${a.nodeType}:${a.alias}`}
+                    ref={el => { itemRefs.current[flatIndex] = el }}
+                    className={`${styles.item}${isFocused ? ' ' + styles.itemFocused : ''}`}
+                    onClick={() => selectAlias(a)}
+                    onMouseEnter={() => setFocusedIndex(flatIndex)}
+                  >
+                    <span className={styles.itemIcon}>{NODE_CATALOG.find(n => n.type === a.nodeType)?.icon ?? '+'}</span>
+                    <div className={styles.itemInfo}>
+                      <div className={styles.itemName}>{a.label} <span style={{ opacity: 0.55, fontSize: 11 }}>· {a.alias}</span></div>
+                      <div className={styles.itemDesc}>{a.description}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           {grouped.map(g => (
             <div key={g.cat}>
               <div className={styles.categoryLabel}>{g.label}</div>
@@ -275,7 +321,7 @@ export function AddNodeMenu({ open, onClose, onAdd, onAddTemplate, filter, posit
               })}
             </div>
           )}
-          {filtered.length === 0 && templates.length === 0 && filteredUserTemplates.length === 0 && (
+          {filtered.length === 0 && templates.length === 0 && filteredUserTemplates.length === 0 && aliases.length === 0 && (
             <div className={styles.hint}>No nodes match "{query}"</div>
           )}
         </div>

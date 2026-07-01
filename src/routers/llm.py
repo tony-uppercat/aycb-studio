@@ -28,6 +28,7 @@ async def llm_chat_endpoint(
     model: str = Form("Gemini 3 Flash"),
     skills_mode: bool = Form(False),
     skills: str = Form(""),
+    effort: str = Form(""),
     media_files: list[UploadFile] | None = File(default=None),
 ):
     import time
@@ -39,7 +40,7 @@ async def llm_chat_endpoint(
         skill_names = [s.strip() for s in skills.split(",") if s.strip()]
         return await _chat_claude_cli(
             clean_prompt, system_prompt, model_id, media_files,
-            time.time(), skills_mode, skill_names,
+            time.time(), skills_mode, skill_names, effort or None,
         )
     if _is_claude_model(model_id):
         return await _chat_claude(clean_prompt, system_prompt, api_key, model_id, media_files, time.time())
@@ -112,6 +113,7 @@ async def _chat_claude_cli(
     prompt: str, system_prompt: str, model_id: str,
     media_files: list[UploadFile] | None, t0: float,
     skills_mode: bool = False, skill_names: list[str] | None = None,
+    effort: str | None = None,
 ):
     """Handle Claude via the local `claude` CLI — subscription auth, no API key. Uploaded
     media are written to a temp dir so claude can Read them; the dir is removed after."""
@@ -142,7 +144,7 @@ async def _chat_claude_cli(
                 system_file = str(sf)
             result = await asyncio.to_thread(
                 claude_cli.run, prompt, model_id, system_file, image_paths,
-                None, skills_mode, skill_names,
+                None, skills_mode, skill_names, effort,
             )
         dt = time.time() - t0
         if result.get("status") != "OK":

@@ -129,6 +129,7 @@ async function generateFromEdits(
   refs: File[],
   size: string,
   quality: string,
+  inputFidelity?: 'low' | 'high',
 ): Promise<GenerateImageResult> {
   const fd = new FormData()
   fd.append('model', modelId)
@@ -136,6 +137,7 @@ async function generateFromEdits(
   fd.append('n', '1')
   fd.append('size', size)
   fd.append('quality', quality)
+  if (inputFidelity) fd.append('input_fidelity', inputFidelity)
   // OpenAI's /v1/images/edits accepts `image` only for a single reference.
   // For multi-ref it requires the array syntax `image[]` — passing multiple
   // `image` fields returns: "Duplicate parameter: 'image'. ... use the
@@ -175,13 +177,14 @@ const openaiImageProvider: ImageProvider = {
   ): Promise<GenerateImageResult> {
     if (!apiKey) throw new Error('OpenAI API key not configured — Settings > API Keys')
     const size = computeSize(options?.aspectRatio, options?.imageSize)
-    const quality = resolutionToQuality(options?.imageSize)
+    const quality = options?.quality ?? resolutionToQuality(options?.imageSize)
+    const inputFidelity = options?.inputFidelity
     // Async mode: Batch API at 50% cost (awaits result, can take minutes-hours).
     if (options?.async) {
-      return runOpenAIBatch({ prompt, modelId, apiKey, size, quality, refs })
+      return runOpenAIBatch({ prompt, modelId, apiKey, size, quality, refs, inputFidelity })
     }
     if (refs && refs.length > 0) {
-      return generateFromEdits(prompt, modelId, apiKey, refs, size, quality)
+      return generateFromEdits(prompt, modelId, apiKey, refs, size, quality, inputFidelity)
     }
     return generateFromText(prompt, modelId, apiKey, size, quality)
   },

@@ -1,5 +1,6 @@
 import { vi, test, expect, beforeEach } from 'vitest'
 import { applyImageResult } from './applyImageResult'
+import { saveMediaForProject } from '../mediaStore'
 
 vi.mock('../mediaStore', () => ({
   generateMediaId: () => 'media-123',
@@ -27,6 +28,22 @@ test('applyImageResult uses a provided mediaId', async () => {
     prompt: 'x', model: 'm', modelName: 'M',
   })
   expect(out.mediaId).toBe('pre-made')
+})
+
+test('applyImageResult pins the media to the given projectId (H5 — async batch routing)', async () => {
+  await applyImageResult({
+    nodeId: 'n1', mediaId: 'm1', result: { image_b64: 'iVBORw0KGgo=', status: 'ok' },
+    prompt: 'x', model: 'm', modelName: 'M', projectId: 'proj-from-job',
+  })
+  expect(saveMediaForProject).toHaveBeenCalledWith('m1', expect.any(File), 'proj-from-job')
+})
+
+test('applyImageResult passes projectId=undefined for sync runs (falls back to active project)', async () => {
+  await applyImageResult({
+    nodeId: 'n1', mediaId: 'm2', result: { image_b64: 'iVBORw0KGgo=', status: 'ok' },
+    prompt: 'x', model: 'm', modelName: 'M',
+  })
+  expect(saveMediaForProject).toHaveBeenCalledWith('m2', expect.any(File), undefined)
 })
 
 test('applyImageResult throws when image_b64 is null', async () => {

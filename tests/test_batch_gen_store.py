@@ -18,7 +18,7 @@ def _make_job(job_id: str = "job-1", node_id: str = "node-A") -> BatchJob:
         id=job_id,
         google_job_name=f"batches/{job_id}",
         node_id=node_id,
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         submitted_at=now,
         updated_at=now,
         state=JobState.RUNNING,

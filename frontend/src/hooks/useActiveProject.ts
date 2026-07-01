@@ -25,6 +25,7 @@ import { deleteMultipleMedia, orphanSweep } from '../mediaStore'
 import { serializeNodes, type PersistedCanvas, loadDefaultProject } from './useCanvasPersistence'
 import { applyEdgeColor } from '../utils/edgeStyles'
 import { useCanvasStore } from '../stores/canvasStore'
+import { useAsyncJobStore } from '../stores/asyncJobStore'
 import { STORAGE_KEYS } from '../storage/keys'
 
 function migrateEdges(edges: Edge[]): Edge[] {
@@ -468,6 +469,12 @@ export function useActiveProject(): UseActiveProject {
     // Purge this project's recorded cost entries (cost view scopes by
     // activeProjectId; orphaned entries would otherwise linger in the store).
     useCanvasStore.getState().removeCostsForProject(targetId)
+
+    // Purge this project's in-flight/persisted async batch jobs — otherwise they
+    // keep polling and their results mis-route into whatever project is active
+    // when they resolve (and the 'done' jobs leak in the store). (H7)
+    const asyncStore = useAsyncJobStore.getState()
+    for (const j of asyncStore.jobsForProject(targetId)) asyncStore.removeJob(j.id)
 
     await deleteProjectRecord(targetId)
 

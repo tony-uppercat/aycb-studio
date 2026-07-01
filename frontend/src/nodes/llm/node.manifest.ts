@@ -6,7 +6,7 @@ const manifest: NodeManifest = {
   icon: '🧠',
   category: 'llm',
   description: 'Generate or transform text — choose Gemini or Claude',
-  defaultData: { prompt: '', systemPrompt: '', selectedModel: 'gemini-3.1-flash-lite:thinking' },
+  defaultData: { prompt: '', systemPrompt: '', selectedModel: 'cli-claude-opus-4-8' },
   inputs: [
     { type: 'text', handleId: 'text-system' },
     { type: 'prompt', handleId: 'prompt-in' },

@@ -10,9 +10,10 @@ def test_chat_forwards_skills_to_claude_cli():
     captured = {}
 
     def fake_run(prompt, model_id, system_file, image_paths,
-                 run_fn=None, skills_enabled=False, skill_names=None):
+                 run_fn=None, skills_enabled=False, skill_names=None, effort=None):
         captured["skills_enabled"] = skills_enabled
         captured["skill_names"] = skill_names
+        captured["effort"] = effort
         return {"text": "ok", "status": "OK",
                 "usage": {"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0}}
 

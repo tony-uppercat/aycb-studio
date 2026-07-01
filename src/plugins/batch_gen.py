@@ -49,9 +49,9 @@ def get_store() -> BatchStore:
 class SubmitRequest(BaseModel):
     node_id: str = Field(..., min_length=1, max_length=200)
     model: Literal[
-        "gemini-3-pro-image-preview",
-        "gemini-3.1-flash-image-preview",
-        "gemini-3.1-flash-lite-image-preview",
+        "gemini-3-pro-image",
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
     ]
     requests: list[BatchRequest] = Field(..., min_length=1, max_length=1000)
 

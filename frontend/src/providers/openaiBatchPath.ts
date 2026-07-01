@@ -77,31 +77,61 @@ export async function submitOpenAIBatch(
   const endpoint = requests[0]?.refs?.length ? '/v1/images/edits' : '/v1/images/generations'
   const refFileIds: string[] = []
   const lines: string[] = []
+  let inputFileId: string | undefined
 
-  for (const req of requests) {
-    if (endpoint === '/v1/images/edits') {
-      const thisRefIds: string[] = []
-      for (const ref of req.refs ?? []) {
+  try {
+    // Parallelize all ref uploads across all requests. Each uploadFile pushes
+    // its id into refFileIds synchronously on resolve, so a partial Promise.all
+    // failure still leaves the M4 cleanup able to delete every file already up.
+    const refsByReq = await Promise.all(requests.map(async req => {
+      if (endpoint !== '/v1/images/edits') return [] as string[]
+      return Promise.all((req.refs ?? []).map(async ref => {
         const id = await uploadFile(apiKey, ref, ref.name || 'ref.png', 'vision')
-        thisRefIds.push(id)
         refFileIds.push(id)
+        return id
+      }))
+    }))
+    for (let i = 0; i < requests.length; i++) {
+      const req = requests[i]
+      if (endpoint === '/v1/images/edits') {
+        req.body.images = refsByReq[i].map(id => ({ file_id: id }))
+        req.body.output_format = 'png'
       }
-      req.body.images = thisRefIds.map(id => ({ file_id: id }))
-      req.body.output_format = 'png'
+      lines.push(JSON.stringify({ custom_id: req.customId, method: 'POST', url: endpoint, body: req.body }))
     }
-    lines.push(JSON.stringify({ custom_id: req.customId, method: 'POST', url: endpoint, body: req.body }))
-  }
 
-  const jsonl = new Blob([lines.join('\n') + '\n'], { type: 'application/jsonl' })
-  const inputFileId = await uploadFile(apiKey, jsonl, 'aycb-async.jsonl', 'batch')
-  const createResp = await fetch(`${OPENAI_BASE}/batches`, {
-    method: 'POST',
-    headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input_file_id: inputFileId, endpoint, completion_window: '24h' }),
-  })
-  if (!createResp.ok) throw new Error(`OpenAI batch create failed: ${await openaiError(createResp)}`)
-  const batch = await createResp.json()
-  return { batchId: batch.id, inputFileId, refFileIds, endpoint }
+    const jsonl = new Blob([lines.join('\n') + '\n'], { type: 'application/jsonl' })
+    inputFileId = await uploadFile(apiKey, jsonl, 'aycb-async.jsonl', 'batch')
+    const createResp = await fetch(`${OPENAI_BASE}/batches`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input_file_id: inputFileId, endpoint, completion_window: '24h' }),
+    })
+    if (!createResp.ok) throw new Error(`OpenAI batch create failed: ${await openaiError(createResp)}`)
+    const batch = await createResp.json()
+    return { batchId: batch.id, inputFileId, refFileIds, endpoint }
+  } catch (e) {
+    // M4: a failure partway through (a later ref upload, the JSONL upload, or
+    // batch-create) would otherwise orphan the files already uploaded above.
+    // Best-effort delete every collected id before surfacing the error.
+    for (const id of refFileIds) await deleteFileQuiet(apiKey, id)
+    await deleteFileQuiet(apiKey, inputFileId)
+    throw e
+  }
+}
+
+/** Cancel a running batch. Best-effort: returns true on 2xx, false otherwise.
+ *  OpenAI docs: only stops queued requests; in-flight ones may still bill. */
+export async function cancelOpenAIBatch(batchId: string, apiKey: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${OPENAI_BASE}/batches/${batchId}/cancel`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    })
+    return resp.ok
+  } catch {
+    return false
+  }
 }
 
 /** One poll tick. */
@@ -173,6 +203,7 @@ export interface OpenAIBatchParams {
   size: string
   quality: string
   refs?: File[]
+  inputFidelity?: 'low' | 'high'
 }
 
 /** Back-compat wrapper: one request, await to terminal, return single result. */
@@ -180,12 +211,14 @@ export async function runOpenAIBatch(
   params: OpenAIBatchParams,
   opts?: { pollMs?: number },
 ): Promise<GenerateImageResult> {
-  const { prompt, modelId, apiKey, size, quality, refs } = params
+  const { prompt, modelId, apiKey, size, quality, refs, inputFidelity } = params
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS
 
+  const body: Record<string, unknown> = { model: modelId, prompt, n: 1, size, quality }
+  if (inputFidelity && refs && refs.length > 0) body.input_fidelity = inputFidelity
   const request: OpenAIBatchRequest = {
     customId: 'r0',
-    body: { model: modelId, prompt, n: 1, size, quality },
+    body,
     refs,
   }
 

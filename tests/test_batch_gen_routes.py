@@ -36,7 +36,7 @@ def test_submit_creates_job_and_persists(app_with_routes):
     client = TestClient(app)
     payload = {
         "node_id": "node-A",
-        "model": "gemini-3-pro-image-preview",
+        "model": "gemini-3-pro-image",
         "requests": [{
             "key": "r0",
             "prompt": "a cat",
@@ -62,7 +62,7 @@ def test_submit_returns_422_on_provider_failure(app_with_routes):
     client = TestClient(app)
     resp = client.post("/api/batch/submit", json={
         "node_id": "node-A",
-        "model": "gemini-3-pro-image-preview",
+        "model": "gemini-3-pro-image",
         "requests": [{"key": "r0", "prompt": "x"}],
     })
     assert resp.status_code == 422
@@ -73,7 +73,7 @@ def test_list_jobs_returns_persisted(app_with_routes):
     app, store, _ = app_with_routes
     job = BatchJob(
         id="j1", google_job_name="batches/j1", node_id="nodeA",
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         submitted_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
         state=JobState.RUNNING,
@@ -91,7 +91,7 @@ def test_list_jobs_filter_by_node(app_with_routes):
     for jid, nid in [("a", "n1"), ("b", "n2")]:
         asyncio.run(store.upsert(BatchJob(
             id=jid, google_job_name=f"batches/{jid}", node_id=nid,
-            model="gemini-3-pro-image-preview",
+            model="gemini-3-pro-image",
             submitted_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
             state=JobState.RUNNING,
@@ -108,7 +108,7 @@ def test_cancel_calls_provider_and_updates_state(app_with_routes):
     app, store, provider = app_with_routes
     asyncio.run(store.upsert(BatchJob(
         id="j1", google_job_name="batches/j1", node_id="nodeA",
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         submitted_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
         state=JobState.RUNNING,
@@ -135,7 +135,7 @@ def test_cancel_terminal_state_short_circuits(app_with_routes):
     app, store, provider = app_with_routes
     asyncio.run(store.upsert(BatchJob(
         id="j1", google_job_name="batches/j1", node_id="nodeA",
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-pro-image",
         submitted_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
         state=JobState.SUCCEEDED,

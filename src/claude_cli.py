@@ -28,8 +28,12 @@ def real_model(model_id: str) -> str:
     return model_id[len(_CLI_PREFIX):] if model_id.startswith(_CLI_PREFIX) else model_id
 
 
+_EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+
+
 def build_command(model: str, system_file: str | None, n_images: int,
-                  skills_enabled: bool = False) -> list[str]:
+                  skills_enabled: bool = False,
+                  effort: str | None = None) -> list[str]:
     """`claude -p` invocation. JSON output so we can read usage + cost.
 
     Default (generation node): NO tools ('' / 'Read' for images), --max-turns
@@ -41,6 +45,11 @@ def build_command(model: str, system_file: str | None, n_images: int,
     load Agent Skills, and --max-turns rises to leave room for skill load + a
     couple of reads + the final answer. Still NO Bash/Write/Edit — knowledge
     skills only, no shell, no file writes.
+
+    effort: forwarded to `claude --effort <level>` when set to one of
+    low|medium|high|xhigh|max. None / "auto" / unknown values → no flag, so
+    the CLI uses its own default (the user's claude config). This is the
+    canonical 'auto' behavior — claude picks its own depth.
 
     --bare is omitted (it forces ANTHROPIC_API_KEY-only auth, breaking the
     subscription session). System prompt passed as a FILE; user prompt via
@@ -56,6 +65,8 @@ def build_command(model: str, system_file: str | None, n_images: int,
            "--model", model,
            "--permission-mode", "bypassPermissions",
            "--tools", tools]
+    if effort and effort in _EFFORT_LEVELS:
+        cmd += ["--effort", effort]
     if system_file:
         cmd += ["--append-system-prompt-file", system_file]
     return cmd
@@ -148,13 +159,16 @@ def parse_result(rc: int, stdout: str, stderr: str = "") -> dict:
 
 def run(prompt: str, model_id: str, system_file: str | None,
         image_paths: list[str], run_fn=None,
-        skills_enabled: bool = False, skill_names: list[str] | None = None) -> dict:
+        skills_enabled: bool = False, skill_names: list[str] | None = None,
+        effort: str | None = None) -> dict:
     """Invoke claude once and return the AYCB node-shape dict. `system_file` is a
     path or None. `run_fn(cmd, stdin) -> (rc, stdout, stderr)` is injected in tests.
-    skills_enabled widens the tool pool; skill_names soft-restricts which skills."""
+    skills_enabled widens the tool pool; skill_names soft-restricts which skills.
+    effort forwards `--effort` to the CLI (low|medium|high|xhigh|max); None/auto
+    omits the flag so the CLI default applies."""
     if run_fn is None:
         run_fn = _default_run
-    cmd = build_command(real_model(model_id), system_file, len(image_paths), skills_enabled)
+    cmd = build_command(real_model(model_id), system_file, len(image_paths), skills_enabled, effort)
     instruction = build_instruction(prompt, image_paths, skill_names)
     rc, stdout, stderr = run_fn(cmd, instruction)
     return parse_result(rc, stdout, stderr)

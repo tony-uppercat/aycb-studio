@@ -8,6 +8,13 @@ export interface ImageGenerationOptions {
   thinking?: boolean
   /** Route through the provider's Batch API at 50% cost; awaits the result (Gemini + OpenAI only). */
   async?: boolean
+  /** OpenAI gpt-image input_fidelity knob — 'high' preserves ref faces/details
+   *  at the cost of more input image tokens. Only applied on /v1/images/edits
+   *  (refs present). Ignored by /generations. */
+  inputFidelity?: 'low' | 'high'
+  /** OpenAI gpt-image quality knob — explicit 'low'|'medium'|'high' override
+   *  for the resolution-derived default. Undefined → resolutionToQuality picks. */
+  quality?: 'low' | 'medium' | 'high'
 }
 
 export interface ImageProvider {

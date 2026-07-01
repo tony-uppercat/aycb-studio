@@ -21,6 +21,7 @@ import {
 import { stripNodeData, keepNodeContent } from '../../services/templateData'
 import type { CollageImage } from '../CollageEditor'
 import type { LayoutMode } from '../../utils/imageMergeRender'
+import { hasRegisteredRun } from '../../utils/cascadeRun'
 import styles from './CanvasContextMenu.module.css'
 
 /* ── Types ── */
@@ -46,10 +47,13 @@ export interface Props {
   onCopy?: (nodes: Node[]) => void
   onDelete?: (nodeIds: string[], edgeIds: string[]) => void
   onBypass?: (nodes: Node[]) => void
+  onBlock?: (nodes: Node[]) => void
   onGroup?: () => void
   onUngroup?: () => void
   onOpenCollage?: (images: CollageImage[]) => void
   onMerge?: (layout: LayoutMode, imageNodes: Node[]) => void
+  onFlip?: (nodes: Node[], axis: 'horizontal' | 'vertical') => void
+  onRunSelected?: (nodeIds: string[]) => void
   onUnpack?: (nodes: Node[]) => void
   onDeleteEdge?: (edgeId: string) => void
   /** Position in flow coordinates (for add-node placement) */
@@ -170,8 +174,8 @@ function Sep() {
 export function CanvasContextMenu({
   x, y, target, allEdges, onClose,
   onAddNode, onPaste, onSelectAll, onFitView,
-  onDuplicate, onCopy, onDelete, onBypass, onGroup, onUngroup,
-  onOpenCollage, onMerge, onUnpack, onDeleteEdge, flowPosition,
+  onDuplicate, onCopy, onDelete, onBypass, onBlock, onGroup, onUngroup,
+  onOpenCollage, onMerge, onFlip, onRunSelected, onUnpack, onDeleteEdge, flowPosition,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [showNodeExportChoice, setShowNodeExportChoice] = useState(false)
@@ -201,6 +205,11 @@ export function CanvasContextMenu({
     n => n.type === 'imageUpload' && typeof (n.data as Record<string, unknown>).mediaId === 'string',
   )
   const canCollage = imageNodes.length >= 2
+  // Nodes carrying a single baked image we can mirror in place.
+  const flippableNodes = selectedNodes.filter(
+    n => typeof (n.data as Record<string, unknown>).mediaId === 'string',
+  )
+  const canFlip = flippableNodes.length > 0
   const canSaveTemplate = nodeCount >= 2
   const hasGroups = selectedNodes.some(n => n.type === 'group')
   const unpackCount = selectedNodes.reduce((sum, n) => {
@@ -208,6 +217,8 @@ export function CanvasContextMenu({
     return sum + (hids?.length ?? 0)
   }, 0)
   const canUnpack = unpackCount > 0
+  // Selected nodes that have a registered run handler (skip notes/groups)
+  const runnableNodes = selectedNodes.filter(n => hasRegisteredRun(n.id))
 
   // ── Action handlers ──
 
@@ -217,6 +228,7 @@ export function CanvasContextMenu({
   }, [onAddNode, flowPosition, onClose])
 
   const handleBypass = useCallback(() => { onBypass?.(selectedNodes); onClose() }, [onBypass, selectedNodes, onClose])
+  const handleBlock = useCallback(() => { onBlock?.(selectedNodes); onClose() }, [onBlock, selectedNodes, onClose])
   const handleDuplicate = useCallback(() => { onDuplicate?.(selectedNodes); onClose() }, [onDuplicate, selectedNodes, onClose])
   const handleUnpack = useCallback(() => { onUnpack?.(selectedNodes); onClose() }, [onUnpack, selectedNodes, onClose])
   const handleCopy = useCallback(() => { onCopy?.(selectedNodes); onClose() }, [onCopy, selectedNodes, onClose])
@@ -346,6 +358,21 @@ export function CanvasContextMenu({
     onClose()
   }, [onMerge, imageNodes, onClose])
 
+  // ── Flip (right-click → mirror selected image nodes in place) ──
+  const handleFlip = useCallback((axis: 'horizontal' | 'vertical') => {
+    if (!onFlip || flippableNodes.length === 0) return
+    onFlip(flippableNodes, axis)
+    onClose()
+  }, [onFlip, flippableNodes, onClose])
+
+  // ── Run Selected (async) — run every selected runnable node in parallel ──
+  const handleRunSelected = useCallback(() => {
+    const ids = runnableNodes.map(n => n.id)
+    if (!onRunSelected || ids.length === 0) return
+    onRunSelected(ids)
+    onClose()
+  }, [onRunSelected, runnableNodes, onClose])
+
   // ── Create Collage ──
   async function handleCreateCollage() {
     if (!canCollage || !onOpenCollage) return
@@ -384,12 +411,42 @@ export function CanvasContextMenu({
               {nodeCount} node{nodeCount > 1 ? 's' : ''} selected
             </div>
 
+            {nodeCount >= 2 && onRunSelected && (
+              <>
+                <Item
+                  icon="▶"
+                  label="Run Selected (Async)"
+                  badge={runnableNodes.length}
+                  disabled={runnableNodes.length === 0}
+                  onClick={handleRunSelected}
+                />
+                <Sep />
+              </>
+            )}
+
             <Item icon="⏩" label="Bypass" shortcut="B" onClick={handleBypass} />
+            {onBlock && (
+              <Item icon="🚫" label="Block Run" onClick={handleBlock} />
+            )}
             <Item icon="⊕" label="Duplicate" shortcut="Ctrl+D" onClick={handleDuplicate} />
             {canUnpack && (
               <Item icon="⊟" label="Unpack History" shortcut="U" badge={unpackCount} onClick={handleUnpack} />
             )}
             <Item icon="📋" label="Copy" shortcut="Ctrl+C" onClick={handleCopy} />
+            {canFlip && onFlip && (
+              <SubMenu label="Flip" icon="🪞" menuX={menuX}>
+                <button className={styles.item} onClick={() => handleFlip('horizontal')}>
+                  <span className={styles.icon}>↔</span>
+                  <span className={styles.label}>Horizontal</span>
+                  <span className={styles.shortcut}>H</span>
+                </button>
+                <button className={styles.item} onClick={() => handleFlip('vertical')}>
+                  <span className={styles.icon}>↕</span>
+                  <span className={styles.label}>Vertical</span>
+                  <span className={styles.shortcut}>V</span>
+                </button>
+              </SubMenu>
+            )}
             <Item icon="🗑" label="Delete" shortcut="Del" danger onClick={handleDelete} />
 
             <Sep />

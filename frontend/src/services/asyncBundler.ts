@@ -2,6 +2,7 @@ import { submitGeminiBatch } from '../providers/geminiBatchPath'
 import { submitOpenAIBatch } from '../providers/openaiBatchPath'
 import { useAsyncJobStore } from '../stores/asyncJobStore'
 import { useCanvasStore } from '../stores/canvasStore'
+import { setJobKey } from './asyncJobPoller'
 
 export const MAX_BUNDLE_BYTES = 18 * 1024 * 1024   // 18MB, under Google's 20MB inline cap
 const MAX_BUNDLE_COUNT = 50
@@ -75,18 +76,20 @@ export async function flushModel(bundleKey: string): Promise<void> {
           chunk.map(r => ({ customId: r.key, body: r.body, refs: r.refs })), apiKey)
         useAsyncJobStore.getState().addJob({
           id: batchId, projectId, provider: 'openai', modelId, opName: '',
-          status: 'submitted', submittedAt: performance.now(),
+          status: 'submitted', submittedAt: Date.now(),
           requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta })),
           openai: { batchId, inputFileId, refFileIds },
         })
+        setJobKey(batchId, apiKey) // H3: poll this job with the key it was submitted under
         useCanvasStore.getState().addLog(`[batch] submit · ${chunk.length} req · ${modelId} · ${batchId.slice(-8)}`)
       } else {
         const opName = await submitGeminiBatch(modelId, chunk.map(r => ({ body: r.body, key: r.key })), apiKey)
         useAsyncJobStore.getState().addJob({
           id: opName, projectId, provider: 'gemini', modelId, opName,
-          status: 'submitted', submittedAt: performance.now(),
+          status: 'submitted', submittedAt: Date.now(),
           requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta })),
         })
+        setJobKey(opName, apiKey) // H3: poll this job with the key it was submitted under
         useCanvasStore.getState().addLog(`[batch] submit · ${chunk.length} req · ${modelId} · ${opName.slice(-8)}`)
       }
     } catch (e) {
@@ -96,7 +99,7 @@ export async function flushModel(bundleKey: string): Promise<void> {
       useAsyncJobStore.getState().addJob({
         id: `failed-${chunk.map(c => c.key).join('-')}`,
         projectId, provider, modelId, opName: '',
-        status: 'failed', submittedAt: performance.now(),
+        status: 'failed', submittedAt: Date.now(),
         requests: chunk.map(r => ({ nodeId: r.nodeId, key: r.key, meta: r.meta, error: msg })),
       })
     }

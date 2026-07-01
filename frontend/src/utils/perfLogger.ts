@@ -155,6 +155,14 @@ function captureWebVitals() {
   } catch { /* not supported */ }
 }
 
+// ── Public emit (instrumentation outside the default collectors) ────────────
+
+/** Emit a custom perf event from anywhere in the app. Dedup skipped — caller
+ *  decides cadence. Honors MAX_BATCH the same way as automatic events. */
+export function logPerfEvent(type: string, value?: number, extra?: Record<string, unknown>): void {
+  push({ type, timestamp: now(), ...(value !== undefined ? { value } : {}), ...(extra ? { extra } : {}) })
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────
 
 let initialized = false

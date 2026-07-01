@@ -18,8 +18,11 @@ import { getCachedRegistry } from '../hooks/useModelRegistry'
  * MODELS dicts.
  */
 const GEMINI_IMAGE_COST_FALLBACK: Record<string, Record<string, number>> = {
-  'gemini-3.1-flash-image-preview': { '0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
-  'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
+  'gemini-3.1-flash-image':      { '0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
+  // Nano Banana 2 Lite — exactly half of NB2 (matches official $0.0336/1K).
+  // ponytail: Lite 2K/4K max-res is unconfirmed by Google (only 1K published); may error until smoke-tested.
+  'gemini-3.1-flash-lite-image': { '0.5K': 0.023, '1K': 0.034, '2K': 0.051, '4K': 0.076, '': 0.034 },
+  'gemini-3-pro-image':          { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
 }
 
 /**

@@ -103,3 +103,19 @@ describe('canvasStore costs — per-project', () => {
     expect(getProjectCosts(list, null)).toHaveLength(0)
   })
 })
+
+describe('canvasStore — a full aycb_ui must never crash the canvas (quota symptom)', () => {
+  it('addCost does not throw when localStorage.setItem hits the quota', () => {
+    const orig = Storage.prototype.setItem
+    Storage.prototype.setItem = () => {
+      const e = new Error('quota')
+      e.name = 'QuotaExceededError'
+      throw e
+    }
+    try {
+      expect(() => useCanvasStore.getState().addCost(makeCost({ projectId: 'p' }))).not.toThrow()
+    } finally {
+      Storage.prototype.setItem = orig
+    }
+  })
+})

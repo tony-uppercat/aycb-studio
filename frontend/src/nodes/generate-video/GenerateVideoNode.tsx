@@ -20,6 +20,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
     { id: 'fal', label: 'fal.ai' },
     { id: 'atlas', label: 'Atlas' },
     { id: 'vertex', label: 'Veo' },
+    { id: 'gemini', label: 'Gemini' },
     { id: 'piapi', label: 'PiAPI' },
   ]
   // Initial provider derived from the fallback const — stable across
@@ -310,7 +311,7 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps) {
               {!activeApiKey
                 ? modelInfo.provider === 'fal' ? 'Set fal.ai key in Settings'
                   : modelInfo.provider === 'atlas' ? 'Set Atlas Cloud key in Settings'
-                  : modelInfo.provider === 'vertex' ? 'Set Gemini key in Settings'
+                  : (modelInfo.provider === 'vertex' || modelInfo.provider === 'gemini') ? 'Set Gemini key in Settings'
                   : 'Set PiAPI key in Settings'
                 : 'Write a prompt and click Run'}
             </span>

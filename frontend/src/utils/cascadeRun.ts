@@ -23,6 +23,27 @@ export function hasRegisteredRun(nodeId: string): boolean {
   return registry.has(nodeId)
 }
 
+// ── Block registry (frozen nodes) ─────────────────────────────────────────
+//
+// A blocked node is a frozen boundary. In any chain/cascade/batch/run-selected
+// run it does NOT run, and upstream traversal does not walk PAST it to its
+// parents — so the node and its ancestors are skipped. Downstream nodes keep
+// consuming its already-computed output. A node's own Run button (a direct,
+// non-cascade click) still runs it, as a deliberate manual override.
+//
+// Kept in sync from node.data._blocked by NodeShell.
+
+const blocked = new Set<string>()
+
+export function setNodeBlocked(nodeId: string, isBlocked: boolean) {
+  if (isBlocked) blocked.add(nodeId)
+  else blocked.delete(nodeId)
+}
+
+export function isNodeBlocked(nodeId: string): boolean {
+  return blocked.has(nodeId)
+}
+
 // ── Topological sort ──────────────────────────────────────────────────────
 
 /**
@@ -38,6 +59,9 @@ export function getUpstreamOrder(startId: string, edges: Edge[]): string[] {
     const nid = queue.shift()!
     for (const e of edges) {
       if (e.target === nid && !visited.has(e.source)) {
+        // Blocked node = frozen boundary: don't include it, don't walk past it.
+        // Its ancestors can still be reached via other, non-blocked paths.
+        if (blocked.has(e.source)) continue
         visited.add(e.source)
         queue.push(e.source)
       }
@@ -104,6 +128,19 @@ let _cascadeRunning = false
 /** Public getter: true while any cascade is executing */
 export function isCascadeRunning(): boolean { return _cascadeRunning }
 
+/**
+ * True only while a DOWNSTREAM-FEEDING chain run is in progress
+ * (executeCascade / executeCascadesParallel) — NOT during runNodesParallel.
+ *
+ * A node whose output is consumed by a downstream node in the same run must
+ * produce its result synchronously; an async (Batch API) submit would resolve
+ * minutes/hours later and the downstream node would consume stale/empty input.
+ * "Run Selected" (runNodesParallel) has no downstream in-run, so async is safe
+ * there and this stays false.
+ */
+let _chainRunning = false
+export function isChainRunning(): boolean { return _chainRunning }
+
 /** Promise that resolves when the current cascade finishes (if any) */
 let _cascadeDone: Promise<void> = Promise.resolve()
 
@@ -116,12 +153,16 @@ let _cascadeDone: Promise<void> = Promise.resolve()
  * this call waits for it to finish before starting the new one.
  */
 export async function executeCascade(startId: string, edges: Edge[]): Promise<void> {
+  // Frozen node: a cascade triggered on it does nothing (use its own Run button).
+  if (blocked.has(startId)) return
+
   // Wait for any in-progress cascade to finish
   if (_cascadeRunning) {
     await _cascadeDone
   }
 
   _cascadeRunning = true
+  _chainRunning = true
   let resolveDone: () => void
   _cascadeDone = new Promise<void>(r => { resolveDone = r })
 
@@ -141,6 +182,7 @@ export async function executeCascade(startId: string, edges: Edge[]): Promise<vo
     _cascadeActiveNodes = new Set()
     _cascadeProgress = null
     _cascadeRunning = false
+    _chainRunning = false
     resolveDone!()
     _notify()
   }
@@ -154,8 +196,74 @@ export async function executeCascade(startId: string, edges: Edge[]): Promise<vo
  * Used by BatchNode to run multiple GenerateImage nodes simultaneously.
  */
 export async function executeCascadesParallel(startIds: string[], edges: Edge[]): Promise<void> {
-  if (startIds.length === 0) return
-  if (startIds.length === 1) return executeCascade(startIds[0], edges)
+  // Drop frozen leaf nodes — they (and their parents) must not run in a chain.
+  const runStarts = startIds.filter(id => !blocked.has(id))
+  if (runStarts.length === 0) return
+  if (runStarts.length === 1) return executeCascade(runStarts[0], edges)
+
+  // Wait for any in-progress cascade to finish
+  if (_cascadeRunning) {
+    await _cascadeDone
+  }
+
+  _cascadeRunning = true
+  _chainRunning = true
+  let resolveDone: () => void
+  _cascadeDone = new Promise<void>(r => { resolveDone = r })
+
+  try {
+    // Phase 1: Run all shared upstream nodes sequentially (deduplicated)
+    const ran = new Set<string>()
+    const startSet = new Set(runStarts)
+
+    for (const sid of runStarts) {
+      const upstream = getRunnableUpstream(sid, edges)
+      for (const nid of upstream) {
+        if (ran.has(nid) || startSet.has(nid)) continue
+        ran.add(nid)
+        _cascadeActiveNodes = new Set([nid])
+        _cascadeProgress = { completed: ran.size, total: ran.size + runStarts.length }
+        _notify()
+        const fn = registry.get(nid)
+        if (fn) await fn()
+      }
+    }
+
+    // Phase 2: Run all leaf nodes in PARALLEL
+    const upstreamDone = ran.size
+    _cascadeActiveNodes = new Set(runStarts)
+    _cascadeProgress = { completed: upstreamDone, total: upstreamDone + runStarts.length }
+    _notify()
+
+    let completed = 0
+    await Promise.all(runStarts.map(async (nid) => {
+      const fn = registry.get(nid)
+      if (fn) await fn()
+      completed++
+      _cascadeProgress = { completed: upstreamDone + completed, total: upstreamDone + runStarts.length }
+      _notify()
+    }))
+  } finally {
+    _cascadeActiveNodes = new Set()
+    _cascadeProgress = null
+    _cascadeRunning = false
+    _chainRunning = false
+    resolveDone!()
+    _notify()
+  }
+}
+
+/**
+ * Run ONLY the given nodes' registered run fns, in parallel. No upstream walk,
+ * no cascade — each selected node fires with its current inputs. Blocked nodes
+ * and nodes without a registered run are skipped.
+ *
+ * Used by "Run Selected": the user wants exactly the selected nodes to run, not
+ * their whole upstream chain.
+ */
+export async function runNodesParallel(ids: string[]): Promise<void> {
+  const runIds = ids.filter(id => !blocked.has(id) && registry.has(id))
+  if (runIds.length === 0) return
 
   // Wait for any in-progress cascade to finish
   if (_cascadeRunning) {
@@ -167,35 +275,16 @@ export async function executeCascadesParallel(startIds: string[], edges: Edge[])
   _cascadeDone = new Promise<void>(r => { resolveDone = r })
 
   try {
-    // Phase 1: Run all shared upstream nodes sequentially (deduplicated)
-    const ran = new Set<string>()
-    const startSet = new Set(startIds)
-
-    for (const sid of startIds) {
-      const upstream = getRunnableUpstream(sid, edges)
-      for (const nid of upstream) {
-        if (ran.has(nid) || startSet.has(nid)) continue
-        ran.add(nid)
-        _cascadeActiveNodes = new Set([nid])
-        _cascadeProgress = { completed: ran.size, total: ran.size + startIds.length }
-        _notify()
-        const fn = registry.get(nid)
-        if (fn) await fn()
-      }
-    }
-
-    // Phase 2: Run all leaf nodes in PARALLEL
-    const upstreamDone = ran.size
-    _cascadeActiveNodes = new Set(startIds)
-    _cascadeProgress = { completed: upstreamDone, total: upstreamDone + startIds.length }
+    _cascadeActiveNodes = new Set(runIds)
+    _cascadeProgress = { completed: 0, total: runIds.length }
     _notify()
 
     let completed = 0
-    await Promise.all(startIds.map(async (nid) => {
+    await Promise.all(runIds.map(async (nid) => {
       const fn = registry.get(nid)
       if (fn) await fn()
       completed++
-      _cascadeProgress = { completed: upstreamDone + completed, total: upstreamDone + startIds.length }
+      _cascadeProgress = { completed, total: runIds.length }
       _notify()
     }))
   } finally {

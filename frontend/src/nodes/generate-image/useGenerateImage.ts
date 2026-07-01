@@ -6,7 +6,7 @@ import { api } from '../../api'
 import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { loadMedia, generateMediaId } from '../../mediaStore'
-import { pullText, pullAllMedia, resolveSourceText, resolveSourceMediaId } from '../../hooks/useDataPropagation'
+import { pullText, pullAllMedia, resolveSourceText } from '../../hooks/useDataPropagation'
 import { useGenerateImageHistory } from '../../hooks/useGenerateImageHistory'
 import { useStateRef } from '../../hooks/useStateRef'
 import { useModelRegistry, type RegistryModel } from '../../hooks/useModelRegistry'
@@ -19,8 +19,41 @@ import { geminiSupportsBatch } from '../../providers/geminiBatchPath'
 import { buildGeminiImageBody, resolveModel } from '../../providers/geminiProvider'
 import { computeSize, resolutionToQuality } from '../../providers/openaiProvider'
 import { enqueueAsyncRequest } from '../../services/asyncBundler'
-import { useAsyncJobStore } from '../../stores/asyncJobStore'
+import { useAsyncJobStore, selectJobForNode } from '../../stores/asyncJobStore'
 import { applyImageResult } from '../../services/applyImageResult'
+import { isChainRunning } from '../../utils/cascadeRun'
+
+export type RunPlan = 'async' | 'sync' | 'skip'
+
+/**
+ * Decide how a single generation should run.
+ *
+ * - 'async' — submit to the Batch API queue (−50%, non-blocking).
+ * - 'sync'  — run inline via api.generateImage.
+ * - 'skip'  — do nothing (an async batch for this node is already in flight).
+ *
+ * Async is allowed ONLY for a standalone, single (×1) run:
+ *  - `inChain` (executeCascade / executeCascadesParallel): a batched result
+ *    lands minutes/hours later and downstream nodes would consume stale/empty
+ *    input → force sync. (C1)
+ *  - `batchCount > 1`: the bundler dedups by nodeId and the consumer renders a
+ *    single mediaId, so N async requests for one node collapse into 1 image →
+ *    force sync so all N render. (H2)
+ *  - `alreadyPending`: an async batch for this node is in flight; re-enqueuing
+ *    would submit (and bill) a second batch → skip. (H1)
+ */
+export function planRun(opts: {
+  asyncGen: boolean
+  asyncCapable: boolean
+  inChain: boolean
+  batchCount: number
+  alreadyPending: boolean
+}): RunPlan {
+  const wantAsync = opts.asyncGen && opts.asyncCapable && !opts.inChain && opts.batchCount <= 1
+  if (!wantAsync) return 'sync'
+  if (opts.alreadyPending) return 'skip'
+  return 'async'
+}
 
 export interface ImageModelDef {
   id: string
@@ -38,6 +71,8 @@ export interface ImageModelDef {
 // Registry-derived values override this once /api/registry/models
 // resolves; cloud mode (no backend) keeps using these values.
 const GEMINI_FLASH_AR = ['1:1', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '16:9', '9:16', '21:9', '4:1', '1:4', '8:1', '1:8']
+// NB2 Lite: official docs list 10 ratios — no 4:1/1:4/8:1/1:8 panoramics.
+const GEMINI_LITE_AR = ['1:1', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '16:9', '9:16', '21:9']
 const GEMINI_PRO_AR = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9']
 const OPENAI_AR = ['1:1', '3:2', '2:3', '16:9', '9:16', '21:9']
 const RECRAFT_AR = ['1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16']
@@ -47,8 +82,11 @@ const ATLAS_FLUX_AR = ['1:1', '4:3', '3:4', '16:9', '9:16']
 
 const IMAGE_MODELS_FALLBACK: ImageModelDef[] = [
   // Google Gemini — text-to-image & image-to-image (pass ref images for editing)
-  { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false, aspect_ratios: GEMINI_FLASH_AR },
-  { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false, aspect_ratios: GEMINI_PRO_AR },
+  { id: 'gemini-3.1-flash-image', name: 'Nano Banana 2', provider: 'gemini', tooltip: 'Gemini 3.1 Flash — fast T→I / I→I, 0.5K–4K, extended aspect ratios', price: '$0.067', cost: 0.067, deprecated: false, aspect_ratios: GEMINI_FLASH_AR },
+  // Lite: Google only supports 1K (2K/4K rejected live 2026-07-01; 0.5K
+  // unconfirmed). 1K price is exactly half of NB2's 1K.
+  { id: 'gemini-3.1-flash-lite-image', name: 'Nano Banana 2 Lite', provider: 'gemini', tooltip: 'Google Gemini — Nano Banana 2 Lite, fastest/cheapest, 1K', price: '$0.034', cost: 0.034, deprecated: false, aspect_ratios: GEMINI_LITE_AR },
+  { id: 'gemini-3-pro-image', name: 'Nano Banana Pro', provider: 'gemini', tooltip: 'Gemini 3 Pro — best quality, text rendering, 1K–4K', price: '$0.134', cost: 0.134, deprecated: false, aspect_ratios: GEMINI_PRO_AR },
   // OpenAI
   { id: 'gpt-image-2', name: 'GPT Image 2', provider: 'openai', tooltip: 'OpenAI gpt-image-2 — multi-ref edit, text fidelity. Draft (low) / 1K (medium) / FHD–4K (high). ≥2K experimental per OpenAI.', price: '$0.053', cost: 0.053, deprecated: false, aspect_ratios: OPENAI_AR },
   // Recraft V4
@@ -155,7 +193,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   }, [imageCount, id, updateNodeInternals])
 
   const [selectedModel, setSelectedModel] = useState(
-    typeof data.selectedModel === 'string' ? data.selectedModel : 'gemini-3-pro-image-preview'
+    typeof data.selectedModel === 'string' ? data.selectedModel : 'gpt-image-2'
   )
   // These seven refs back the values runSingle reads — runSingle is a
   // long-lived callback that outlives any single render, so reading the
@@ -165,7 +203,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     (data as Record<string, unknown>).aspectRatio as string || '16:9'
   )
   const [resolution, setResolution, resolutionRef] = useStateRef(
-    (data as Record<string, unknown>).resolution as string || '1K'
+    (data as Record<string, unknown>).resolution as string || 'Draft'
   )
   // `inputLocked` freezes the current aspect-ratio and resolution dropdown
   // values. When ON: AR auto-adapt is skipped, FHD/0.5K model-switch resets
@@ -200,6 +238,20 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   // stay correct; latency is unbounded (24h SLA, usually minutes).
   const [asyncGen, setAsyncGen, asyncGenRef] = useStateRef(
     Boolean((data as Record<string, unknown>).asyncGen),
+  )
+  // OpenAI gpt-image input_fidelity — 'high' preserves ref faces/details at
+  // the cost of more input image tokens. Applied only on /v1/images/edits
+  // (refs present). Persisted on the node.
+  const [inputFidelity, setInputFidelity, inputFidelityRef] = useStateRef<'low' | 'high'>(
+    (data as Record<string, unknown>).inputFidelity === 'high' ? 'high' : 'low',
+  )
+  // OpenAI gpt-image quality knob — 'auto' derives from resolution preset
+  // (Draft→low / 1K→medium / FHD+→high); explicit value overrides.
+  const [quality, setQuality, qualityRef] = useStateRef<'auto' | 'low' | 'medium' | 'high'>(
+    (() => {
+      const v = (data as Record<string, unknown>).quality
+      return v === 'low' || v === 'medium' || v === 'high' || v === 'auto' ? v : 'auto'
+    })(),
   )
   const [localPrompt, setLocalPrompt] = useState(String(data.prompt ?? ''))
   const [imageB64, setImageB64, imageB64Ref] = useStateRef<string | null>(null)
@@ -360,13 +412,13 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     updateNodeData(id, { resolution: '' })
   }, [selectedModel, modelInfo.provider, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 0.5K is Flash-only (gemini-3.1-flash-image-preview). Reset to Auto if
+  // 0.5K is Flash-only (gemini-3.1-flash-image / NB2 Lite). Reset to Auto if
   // the model changes off Flash while 0.5K was selected. The user can opt
   // out via the resolution lock.
   useEffect(() => {
     if (inputLocked) return
     if (resolution !== '0.5K') return
-    if (modelInfo.id === 'gemini-3.1-flash-image-preview') return
+    if (modelInfo.id === 'gemini-3.1-flash-image' || modelInfo.id === 'gemini-3.1-flash-lite-image') return
     setResolution('')
     updateNodeData(id, { resolution: '' })
   }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -382,7 +434,7 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     updateNodeData(id, { resolution: '' })
   }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // NB2 (gemini-3-pro-image-preview) is configured to default to max quality
+  // NB2 Pro (gemini-3-pro-image) is configured to default to max quality
   // (4K). 1K is hidden from the dropdown because it costs the same as 2K, so
   // any stale 1K selection is upgraded to 4K (the new default). 2K is left
   // alone — it's still in the dropdown as an explicit cost-saving choice.
@@ -390,82 +442,14 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   useEffect(() => {
     if (inputLocked) return
     if (resolution !== '1K') return
-    if (modelInfo.id !== 'gemini-3-pro-image-preview') return
+    if (modelInfo.id !== 'gemini-3-pro-image') return
     setResolution('4K')
     updateNodeData(id, { resolution: '4K' })
   }, [selectedModel, modelInfo.id, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-adapt: when an image is connected to image-0 (or its source mediaId
-  // changes), measure the input dimensions and pick the closest supported AR
-  // + a 1K/2K bucket. Fires only when the source mediaId actually changes —
-  // model switches alone do not re-adapt, so manual choices stick.
-  const sourceMediaIdImage0 = useStore(state => {
-    const edge = state.edges.find(e => e.target === id && e.targetHandle === 'image-0')
-    if (!edge) return null
-    return resolveSourceMediaId(edge.source, edge.sourceHandle ?? '', state.nodes, state.edges)
-  })
-  // The ref tracks the last mediaId we adapted to and is NEVER reset on
-  // disconnect/transient null — that prevented a perceived bug where adding
-  // an unrelated text edge appeared to change the resolution. Mechanism:
-  // React Flow's edge updates can briefly null out the image-0 source mid
-  // operation; resetting the ref then would let the next non-null re-fire
-  // adapt and overwrite the user's manual choice. Keep the ref sticky:
-  // only adapt when the connected mediaId is genuinely DIFFERENT from the
-  // last one we adapted to.
-  const lastAdaptedRef = useRef<string | null>(null)
-  // Once the user picks an AR or resolution from the dropdowns, auto-adapt
-  // must not override them anymore — node values always win.
-  const userOverrodeRef = useRef(false)
-  useEffect(() => {
-    // Lock freezes current settings — no auto-adapt while locked.
-    if (inputLocked) return
-    if (userOverrodeRef.current) return
-    if (!sourceMediaIdImage0) return
-    if (lastAdaptedRef.current === sourceMediaIdImage0) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const file = await loadMedia(sourceMediaIdImage0)
-        if (!file || cancelled || !file.type.startsWith('image/')) return
-        // Image() reads dimensions from headers without decoding the full
-        // pixel buffer — much faster than createImageBitmap, which keeps
-        // the async window tiny so adapt completes before the user can
-        // start typing or connecting other inputs.
-        const url = URL.createObjectURL(file)
-        const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
-          const img = new Image()
-          img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url) }
-          img.onerror = () => { resolve(null); URL.revokeObjectURL(url) }
-          img.src = url
-        })
-        if (!dims || cancelled) return
-        const { w, h } = dims
-        const targetRatio = w / h
-        const candidates = modelInfo.aspect_ratios.length > 0
-          ? modelInfo.aspect_ratios
-          : ASPECT_RATIOS.map(a => a.value).filter((v): v is string => v !== '')
-        let bestAr = ''
-        let bestDelta = Infinity
-        for (const ar of candidates) {
-          const [a, b] = ar.split(':').map(Number)
-          if (!a || !b) continue
-          const delta = Math.abs(targetRatio - a / b)
-          if (delta < bestDelta) { bestDelta = delta; bestAr = ar }
-        }
-        // Tolerance: if the input is far from any supported ratio, fall back
-        // to Auto rather than forcing a bad match.
-        if (bestDelta > 0.5) bestAr = ''
-        // Resolution auto-adapt is handled by the lock-only useEffect below
-        // (when inputLocked is ON). The default path here only adapts AR.
-        lastAdaptedRef.current = sourceMediaIdImage0
-        setAspectRatio(bestAr)
-        updateNodeData(id, { aspectRatio: bestAr })
-      } catch (err) {
-        console.warn('[GenerateImage] auto-adapt failed:', err)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [sourceMediaIdImage0, inputLocked]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-AR-adapt from connected input image: REMOVED on user request
+  // 2026-06-15. Aspect ratio is now whatever the user picks in the dropdown
+  // and never auto-overwrites on edge connect.
 
   function swapRefs() {
     setEdges(eds => {
@@ -489,18 +473,23 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
   const asyncActive = asyncGen && asyncCapable
   const estimatedLabel = formatCostEstimate(estimate.costUsd * (asyncActive ? 0.5 : 1))
 
-  const [batchCount, setBatchCount] = useState(1)
+  const [batchCount, setBatchCount, batchCountRef] = useStateRef(1)
   const [batchProgress, setBatchProgress] = useState(0)
 
   // Elapsed seconds while an async (batch) run is in flight — drives the
-  // "Batch Xm Ys" status label.
+  // "Batch Xm Ys" status label. Driven off the JOB's submittedAt so the timer
+  // survives the post-submit loading=false flip AND a page reload.
   const [asyncElapsed, setAsyncElapsed] = useState(0)
+  const elapsedJob = useAsyncJobStore(s => selectJobForNode(s.jobs, id))
+  const elapsedActive = data.asyncPending || (elapsedJob && elapsedJob.status !== 'done' && elapsedJob.status !== 'failed')
   useEffect(() => {
-    if (!(loading && asyncGen)) { setAsyncElapsed(0); return }
-    const t0 = Date.now()
-    const iv = setInterval(() => setAsyncElapsed(Math.floor((Date.now() - t0) / 1000)), 1000)
+    if (!elapsedActive) { setAsyncElapsed(0); return }
+    const t0 = elapsedJob?.submittedAt ?? Date.now()
+    const tick = () => setAsyncElapsed(Math.max(0, Math.floor((Date.now() - t0) / 1000)))
+    tick()
+    const iv = setInterval(tick, 1000)
     return () => clearInterval(iv)
-  }, [loading, asyncGen])
+  }, [elapsedActive, elapsedJob?.submittedAt])
 
   // Dynamic output slots: one per batch slot when ×2/×4
   const outputSlots: SlotDef[] = useMemo(() => {
@@ -562,19 +551,39 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const currentResolution = resolutionRef.current
     const asyncCapableRun = modelInfo.provider === 'openai'
       || (modelInfo.provider === 'gemini' && geminiSupportsBatch(selectedModel))
+    const alreadyPending = !!(getNodes().find(n => n.id === id)?.data as Record<string, unknown> | undefined)?.asyncPending
+    const plan = planRun({
+      asyncGen: asyncGenRef.current,
+      asyncCapable: asyncCapableRun,
+      inChain: isChainRunning(),
+      batchCount: batchCountRef.current,
+      alreadyPending,
+    })
+    if (plan === 'skip') {
+      // H1: an async batch for this node is already in flight — don't bill a second one.
+      useCanvasStore.getState().addLog('[batch] skip · node already queued')
+      return
+    }
+    const runAsync = plan === 'async'
     const imageOptions = {
       ...(currentAspectRatio ? { aspectRatio: currentAspectRatio } : {}),
       ...(currentResolution ? { imageSize: currentResolution } : {}),
       ...(groundingRef.current ? { useGrounding: true } : {}),
       ...(thinkingRef.current === false ? { thinking: false } : {}),
-      ...(asyncGenRef.current && asyncCapableRun ? { async: true } : {}),
+      ...(runAsync ? { async: true } : {}),
+      ...(modelInfo.provider === 'openai' && inputFidelityRef.current === 'high'
+        ? { inputFidelity: 'high' as const }
+        : {}),
+      ...(modelInfo.provider === 'openai' && qualityRef.current !== 'auto'
+        ? { quality: qualityRef.current }
+        : {}),
     }
     // Pre-crop refs to output AR only when the user opted in via the CROP
     // toggle. Default: send refs intact and let the model handle AR mismatch.
     const sentRefs = cropRefsRef.current
       ? await Promise.all(refs.map(f => cropImageFileToAspectRatio(f, currentAspectRatio)))
       : refs
-    if (asyncGenRef.current && asyncCapableRun && modelInfo.provider === 'gemini') {
+    if (runAsync && modelInfo.provider === 'gemini') {
       const resolvedModelId = resolveModel(selectedModel)
       const body = await buildGeminiImageBody(prompt, resolvedModelId, sentRefs.length ? sentRefs : undefined, imageOptions)
       enqueueAsyncRequest({
@@ -585,11 +594,14 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
       updateNodeData(id, { asyncPending: true })
       return
     }
-    if (asyncGenRef.current && asyncCapableRun && modelInfo.provider === 'openai') {
+    if (runAsync && modelInfo.provider === 'openai') {
       const size = computeSize(currentAspectRatio || undefined, currentResolution || undefined)
-      const quality = resolutionToQuality(currentResolution || undefined)
-      const body = { model: selectedModel, prompt, n: 1, size, quality }
+      const quality = qualityRef.current === 'auto'
+        ? resolutionToQuality(currentResolution || undefined)
+        : qualityRef.current
       const hasRefs = sentRefs.length > 0
+      const body: Record<string, unknown> = { model: selectedModel, prompt, n: 1, size, quality }
+      if (hasRefs && inputFidelityRef.current === 'high') body.input_fidelity = 'high'
       enqueueAsyncRequest({
         nodeId: id, key: id, body, bytes: JSON.stringify(body).length,
         modelId: selectedModel, provider: 'openai',
@@ -689,14 +701,9 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     }
   }, [batchCount, runSingle, id, getNodes, historyIds, updateNodeData, setHistoryIds])
 
-  // Called from dropdown onChange handlers — once the user has touched AR
-  // or Resolution manually, auto-adapt is suppressed for the rest of the
-  // node's life so node values always win over input-driven adaptation.
-  const markManualOverride = useCallback(() => { userOverrodeRef.current = true }, [])
-
   // Consume the background ASY result: when the poller resolves this node's
   // request, render the image (or surface the error) and clear the pending flag.
-  const myJob = useAsyncJobStore(s => s.jobs.find(j => j.requests.some(r => r.nodeId === id)))
+  const myJob = useAsyncJobStore(s => selectJobForNode(s.jobs, id))
   useEffect(() => {
     if (!myJob) return
     const req = myJob.requests.find(r => r.nodeId === id)
@@ -715,14 +722,34 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     const newHistory = [...currentIds, mediaId].slice(-MAX_HISTORY)
     updateNodeData(id, { mediaId, historyIds: newHistory, outputMediaIds: null, asyncPending: false })
     setHistoryIds(newHistory)
-    const est = estimateCost(selectedModel, 'generate_image', activePrompt, 0, 0, 1, resolutionRef.current, false)
+    // M2: log the SUBMITTED snapshot's real cost (resolution-correct + already
+    // batch-discounted by the poller), not a re-estimate from current node state.
+    // Fall back to an estimate (×0.5) only when the response carried no usage.
+    const usage = req.usage
+    const est = estimateCost(myJob.modelId, 'generate_image', req.meta?.prompt ?? activePrompt, 0, 0, 1, req.meta?.resolution ?? resolutionRef.current, false)
     useCanvasStore.getState().addCost({
       timestamp: new Date().toISOString(), nodeId: id, nodeName: 'Generate Image',
-      model: selectedModel, inputTokens: est.inputTokens, outputTokens: 0, costUsd: est.costUsd * 0.5,
+      model: myJob.modelId,
+      inputTokens: usage?.input_tokens ?? est.inputTokens,
+      outputTokens: usage?.output_tokens ?? 0,
+      costUsd: usage?.cost_usd ?? est.costUsd * 0.5,
+      projectId: myJob.projectId, // H6: bill the job's project, not whatever is active at poll-resolution time
     })
+    // markConsumed already drops the job once its last request is consumed, so a
+    // single-request job is gone here and the old removeJob guard was dead. (L4)
     useAsyncJobStore.getState().markConsumed(myJob.id, req.key)
-    if (myJob.requests.length <= 1) useAsyncJobStore.getState().removeJob(myJob.id)
   }, [myJob, id])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On MOUNT only, reconcile a stale persisted "Batch · queued" flag: an OLD node
+  // reloaded with asyncPending=true but no live job behind it (job long gone /
+  // from a previous session) would otherwise be bricked by the re-run guard.
+  // Mount-only so it never races a fresh run's legit pre-job debounce window. (L3)
+  useEffect(() => {
+    if (data.asyncPending && !selectJobForNode(useAsyncJobStore.getState().jobs, id)) {
+      updateNodeData(id, { asyncPending: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return {
     // State
@@ -730,14 +757,17 @@ export function useGenerateImage(id: string, data: GenerateImageNodeData, select
     aspectRatio, setAspectRatio,
     resolution, setResolution,
     inputLocked, setInputLocked,
-    markManualOverride,
     useGrounding, setUseGrounding,
     editMode, setEditMode,
     thinking, setThinking,
     cropRefs, setCropRefs,
+    inputFidelity, setInputFidelity,
+    quality, setQuality,
     asyncGen, setAsyncGen,
     asyncCapable,
     asyncElapsed,
+    asyncBatchStatus: elapsedJob?.batchStatus,
+    asyncJobId: elapsedActive ? elapsedJob?.id : undefined,
     localPrompt, setLocalPrompt,
     imageB64,
     compareSourceUrl,

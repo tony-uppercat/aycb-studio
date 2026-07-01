@@ -32,9 +32,9 @@ _GOOGLE_TO_STATE = {
 }
 
 _AVG_PER_IMAGE = {
-    "gemini-3-pro-image-preview": 0.134,
-    "gemini-3.1-flash-image-preview": 0.067,
-    "gemini-3.1-flash-lite-image-preview": 0.040,
+    "gemini-3-pro-image": 0.134,
+    "gemini-3.1-flash-image": 0.067,
+    "gemini-3.1-flash-lite-image": 0.034,  # Nano Banana 2 Lite (half of NB2)
 }
 
 

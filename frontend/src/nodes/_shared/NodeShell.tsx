@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { Handle, Position, NodeResizer, useNodeId, useReactFlow, useStore } from '@xyflow/react'
-import { registerNodeRun, unregisterNodeRun, getRunnableUpstream, executeCascade, getCascadeActiveNodes, getCascadeProgress, subscribeCascade } from '../../utils/cascadeRun'
+import { registerNodeRun, unregisterNodeRun, getRunnableUpstream, executeCascade, getCascadeActiveNodes, getCascadeProgress, subscribeCascade, setNodeBlocked } from '../../utils/cascadeRun'
 import { useCanvasStore } from '../../stores/canvasStore'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import styles from './NodeShell.module.css'
@@ -25,6 +25,11 @@ interface Props {
   inputSlots?: SlotDef[]
   outputSlots?: SlotDef[]
   onRun?: () => void | Promise<void>
+  /** Optional cancel handler. When provided AND `running` is true, the Run
+   *  button morphs into an enabled "Stop" button that calls this. Sync runs
+   *  (no upstream cancel signal) should leave this undefined → button stays
+   *  disabled with "Running...". Used by async batch nodes. */
+  onCancel?: () => void
   running?: boolean
   autoUpdate?: boolean
   onAutoUpdateToggle?: () => void
@@ -103,6 +108,7 @@ export function NodeShell({
   inputSlots = [],
   outputSlots = [],
   onRun,
+  onCancel,
   running = false,
   autoUpdate,
   onAutoUpdateToggle,
@@ -119,6 +125,12 @@ export function NodeShell({
   const isBypassed = useStore(state => {
     const node = state.nodes.find(n => n.id === nodeId)
     return !!(node?.data as Record<string, unknown>)?._bypassed
+  })
+
+  // Check if this node is blocked (frozen boundary for chain runs)
+  const isBlocked = useStore(state => {
+    const node = state.nodes.find(n => n.id === nodeId)
+    return !!(node?.data as Record<string, unknown>)?._blocked
   })
 
   const { updateNodeData } = useReactFlow()
@@ -146,6 +158,13 @@ export function NodeShell({
     }
   }, [nodeId, onRun])
 
+  // Mirror the _blocked flag into the cascade engine's block registry
+  useEffect(() => {
+    if (!nodeId) return
+    setNodeBlocked(nodeId, isBlocked)
+    return () => setNodeBlocked(nodeId, false)
+  }, [nodeId, isBlocked])
+
   const upstreamCount = nodeId ? getRunnableUpstream(nodeId, edges).length : 0
 
   const handleRunClick = useCallback((e: React.MouseEvent) => {
@@ -167,7 +186,7 @@ export function NodeShell({
 
   return (
     <div
-      className={`${styles.shell} ${selected ? styles.selected : ''} ${isBypassed ? styles.bypassed : ''} ${isCascadeActive ? styles.cascadeActive : ''}`}
+      className={`${styles.shell} ${selected ? styles.selected : ''} ${isBypassed ? styles.bypassed : ''} ${isBlocked ? styles.blocked : ''} ${isCascadeActive ? styles.cascadeActive : ''}`}
       {...(prvExempt ? { 'data-prv-show': '' } : {})}
     >
       <NodeResizer
@@ -207,6 +226,15 @@ export function NodeShell({
           </span>
         )}
         <div className={styles.headerActions}>
+          <button
+            className={`${styles.headerBtn} ${isBlocked ? styles.headerBtnBlocked : ''}`}
+            onClick={() => { if (nodeId) updateNodeData(nodeId, { _blocked: !isBlocked }) }}
+            title={isBlocked
+              ? 'Run blocked — this node and its parents are skipped in chain runs. Click to unblock.'
+              : 'Block run from here back — chain runs skip this node and its parents'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+          </button>
           {onSettings && (
             <button className={styles.headerBtn} onClick={onSettings} title="Settings">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
@@ -308,13 +336,25 @@ export function NodeShell({
           )}
           <button
             className={`${styles.runBtn} ${isRunning ? styles.runBtnRunning : ''}`}
-            onClick={handleRunClick}
-            disabled={isRunning}
-            title={upstreamCount > 0 ? `Shift+Click to run all ${upstreamCount + 1} nodes` : undefined}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (isRunning && onCancel) onCancel()
+              else if (!isRunning) handleRunClick(e)
+            }}
+            disabled={isRunning && !onCancel}
+            title={
+              isRunning && onCancel
+                ? 'Stop — cancel this async batch (in-flight OpenAI requests may still bill)'
+                : upstreamCount > 0
+                  ? `Shift+Click to run all ${upstreamCount + 1} nodes`
+                  : undefined
+            }
           >
             {cascadeRunning && cascadeProgress
               ? `${cascadeProgress.completed}/${cascadeProgress.total}`
-              : isRunning ? 'Running...' : 'Run'}
+              : isRunning
+                ? (onCancel ? 'Stop' : 'Running...')
+                : 'Run'}
           </button>
         </div>
       )}

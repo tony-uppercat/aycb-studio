@@ -7,6 +7,7 @@ import type { GenerateImageNodeData } from '../../types'
 import { useMediaPreview } from '../../components/media/MediaPreview'
 import { useGenerateImage, useImageModels, ASPECT_RATIOS, RESOLUTIONS } from './useGenerateImage'
 import { priceTier } from '../_shared/types'
+import { cancelJob } from '../../services/asyncJobPoller'
 import styles from '../_shared/Node.module.css'
 
 type GenerateImageNodeType = Node<GenerateImageNodeData, 'generateImage'>
@@ -30,7 +31,8 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
       ]}
       outputSlots={h.outputSlots}
       onRun={h.run}
-      running={h.loading}
+      running={h.loading || !!h.asyncJobId}
+      onCancel={h.asyncJobId ? () => { void cancelJob(h.asyncJobId!) } : undefined}
       lastCost={h.lastCost}
       estimatedCost={h.estimatedLabel}
     >
@@ -64,7 +66,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         )}
         <div className={styles.arResRow}>
           <select className={styles.selectSmall} value={h.aspectRatio}
-            onChange={e => { h.markManualOverride(); h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
+            onChange={e => { h.setAspectRatio(e.target.value); h.updateNodeData(id, { aspectRatio: e.target.value }) }}
             disabled={h.inputLocked}
             title={h.inputLocked ? 'Locked — unlock to change' : 'Aspect Ratio'}>
             {ASPECT_RATIOS
@@ -73,7 +75,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             }
           </select>
           <select className={styles.selectSmall} value={h.resolution}
-            onChange={e => { h.markManualOverride(); h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
+            onChange={e => { h.setResolution(e.target.value); h.updateNodeData(id, { resolution: e.target.value }) }}
             disabled={h.inputLocked}
             title={
               h.inputLocked ? 'Locked — unlock to change'
@@ -83,9 +85,19 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
             }>
             {RESOLUTIONS
               .filter(r => r.value !== 'FHD' || h.modelInfo.provider === 'openai')
-              .filter(r => r.value !== '0.5K' || h.modelInfo.id === 'gemini-3.1-flash-image-preview')
+              // 0.5K: only NB2 flash-image (GA). Accept the old preview id too
+              // so saved nodes keep the 0.5K option.
+              .filter(r => r.value !== '0.5K'
+                || h.modelInfo.id === 'gemini-3.1-flash-image'
+                || h.modelInfo.id === 'gemini-3.1-flash-image-preview')
+              // NB2 Lite: Google only supports 1K — 2K/4K return "Image size
+              // not supported"; 0.5K is unconfirmed. Restrict to 1K until a
+              // smoke test (scripts/smoke_test_ga_image_ids.py) proves otherwise.
+              .filter(r => (r.value !== '0.5K' && r.value !== '2K' && r.value !== '4K')
+                || h.modelInfo.id !== 'gemini-3.1-flash-lite-image')
               .filter(r => r.value !== 'Draft' || h.modelInfo.id === 'gpt-image-2')
-              .filter(r => r.value !== '1K' || h.modelInfo.id !== 'gemini-3-pro-image-preview')
+              .filter(r => r.value !== '1K'
+                || (h.modelInfo.id !== 'gemini-3-pro-image' && h.modelInfo.id !== 'gemini-3-pro-image-preview'))
               .map(r => <option key={r.value} value={r.value}>{r.label}</option>)
             }
           </select>
@@ -118,7 +130,7 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
               title="Search Grounding — uses Google Search for real-time data before generating"
             >GND</button>
           )}
-          {h.modelInfo.id === 'gemini-3.1-flash-image-preview' && (
+          {(h.modelInfo.id === 'gemini-3.1-flash-image' || h.modelInfo.id === 'gemini-3.1-flash-image-preview') && (
             <button
               className={`${styles.batchBtn} ${h.thinking ? styles.batchBtnActive : ''}`}
               onClick={() => { h.setThinking(!h.thinking); h.updateNodeData(id, { thinking: !h.thinking }) }}
@@ -127,18 +139,22 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                 : 'Thinking high — composition refinement on, cost +'}
             >THK</button>
           )}
-          <button
-            className={`${styles.batchBtn} ${h.cropRefs ? styles.batchBtnActive : ''}`}
-            onClick={() => { h.setCropRefs(!h.cropRefs); h.updateNodeData(id, { cropRefs: !h.cropRefs }) }}
-            title={h.cropRefs
-              ? 'Refs pre-cropped to output AR before sending (chain coherence)'
-              : 'Refs sent intact — model handles AR mismatch'}
-          >CROP</button>
-          <button
-            className={`${styles.batchBtn} ${h.editMode ? styles.batchBtnActive : ''}`}
-            onClick={() => { h.setEditMode(!h.editMode); h.updateNodeData(id, { editMode: !h.editMode }) }}
-            title="Edit Mode — reuses last generation as iterative base. Without a prior gen, the connected input image (Ref 1) acts as the implicit edit target."
-          >EDIT</button>
+          {h.modelInfo.provider !== 'openai' && (
+            <>
+              <button
+                className={`${styles.batchBtn} ${h.cropRefs ? styles.batchBtnActive : ''}`}
+                onClick={() => { h.setCropRefs(!h.cropRefs); h.updateNodeData(id, { cropRefs: !h.cropRefs }) }}
+                title={h.cropRefs
+                  ? 'Refs pre-cropped to output AR before sending (chain coherence)'
+                  : 'Refs sent intact — model handles AR mismatch'}
+              >CROP</button>
+              <button
+                className={`${styles.batchBtn} ${h.editMode ? styles.batchBtnActive : ''}`}
+                onClick={() => { h.setEditMode(!h.editMode); h.updateNodeData(id, { editMode: !h.editMode }) }}
+                title="Edit Mode — reuses last generation as iterative base. Without a prior gen, the connected input image (Ref 1) acts as the implicit edit target."
+              >EDIT</button>
+            </>
+          )}
           {h.asyncCapable && (
             <button
               className={`${styles.batchBtn} ${h.asyncGen ? styles.batchBtnActive : ''}`}
@@ -147,6 +163,31 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
                 ? 'Async ON — Batch API at 50% cost; run waits for the result (minutes to hours)'
                 : 'Async OFF — sync generation at full price'}
             >ASY</button>
+          )}
+          {h.modelInfo.provider === 'openai' && (
+            <>
+              <button
+                className={`${styles.batchBtn} ${h.inputFidelity === 'high' ? styles.batchBtnActive : ''}`}
+                onClick={() => {
+                  const next = h.inputFidelity === 'high' ? 'low' : 'high'
+                  h.setInputFidelity(next)
+                  h.updateNodeData(id, { inputFidelity: next })
+                }}
+                title={h.inputFidelity === 'high'
+                  ? 'input_fidelity=high — preserves ref faces/details, more image-input tokens. Only applies with refs.'
+                  : 'input_fidelity=low (default) — click to switch to high (preserves ref details, costs more)'}
+              >FID</button>
+              <button
+                className={`${styles.batchBtn} ${h.quality !== 'auto' ? styles.batchBtnActive : ''}`}
+                onClick={() => {
+                  const order = ['auto', 'low', 'medium', 'high'] as const
+                  const next = order[(order.indexOf(h.quality) + 1) % order.length]
+                  h.setQuality(next)
+                  h.updateNodeData(id, { quality: next })
+                }}
+                title={`quality=${h.quality}${h.quality === 'auto' ? ' (from resolution)' : ' (explicit override)'} — click to cycle auto→low→medium→high`}
+              >Q:{h.quality === 'auto' ? 'A' : h.quality[0].toUpperCase()}</button>
+            </>
           )}
         </div>
         {h.connectedImageCount >= 2 && (
@@ -166,13 +207,11 @@ export function GenerateImageNode({ id, data, selected }: NodeProps<GenerateImag
         {h.loading && h.batchCount > 1 && (
           <div className={styles.batchProgress}>{h.batchProgress}/{h.batchCount}</div>
         )}
-        {h.loading && h.asyncGen && h.asyncCapable && (
+        {h.asyncJobId && (
           <div className={styles.batchProgress}>
-            Batch {Math.floor(h.asyncElapsed / 60)}m {h.asyncElapsed % 60}s
+            Batch · {h.asyncBatchStatus || (data.asyncPending ? 'queued' : 'polling')}
+            {h.asyncElapsed > 0 && ` · ${Math.floor(h.asyncElapsed / 60)}m ${h.asyncElapsed % 60}s`}
           </div>
-        )}
-        {data.asyncPending && (
-          <div className={styles.batchProgress}>Batch · queued</div>
         )}
         {h.error && <p className={styles.error}>{h.error}</p>}
         <div className={styles.previewArea}>

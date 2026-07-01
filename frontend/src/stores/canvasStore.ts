@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { STORAGE_KEYS } from '../storage/keys';
+import { safeStorage } from './asyncJobStore';
 
 export interface NetworkEntry {
   timestamp: string;
@@ -151,6 +152,9 @@ export const useCanvasStore = create<CanvasState>()(
     }),
     {
       name: STORAGE_KEYS.UI_STATE,
+      // Quota-safe write: a full localStorage degrades to "no persist" not a
+      // crash (the costs array + sibling keys can fill the shared quota).
+      storage: createJSONStorage(() => safeStorage),
       // Only persist panel visibility flags — not transient runtime state
       partialize: (state) => ({
         consoleOpen: state.consoleOpen,

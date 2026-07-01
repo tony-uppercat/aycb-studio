@@ -110,7 +110,11 @@ async def generate_video(
     ref_images: list[UploadFile] | None = File(default=None),
     ref_video: UploadFile | None = File(default=None),
 ):
-    """Submit a video generation request via PiAPI, fal.ai, Atlas Cloud, or Vertex AI."""
+    """Submit a video generation request via PiAPI, fal.ai, Atlas Cloud, Vertex AI, or Gemini."""
+    if model.startswith("gemini-omni"):
+        return await _generate_video_gemini(
+            prompt, model, api_key, aspect_ratio, duration, ref_images, seed,
+        )
     if model.startswith("vertex-"):
         return await _generate_video_vertex(
             prompt, model, api_key, aspect_ratio, duration, quality, ref_images, seed,
@@ -252,6 +256,52 @@ async def _generate_video_atlas(
         raise HTTPException(422, str(e))
 
 
+async def _generate_video_gemini(
+    prompt: str, model: str, api_key: str, aspect_ratio: str,
+    duration: int,
+    ref_images: list[UploadFile] | None,
+    seed: int = -1,
+):
+    from src.gemini_omni_gen import (
+        GeminiOmniGenError,
+        submit_text_to_video as omni_t2v,
+        submit_with_refs as omni_refs,
+    )
+
+    key = _require_key(api_key, "gemini")
+    try:
+        # Gemini Omni Flash accepts multiple refs (provider caps at the model's
+        # max_ref_images); read up to 5 and let the provider trim.
+        image_bytes: list[tuple[str, bytes]] = []
+        if ref_images:
+            for i, f in enumerate(ref_images[:5]):
+                data = await f.read()
+                ext = Path(f.filename or "ref.png").suffix or ".png"
+                image_bytes.append((f"ref_{i}{ext}", data))
+
+        if image_bytes:
+            result = await omni_refs(
+                api_key=key, model_id=model, prompt=prompt,
+                ref_image_bytes=image_bytes,
+                aspect_ratio=aspect_ratio, duration=duration,
+                seed=seed,
+            )
+        else:
+            result = await omni_t2v(
+                api_key=key, model_id=model, prompt=prompt,
+                aspect_ratio=aspect_ratio, duration=duration,
+                seed=seed,
+            )
+        _log(f"Video submitted (Omni) — model={model}, request_id={result.get('request_id')}, refs={len(image_bytes)}")
+        return result
+    except ValueError as e:
+        _log(f"Omni ValueError: {e}")
+        raise HTTPException(400, str(e))
+    except GeminiOmniGenError as e:
+        _log(f"Omni error: {e}")
+        raise HTTPException(422, str(e))
+
+
 async def _generate_video_vertex(
     prompt: str, model: str, api_key: str, aspect_ratio: str,
     duration: int, quality: str,
@@ -300,7 +350,18 @@ async def _generate_video_vertex(
 async def video_generation_status(
     request_id: str, api_key: str = "", provider: str = "piapi", endpoint: str = "",
 ):
-    """Poll video generation status. Provider: 'piapi', 'fal', 'atlas', or 'vertex'."""
+    """Poll video generation status. Provider: 'piapi', 'fal', 'atlas', 'vertex', or 'gemini'."""
+    if provider == "gemini":
+        from src.gemini_omni_gen import GeminiOmniGenError, get_result as omni_get_result
+        key = _require_key(api_key, "gemini")
+        try:
+            return await omni_get_result(key, request_id)
+        except ValueError as e:
+            _log(f"Omni status ValueError: {e}")
+            raise HTTPException(400, str(e))
+        except GeminiOmniGenError as e:
+            _log(f"Omni status error: {e}")
+            raise HTTPException(422, str(e))
     if provider == "vertex":
         from src.veo_gen import VertexVideoGenError, get_result as vertex_get_result
         key = _require_key(api_key, "gemini")

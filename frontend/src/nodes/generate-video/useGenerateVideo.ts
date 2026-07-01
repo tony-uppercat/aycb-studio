@@ -123,6 +123,16 @@ const VIDEO_MODELS_FALLBACK: VideoModelDef[] = [
     cost: 0.15, ratios: ['16:9', '9:16'],
     qualities: ['720p'], minDuration: 4, maxDuration: 8,
   },
+  // Gemini — Omni Flash (text/image-to-video preview)
+  // ponytail: VideoModelDef has no default_duration/max_ref_images fields
+  // (those are registry-only); backend registry carries provider_model_id
+  // 'gemini-omni-flash-preview', default_duration 8, max_ref_images 5.
+  {
+    id: 'gemini-omni-flash', name: 'Gemini Omni Flash', provider: 'gemini',
+    tooltip: 'Google Gemini — Omni Flash, 720p, 3-10s, text/image-to-video (preview)', price: '$0.10/s',
+    cost: 0.10, ratios: ['16:9', '9:16'],
+    qualities: ['720p'], minDuration: 3, maxDuration: 10,
+  },
 ]
 
 // Back-compat export — prefer useVideoModels() at call sites that can
@@ -225,9 +235,12 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
   const isFal = modelInfo.provider === 'fal'
   const isAtlas = modelInfo.provider === 'atlas'
   const isVertex = modelInfo.provider === 'vertex'
+  // Gemini video (Omni Flash, id 'gemini-omni-*') → provider 'gemini' for the
+  // status-poll query param; reuses the Gemini/Vertex apiKey (same Google key).
+  const isGemini = modelInfo.provider === 'gemini'
   const isMotionControl = selectedModel === 'atlas-kling-motion-control'
-  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : isVertex ? apiKey : piApiKey
-  const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : isVertex ? 'vertex' : 'piapi'
+  const activeApiKey = isFal ? falApiKey : isAtlas ? atlasApiKey : (isVertex || isGemini) ? apiKey : piApiKey
+  const activeProvider = isFal ? 'fal' : isAtlas ? 'atlas' : isVertex ? 'vertex' : isGemini ? 'gemini' : 'piapi'
 
   // -- Dynamic image slots (same pattern as Generate Image) -------------------
 
@@ -434,7 +447,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
     if (!activeApiKey) {
       setError(isFal ? 'Set fal.ai key in Settings'
              : isAtlas ? 'Set Atlas Cloud key in Settings'
-             : isVertex ? 'Set Gemini key in Settings'
+             : (isVertex || isGemini) ? 'Set Gemini key in Settings'
              : 'Set PiAPI key in Settings')
       return
     }
@@ -499,7 +512,7 @@ export function useGenerateVideo(id: string, data: GenerateVideoNodeData) {
       setLoading(false)
       reportNodeError(id, msg)
     }
-  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, isMotionControl, activeProvider,
+  }, [id, activePrompt, activeApiKey, isFal, isAtlas, isVertex, isGemini, isMotionControl, activeProvider,
       selectedModel, aspectRatio, duration, quality, seed,
       hasVideoRef, hasAudioRef, getNodes, getEdges, updateNodeData, startPolling, connectedImageCount])
 

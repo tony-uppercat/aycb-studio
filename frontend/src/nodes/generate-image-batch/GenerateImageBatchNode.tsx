@@ -9,10 +9,12 @@ import styles from '../_shared/Node.module.css'
 
 type GenerateImageBatchNodeType = Node<GenerateImageBatchNodeData, 'generateImageBatch'>
 
+// Batch node is ALWAYS Batch API — prices shown are already −50% (list × 0.5):
+// Pro 0.134→0.067, NB2 0.067→0.034, Lite 0.034→0.017.
 const MODELS = [
-  { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', price: '$0.067 (batch)' },
-  { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2', price: '$0.034 (batch)' },
-  { id: 'gemini-3.1-flash-lite-image-preview', name: 'Flash-Lite Image', price: '$0.020 (batch)' },
+  { id: 'gemini-3-pro-image', name: 'Nano Banana Pro', price: '$0.067 (batch)' },
+  { id: 'gemini-3.1-flash-image', name: 'Nano Banana 2', price: '$0.034 (batch)' },
+  { id: 'gemini-3.1-flash-lite-image', name: 'Nano Banana 2 Lite', price: '$0.017 (batch)' },
 ]
 
 const ASPECT_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9']
@@ -45,7 +47,13 @@ export function GenerateImageBatchNode({ id, data, selected }: NodeProps<Generat
         <select
           className={styles.select}
           value={data.selectedModel}
-          onChange={e => updateNodeData({ selectedModel: e.target.value })}
+          onChange={e => {
+            const m = e.target.value
+            // NB2 Lite is 1K-only — reset a stale 2K/4K so submit can't 400.
+            updateNodeData(m === 'gemini-3.1-flash-lite-image'
+              ? { selectedModel: m, resolution: '1K' }
+              : { selectedModel: m })
+          }}
         >
           {MODELS.map(m => (
             <option key={m.id} value={m.id}>{m.name} ({m.price})</option>
@@ -65,7 +73,10 @@ export function GenerateImageBatchNode({ id, data, selected }: NodeProps<Generat
             value={data.resolution}
             onChange={e => updateNodeData({ resolution: e.target.value })}
           >
-            {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            {RESOLUTIONS
+              // NB2 Lite is 1K-only — 2K/4K return "Image size not supported".
+              .filter(r => data.selectedModel !== 'gemini-3.1-flash-lite-image' || r === '1K')
+              .map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
 

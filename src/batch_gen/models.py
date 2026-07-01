@@ -43,9 +43,9 @@ class BatchJob(BaseModel):
     google_job_name: str  # "batches/abc123"
     node_id: str  # frontend node id (canvas-scoped)
     model: Literal[
-        "gemini-3-pro-image-preview",
-        "gemini-3.1-flash-image-preview",
-        "gemini-3.1-flash-lite-image-preview",
+        "gemini-3-pro-image",
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
     ]
     submitted_at: datetime
     updated_at: datetime

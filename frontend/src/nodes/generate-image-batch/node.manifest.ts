@@ -8,7 +8,7 @@ const manifest: NodeManifest = {
   description: 'Async batch image generation via Gemini Batch API (50% discount, up to 24h SLA)',
   defaultData: {
     prompt: '',
-    selectedModel: 'gemini-3-pro-image-preview',
+    selectedModel: 'gemini-3-pro-image',
     aspectRatio: '16:9',
     resolution: '2K',
     bundleN: 5,

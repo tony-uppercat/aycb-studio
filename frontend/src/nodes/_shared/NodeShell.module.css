@@ -40,6 +40,11 @@
   50% { box-shadow: 0 0 16px rgba(79, 195, 247, 0.4); }
 }
 
+/* Frozen boundary: skipped (with its parents) in chain runs. Locked, not disabled. */
+.blocked {
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.55), 0 0 10px rgba(239, 68, 68, 0.18);
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -94,6 +99,11 @@
 
 .headerBtn:hover {
   color: var(--color-text-secondary);
+}
+
+.headerBtnBlocked,
+.headerBtnBlocked:hover {
+  color: var(--color-error);
 }
 
 .slotRow {

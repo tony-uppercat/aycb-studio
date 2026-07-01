@@ -173,6 +173,24 @@ describe('pollOpenAIBatch', () => {
 describe('submitOpenAIBatch', () => {
   beforeEach(() => { vi.restoreAllMocks() })
 
+  it('cleans up already-uploaded vision files when a later upload fails mid-submit (M4)', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okJson({ id: 'file-ref0' }))                                         // vision ref upload OK
+      .mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve('{"error":{"message":"boom"}}') }) // JSONL upload FAILS
+      .mockResolvedValue(okJson({}))                                                              // cleanup DELETE
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ref = new File(['x'], 'ref.png', { type: 'image/png' })
+    await expect(submitOpenAIBatch(
+      [{ customId: 'r0', body: { model: 'gpt-image-2', prompt: 'p', n: 1, size: 'auto', quality: 'high' }, refs: [ref] }],
+      'K',
+    )).rejects.toThrow(/boom/)
+
+    // the orphaned vision file must have been DELETEd
+    const deleteCalls = fetchMock.mock.calls.filter(c => c[1]?.method === 'DELETE')
+    expect(deleteCalls.some(c => String(c[0]).includes('file-ref0'))).toBe(true)
+  })
+
   it('no-refs: uploads JSONL then creates batch and preserves the real custom_id', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(okJson({ id: 'file-in' }))                        // JSONL upload

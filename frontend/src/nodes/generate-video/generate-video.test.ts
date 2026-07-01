@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import manifest from './node.manifest'
+import { VIDEO_MODELS } from './useGenerateVideo'
 
 describe('generate-video manifest', () => {
   it('has required fields', () => {
@@ -19,5 +20,19 @@ describe('generate-video manifest', () => {
 
   it('has defaultData with selectedModel', () => {
     expect(manifest.defaultData.selectedModel).toBe('atlas-seedance-2.0')
+  })
+})
+
+describe('VIDEO_MODELS_FALLBACK', () => {
+  it('includes the Gemini Omni Flash row', () => {
+    const omni = VIDEO_MODELS.find(m => m.id === 'gemini-omni-flash')
+    expect(omni).toBeDefined()
+    expect(omni?.provider).toBe('gemini')
+    expect(omni?.name).toBe('Gemini Omni Flash')
+    expect(omni?.cost).toBe(0.10)
+    expect(omni?.ratios).toEqual(['16:9', '9:16'])
+    expect(omni?.qualities).toEqual(['720p'])
+    expect(omni?.minDuration).toBe(3)
+    expect(omni?.maxDuration).toBe(10)
   })
 })

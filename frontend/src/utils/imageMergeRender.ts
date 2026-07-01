@@ -18,6 +18,88 @@ export interface RenderImageMergeOptions {
   customH: number
 }
 
+/**
+ * Per-dimension canvas cap (browser limit) and total-area cap (memory
+ * safety). Raised from the old 8192 per-dim so merges of large inputs
+ * (e.g. two 8K images, or 3+ 4K images) keep the largest input at its
+ * native resolution instead of being silently downscaled.
+ */
+export const MAX_CANVAS_DIM = 16384
+export const MAX_CANVAS_AREA = 16384 * 8192 // ~134M px (~512MB) ceiling
+
+export interface MergeLayout {
+  cols: number
+  rows: number
+  canvasW: number
+  canvasH: number
+  cellW: number
+  cellH: number
+}
+
+/**
+ * Pure sizing math for a merge: given each input's intrinsic dimensions
+ * and the layout options, compute the output canvas + per-cell size.
+ *
+ * 'auto' sizes cells to the largest input (max width × max height) so the
+ * biggest image is never downscaled. The canvas is then bounded: first to
+ * MAX_CANVAS_DIM per side, then to MAX_CANVAS_AREA total — both via a
+ * single proportional scale so the aspect ratio is preserved.
+ */
+export function computeMergeLayout(
+  dims: Array<{ w: number; h: number }>,
+  opts: { layout: LayoutMode; columns: number; gap: number; outputMode: string; customW: number; customH: number },
+): MergeLayout {
+  const { layout, columns, gap, outputMode, customW, customH } = opts
+  const count = dims.length
+  if (count === 0) return { cols: 0, rows: 0, canvasW: 0, canvasH: 0, cellW: 0, cellH: 0 }
+
+  let cols: number, rows: number
+  if (layout === 'horizontal') {
+    cols = count
+    rows = 1
+  } else if (layout === 'vertical') {
+    cols = 1
+    rows = count
+  } else {
+    cols = Math.min(columns, count)
+    rows = Math.ceil(count / cols)
+  }
+
+  const maxImgW = Math.max(...dims.map(d => d.w))
+  const maxImgH = Math.max(...dims.map(d => d.h))
+  let canvasW: number, canvasH: number, cellW: number, cellH: number
+  if (outputMode === 'custom' && customW > 0 && customH > 0) {
+    canvasW = customW
+    canvasH = customH
+    cellW = (canvasW - (cols - 1) * gap) / cols
+    cellH = (canvasH - (rows - 1) * gap) / rows
+  } else if (outputMode === 'first') {
+    cellW = dims[0].w
+    cellH = dims[0].h
+    canvasW = cols * cellW + (cols - 1) * gap
+    canvasH = rows * cellH + (rows - 1) * gap
+  } else {
+    // 'auto' (default): adapt to the largest input so nothing is downscaled.
+    cellW = maxImgW
+    cellH = maxImgH
+    canvasW = cols * cellW + (cols - 1) * gap
+    canvasH = rows * cellH + (rows - 1) * gap
+  }
+
+  canvasW = Math.round(canvasW)
+  canvasH = Math.round(canvasH)
+  // Single proportional scale that satisfies both the per-side and the
+  // total-area caps at once (keeps the merged aspect ratio intact).
+  let scale = Math.min(1, MAX_CANVAS_DIM / canvasW, MAX_CANVAS_DIM / canvasH)
+  const area = (canvasW * scale) * (canvasH * scale)
+  if (area > MAX_CANVAS_AREA) scale *= Math.sqrt(MAX_CANVAS_AREA / area)
+  canvasW = Math.max(1, Math.round(canvasW * scale))
+  canvasH = Math.max(1, Math.round(canvasH * scale))
+  cellW = (canvasW - (cols - 1) * gap) / cols
+  cellH = (canvasH - (rows - 1) * gap) / rows
+  return { cols, rows, canvasW, canvasH, cellW, cellH }
+}
+
 /** Load a File as an HTMLImageElement. Revokes its object URL on settle. */
 export function fileToImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -44,42 +126,10 @@ export async function renderImageMerge(
   const count = images.length
   if (count === 0) throw new Error('No images to merge')
 
-  let cols: number, rows: number
-  if (layout === 'horizontal') {
-    cols = count
-    rows = 1
-  } else if (layout === 'vertical') {
-    cols = 1
-    rows = count
-  } else {
-    cols = Math.min(columns, count)
-    rows = Math.ceil(count / cols)
-  }
-
-  const maxImgW = Math.max(...images.map(img => img.naturalWidth))
-  const maxImgH = Math.max(...images.map(img => img.naturalHeight))
-  let canvasW: number, canvasH: number, cellW: number, cellH: number
-  if (outputMode === 'custom' && customW > 0 && customH > 0) {
-    canvasW = customW
-    canvasH = customH
-    cellW = (canvasW - (cols - 1) * gap) / cols
-    cellH = (canvasH - (rows - 1) * gap) / rows
-  } else if (outputMode === 'first' && images.length > 0) {
-    cellW = images[0].naturalWidth
-    cellH = images[0].naturalHeight
-    canvasW = cols * cellW + (cols - 1) * gap
-    canvasH = rows * cellH + (rows - 1) * gap
-  } else {
-    cellW = maxImgW
-    cellH = maxImgH
-    canvasW = cols * cellW + (cols - 1) * gap
-    canvasH = rows * cellH + (rows - 1) * gap
-  }
-
-  canvasW = Math.min(Math.round(canvasW), 8192)
-  canvasH = Math.min(Math.round(canvasH), 8192)
-  cellW = (canvasW - (cols - 1) * gap) / cols
-  cellH = (canvasH - (rows - 1) * gap) / rows
+  const { cols, canvasW, canvasH, cellW, cellH } = computeMergeLayout(
+    images.map(img => ({ w: img.naturalWidth, h: img.naturalHeight })),
+    { layout, columns, gap, outputMode, customW, customH },
+  )
 
   let canvas: HTMLCanvasElement | OffscreenCanvas
   let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D

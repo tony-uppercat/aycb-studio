@@ -3,34 +3,34 @@ import { estimateCost } from './costEstimate'
 
 describe('estimateCost — Gemini image quality push additions', () => {
   it('returns 0.045 for Flash 0.5K', () => {
-    const result = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '0.5K')
+    const result = estimateCost('gemini-3.1-flash-image', 'generate_image', 'short', 0, 0, 1, '0.5K')
     expect(result.costUsd).toBeCloseTo(0.045, 3)
   })
 
   it('preserves existing 1K Flash cost (0.067) when thinking=false', () => {
-    const result = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '1K', false)
+    const result = estimateCost('gemini-3.1-flash-image', 'generate_image', 'short', 0, 0, 1, '1K', false)
     expect(result.costUsd).toBeCloseTo(0.067, 3)
   })
 
   it('applies thinking ×1.3 on Flash 4K when thinking=true', () => {
-    const base = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', false)
-    const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', true)
+    const base = estimateCost('gemini-3.1-flash-image', 'generate_image', 'short', 0, 0, 1, '4K', false)
+    const withThinking = estimateCost('gemini-3.1-flash-image', 'generate_image', 'short', 0, 0, 1, '4K', true)
     expect(base.costUsd).toBeCloseTo(0.151, 3)
     expect(withThinking.costUsd).toBeCloseTo(0.151 * 1.3, 3)
   })
 
   it('applies thinking ×1.3 on Flash 2K when thinking=true', () => {
-    const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '2K', true)
+    const withThinking = estimateCost('gemini-3.1-flash-image', 'generate_image', 'short', 0, 0, 1, '2K', true)
     expect(withThinking.costUsd).toBeCloseTo(0.101 * 1.3, 3)
   })
 
   it('does NOT apply thinking ×1.3 to Pro Image (auto-thinking, included in base price)', () => {
-    const withThinking = estimateCost('gemini-3-pro-image-preview', 'generate_image', 'short', 0, 0, 1, '4K', true)
+    const withThinking = estimateCost('gemini-3-pro-image', 'generate_image', 'short', 0, 0, 1, '4K', true)
     expect(withThinking.costUsd).toBeCloseTo(0.240, 3)
   })
 
   it('applies thinking ×1.3 on Flash 0.5K too', () => {
-    const withThinking = estimateCost('gemini-3.1-flash-image-preview', 'generate_image', 'short', 0, 0, 1, '0.5K', true)
+    const withThinking = estimateCost('gemini-3.1-flash-image', 'generate_image', 'short', 0, 0, 1, '0.5K', true)
     expect(withThinking.costUsd).toBeCloseTo(0.045 * 1.3, 3)
   })
 
@@ -48,6 +48,28 @@ describe('estimateCost — Gemini image quality push additions', () => {
   it('does NOT apply thinking ×1.3 to Recraft', () => {
     const result = estimateCost('recraftv4_pro', 'generate_image', 'short', 0, 0, 1, '', true)
     expect(result.costUsd).toBeCloseTo(0.25, 3)
+  })
+})
+
+describe('estimateCost — Nano Banana 2 Lite (gemini-3.1-flash-lite-image)', () => {
+  it('returns 0.034 for Lite 1K (half of NB2)', () => {
+    const result = estimateCost('gemini-3.1-flash-lite-image', 'generate_image', 'short', 0, 0, 1, '1K')
+    expect(result.costUsd).toBeCloseTo(0.034, 3)
+  })
+
+  it('returns 0.076 for Lite 4K', () => {
+    const result = estimateCost('gemini-3.1-flash-lite-image', 'generate_image', 'short', 0, 0, 1, '4K')
+    expect(result.costUsd).toBeCloseTo(0.076, 3)
+  })
+
+  it('returns 0.023 for Lite 0.5K and 0.051 for Lite 2K', () => {
+    expect(estimateCost('gemini-3.1-flash-lite-image', 'generate_image', 'short', 0, 0, 1, '0.5K').costUsd).toBeCloseTo(0.023, 3)
+    expect(estimateCost('gemini-3.1-flash-lite-image', 'generate_image', 'short', 0, 0, 1, '2K').costUsd).toBeCloseTo(0.051, 3)
+  })
+
+  it('does NOT apply thinking ×1.3 to Lite (speed model, no explicit thinking)', () => {
+    const withThinking = estimateCost('gemini-3.1-flash-lite-image', 'generate_image', 'short', 0, 0, 1, '1K', true)
+    expect(withThinking.costUsd).toBeCloseTo(0.034, 3)
   })
 })
 

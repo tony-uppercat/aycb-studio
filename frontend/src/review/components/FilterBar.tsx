@@ -37,7 +37,7 @@ export function FilterBar({
         <span className="rh-search-icon">S</span>
         <input
           className="rh-search-input"
-          placeholder="Search..."
+          placeholder="Search name or prompt..."
           value={search}
           onChange={e => on_search_change(e.target.value)}
         />

@@ -265,7 +265,7 @@ export const api = {
     return get('/llm/skills', signal)
   },
 
-  llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[], systemPrompt?: string, skillsMode?: boolean, skills?: string[]): Promise<{ text: string; status: string; usage?: UsageInfo }> {
+  llmChat(prompt: string, model: string, apiKey: string, mediaFiles?: File[], systemPrompt?: string, skillsMode?: boolean, skills?: string[], effort?: string): Promise<{ text: string; status: string; usage?: UsageInfo }> {
     // Route Ollama models directly to client-side provider (no backend proxy needed)
     if (model.startsWith('ollama/')) {
       const llm = getLLMProvider('ollama')
@@ -289,6 +289,7 @@ export const api = {
       fd.append('skills_mode', 'true')
       if (skills && skills.length) fd.append('skills', skills.join(','))
     }
+    if (effort && effort !== 'auto') fd.append('effort', effort)
     mediaFiles?.forEach(f => fd.append('media_files', f))
     return post('/llm/chat', fd)
   },

@@ -46,6 +46,7 @@ import { CollageEditor } from '../CollageEditor'
 import type { CollageImage } from '../CollageEditor'
 import { runQuickMerge } from '../../services/quickMerge'
 import type { LayoutMode } from '../../utils/imageMergeRender'
+import { runNodesParallel, hasRegisteredRun } from '../../utils/cascadeRun'
 import { useActiveProject } from '../../hooks/useActiveProject'
 import { useBackendHealth } from '../../hooks/useBackendHealth'
 import styles from './FlowCanvas.module.css'
@@ -354,8 +355,9 @@ function FlowCanvasInner() {
 
   // ── Context menu action callbacks ──
   const {
-    ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxDuplicate,
+    ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxBlock, ctxDuplicate,
     ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
+    ctxFlip,
   } = useCanvasContextMenuActions({ getNodes, getEdges, setNodes, setEdges, snapshot, clipboardRef, fitView })
 
   function handleClearCanvas(): void {
@@ -501,6 +503,16 @@ function FlowCanvasInner() {
     snapshot(postNodes, getEdges())
     setNodes(postNodes)
   }, [getNodes, getEdges, setNodes, snapshot])
+
+  // ── Run Selected (async) — fire ONLY the selected runnable nodes in
+  // parallel. No upstream cascade: the user wants exactly the selected nodes
+  // to run with their current inputs, not the whole chain. ──
+  const handleRunSelected = useCallback((nodeIds: string[]) => {
+    const ids = nodeIds.filter(id => hasRegisteredRun(id))
+    if (ids.length === 0) return
+    runNodesParallel(ids)
+      .catch(err => console.warn('[AYCB] Run selected failed:', err))
+  }, [])
 
   const handleCollageExport = useCallback(async (blob: Blob) => {
     // Save blob as a File to mediaStore and create a new ImageUploadNode at viewport center
@@ -759,10 +771,13 @@ function FlowCanvasInner() {
           onCopy={ctxCopy}
           onDelete={ctxDelete}
           onBypass={ctxBypass}
+          onBlock={ctxBlock}
           onGroup={ctxGroup}
           onUngroup={ctxUngroup}
           onOpenCollage={handleOpenCollage}
           onMerge={handleQuickMerge}
+          onFlip={ctxFlip}
+          onRunSelected={handleRunSelected}
           onUnpack={ctxUnpack}
           onDeleteEdge={ctxDeleteEdge}
           flowPosition={ctxMenu.flowPos}

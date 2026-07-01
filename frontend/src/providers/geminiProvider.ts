@@ -22,8 +22,9 @@ const MODEL_MAP: Record<string, string> = {
   'Gemini 3.1 Flash-Lite Thinking': 'gemini-3.1-flash-lite:thinking',
   'Gemini 3 Flash': 'gemini-3-flash-preview',
   'Gemini 3 Flash Thinking': 'gemini-3-flash-preview:thinking',
-  'Gemini 3.1 Flash Image': 'gemini-3.1-flash-image-preview',
-  'Gemini 3 Pro Image': 'gemini-3-pro-image-preview',
+  'Gemini 3.1 Flash Image': 'gemini-3.1-flash-image',
+  'Gemini 3 Pro Image': 'gemini-3-pro-image',
+  'Nano Banana 2 Lite': 'gemini-3.1-flash-lite-image',
   'Imagen 4 Ultra': 'imagen-4.0-ultra-generate-001',
   'Imagen 4 Fast': 'imagen-4.0-fast-generate-001',
   // Migration aliases — saved canvases serialized before 2026-05-14 carry the
@@ -31,6 +32,11 @@ const MODEL_MAP: Record<string, string> = {
   // Safe to remove after 2026-06-30.
   'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
   'gemini-3.1-flash-lite-preview:thinking': 'gemini-3.1-flash-lite:thinking',
+  // Image GA rename (2026-07-01) — pre-migration saved nodes carry the old
+  // -preview image ids; rewrite to the new GA ids so they still resolve.
+  'gemini-3.1-flash-image-preview': 'gemini-3.1-flash-image',
+  'gemini-3-pro-image-preview': 'gemini-3-pro-image',
+  'gemini-3.1-flash-lite-image-preview': 'gemini-3.1-flash-lite-image',
 }
 
 export function resolveModel(nameOrId: string): string {
@@ -89,8 +95,10 @@ export async function buildGeminiImageBody(
     responseModalities: ['IMAGE', 'TEXT'],
     ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
   }
-  // thinkingConfig is configurable ONLY for gemini-3.1-flash-image-preview.
-  // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig.
+  // thinkingConfig is configurable ONLY for gemini-3.1-flash-image (NB2).
+  // Pro Image has built-in auto-thinking and rejects explicit thinkingConfig;
+  // Nano Banana 2 Lite (gemini-3.1-flash-lite-image) is a speed model with no
+  // thinking, so it's excluded here too.
   // Canonical casing is lowercase ("minimal" / "high").
   //
   // At imageSize 2K/4K, explicit thinkingLevel=high silently degrades the
@@ -100,7 +108,7 @@ export async function buildGeminiImageBody(
   // imageSize. See memory feedback_gemini_thinking_imagesize.
   const isHighRes = options?.imageSize === '2K' || options?.imageSize === '4K'
   if (
-    modelId === 'gemini-3.1-flash-image-preview'
+    modelId === 'gemini-3.1-flash-image'
     && options?.thinking !== false
     && !isHighRes
   ) {
@@ -128,6 +136,28 @@ export async function buildGeminiImageBody(
   return body
 }
 
+// ── Transient-error retry (sync REST path) ──────────────────────────────────
+// Gemini generateContent intermittently returns 503/504 DEADLINE_EXCEEDED when
+// Google's server-side serving deadline is hit — Pro Image at high res, many
+// refs, or grounding push the request past it. The same body usually succeeds
+// on a second try, so we retry transient failures with linear backoff before
+// surfacing the error. Non-transient errors (4xx) fail fast — no point retrying
+// a malformed request.
+const GEMINI_MAX_ATTEMPTS = 3
+// Linear backoff base. Deadline-expired is a server-side congestion window that
+// can last tens of seconds — a 1.5s/3s spacing retries inside the same bad
+// window and fails together. 5s/10s spreads the attempts wide enough to land in
+// a clear window on the intermittent case (same heavy ref that "worked before").
+const GEMINI_RETRY_BASE_MS = 5000
+const RETRYABLE_STATUS = new Set([429, 500, 503, 504])
+const RETRYABLE_MSG = /deadline expired|deadline_exceeded|unavailable|try again later|internal error/i
+
+function isTransientGeminiError(status: number, detail: string): boolean {
+  return RETRYABLE_STATUS.has(status) || RETRYABLE_MSG.test(detail)
+}
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
 const geminiImageProvider: ImageProvider = {
   id: 'gemini',
   async generateImage(prompt: string, modelNameOrId: string, apiKey: string, refs?: File[], options?: ImageGenerationOptions): Promise<GenerateImageResult> {
@@ -144,16 +174,23 @@ const geminiImageProvider: ImageProvider = {
     // Direct REST call — bypasses @google/genai SDK which silently drops
     // imageConfig.imageSize (googleapis/js-genai Issue #1461, still open).
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'x-goog-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
 
-    if (!response.ok) {
+    let lastDetail = `HTTP error from ${modelId}`
+    for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return parseGenerateContentResponse(data, modelId)
+      }
+
       const errText = await response.text().catch(() => `HTTP ${response.status}`)
       // Try to extract Google's structured error message.
       let detail = errText
@@ -161,11 +198,16 @@ const geminiImageProvider: ImageProvider = {
         const parsed = JSON.parse(errText)
         detail = parsed.error?.message ?? errText
       } catch { /* keep raw */ }
+      lastDetail = detail
+
+      // Retry only transient deadline/availability errors; fail fast otherwise.
+      if (attempt < GEMINI_MAX_ATTEMPTS && isTransientGeminiError(response.status, detail)) {
+        await sleep(GEMINI_RETRY_BASE_MS * attempt)
+        continue
+      }
       return { image_b64: null, status: `Gemini API error: ${detail}`, usage: undefined }
     }
-
-    const data = await response.json()
-    return parseGenerateContentResponse(data, modelId)
+    return { image_b64: null, status: `Gemini API error: ${lastDetail}`, usage: undefined }
   },
 }
 

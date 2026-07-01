@@ -19,11 +19,13 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   // Safe to remove after 2026-06-30.
   'gemini-3.1-flash-lite-preview':    [0.25,  1.50],
   // Nano Banana 2 (Gemini 3.1 Flash Image) — ~$0.067/image @1K, $0.15 @4K
-  'gemini-3.1-flash-image-preview':   [0.50, 60.00],
+  'gemini-3.1-flash-image':           [0.50, 60.00],
+  // Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image) — ~$0.034/image @1K, $0.076 @4K (half of NB2)
+  'gemini-3.1-flash-lite-image':      [0.25, 30.00],
   // Gemini 3 (text/LLM)
   'gemini-3-flash-preview':           [0.50,  3.00],
   // Nano Banana Pro (Gemini 3 Pro Image) — ~$0.134/image @1K-2K, $0.24 @4K
-  'gemini-3-pro-image-preview':       [2.00, 120.00],
+  'gemini-3-pro-image':               [2.00, 120.00],
   // GPT Image 2 (tokenized: $5/M text in, $8/M image in, $30/M image out)
   'gpt-image-2':                      [5.00, 30.00],
   // Claude models (approximate)
@@ -101,15 +103,29 @@ export function estimateCost(
   const outputTokens = (AVG_OUTPUT_TOKENS[operation] ?? 500) * (operation === 'analyze_video' ? nFrames : 1)
 
   // Strip :thinking suffix for pricing lookup
-  const pricingModelId = modelId.endsWith(':thinking') ? modelId.replace(':thinking', '') : modelId
+  const strippedId = modelId.endsWith(':thinking') ? modelId.replace(':thinking', '') : modelId
+  // Image GA rename (2026-07-01) — saved canvases still carry the old -preview
+  // image ids. Normalize to the GA id so pricing lookups keep resolving.
+  // Mirrors MODEL_MAP in geminiProvider.ts (kept local to avoid a circular
+  // import + provider-registration side effect). Safe to remove after 2026-06-30.
+  const IMAGE_ID_ALIASES: Record<string, string> = {
+    'gemini-3.1-flash-image-preview': 'gemini-3.1-flash-image',
+    'gemini-3-pro-image-preview': 'gemini-3-pro-image',
+    'gemini-3.1-flash-lite-image-preview': 'gemini-3.1-flash-lite-image',
+    'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+  }
+  const pricingModelId = IMAGE_ID_ALIASES[strippedId] ?? strippedId
 
   // Image generation: use official fixed per-image pricing (Google charges per image, not per token)
   // Prices vary by resolution — imageSize passed via imageCount overload won't work,
   // so we expose resolution-aware maps and let the caller pass the right imageCount for input refs.
   if (operation === 'generate_image') {
     const FIXED_IMAGE_COST: Record<string, Record<string, number>> = {
-      'gemini-3.1-flash-image-preview': { '0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
-      'gemini-3-pro-image-preview':     { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
+      'gemini-3.1-flash-image':      { '0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151, '': 0.067 },
+      // Nano Banana 2 Lite — exactly half of NB2 (matches official $0.0336/1K).
+      // ponytail: Lite 2K/4K max-res is unconfirmed by Google (only 1K published); may error until smoke-tested.
+      'gemini-3.1-flash-lite-image': { '0.5K': 0.023, '1K': 0.034, '2K': 0.051, '4K': 0.076, '': 0.034 },
+      'gemini-3-pro-image':          { '1K': 0.134, '2K': 0.134, '4K': 0.240, '': 0.134 },
       // gpt-image-2 quality knobs: Draft=low (~$0.006/img at 1K), 1K=medium
       // (~$0.053), FHD/2K/4K=high. Token-billed in production via
       // computeCost(); these are dropdown estimates synced 2026-05-18 against
@@ -141,10 +157,11 @@ export function estimateCost(
           : (imageCount * 560 / 1_000_000) * (MODEL_PRICING[pricingModelId]?.[0] ?? 0.50)
       }
       const rawCost = imgCost + inputRefCost
-      // thinking surcharge applies ONLY to gemini-3.1-flash-image-preview.
+      // thinking surcharge applies ONLY to gemini-3.1-flash-image.
       // Pro Image has built-in thinking included in its base per-call price.
+      // Lite is a speed model with no explicit thinking — excluded here too.
       const thinkingEffective = thinking
-        && pricingModelId === 'gemini-3.1-flash-image-preview'
+        && pricingModelId === 'gemini-3.1-flash-image'
       const thinkingFactor = thinkingEffective ? 1.3 : 1
       return { inputTokens: imageCount * 560, outputTokens: 0, costUsd: rawCost * thinkingFactor, model: modelId }
     }

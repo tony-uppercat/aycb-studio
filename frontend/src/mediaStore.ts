@@ -127,17 +127,20 @@ export async function listMediaIds(): Promise<string[]> {
 // ── Project-aware save ───────────────────────────────────────────────────────
 
 /**
- * Save media blob to IndexedDB AND register it in the active project's mediaIds.
+ * Save media blob to IndexedDB AND register it in a project's mediaIds.
  * Use this everywhere a user action creates new media (upload, generate, effects, etc.).
- * Falls back to raw saveMedia if no active project is set.
+ *
+ * Pass `projectId` to pin the media to a specific project — required for async
+ * batch results, which resolve later when a DIFFERENT project may be active.
+ * When omitted, falls back to the currently-active project. (H5)
  */
-export async function saveMediaForProject(id: string, file: File): Promise<void> {
+export async function saveMediaForProject(id: string, file: File, projectId?: string): Promise<void> {
   await saveMedia(id, file)
-  const projectId = useCanvasStore.getState().activeProjectId
-  if (projectId) {
+  const pid = projectId ?? useCanvasStore.getState().activeProjectId
+  if (pid) {
     try {
       const { addMediaToProject } = await import('./stores/projectStore')
-      await addMediaToProject(projectId, id)
+      await addMediaToProject(pid, id)
     } catch (e) {
       console.warn('[mediaStore] Failed to register media in project:', e)
     }

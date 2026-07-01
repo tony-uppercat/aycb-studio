@@ -35,10 +35,29 @@ def test_registry_covers_all_video_providers():
 
 def test_registry_has_gemini_image_models_at_correct_price():
     from src.registry import REGISTRY
-    m = REGISTRY["gemini-3.1-flash-image-preview"]
+    m = REGISTRY["gemini-3.1-flash-image"]
     assert m.cost_per_call == 0.067
     assert m.capability == "image"
     assert m.provider == "gemini"
+
+
+def test_registry_has_nano_banana_2_lite():
+    """NB2 Lite is the half-price speed/cost image model (GA id)."""
+    from src.registry import REGISTRY
+    m = REGISTRY["gemini-3.1-flash-lite-image"]
+    assert m.cost_per_call == 0.034
+    assert m.capability == "image"
+    assert m.provider == "gemini"
+
+
+def test_registry_has_gemini_omni_flash_video():
+    """Gemini Omni Flash — native Gemini video, 720p @ $0.10/s."""
+    from src.registry import REGISTRY
+    m = REGISTRY["gemini-omni-flash"]
+    assert m.capability == "video"
+    assert m.provider == "gemini"
+    assert m.cost_per_sec == {"720p": 0.10}
+    assert m.provider_model_id == "gemini-omni-flash-preview"
 
 
 def test_registry_llm_pricing_matches_shared_module():
@@ -62,7 +81,7 @@ def test_list_models_returns_all(client):
     data = resp.json()
     ids = {m["id"] for m in data["models"]}
     # Spot-check representative entries from each capability.
-    assert "gemini-3.1-flash-image-preview" in ids
+    assert "gemini-3.1-flash-image" in ids
     assert "vertex-veo-3.1" in ids
     assert "claude-opus-4-6-20250620" in ids
     assert "flux-2-klein-4b" in ids
@@ -87,7 +106,7 @@ def test_edit_capability_includes_gemini_alias(client):
     resp = client.get("/api/registry/models/edit")
     assert resp.status_code == 200
     ids = {m["id"] for m in resp.json()["models"]}
-    assert "gemini-3.1-flash-image-preview" in ids
+    assert "gemini-3.1-flash-image" in ids
     assert "imagen-3.0-capability-001" in ids
 
 

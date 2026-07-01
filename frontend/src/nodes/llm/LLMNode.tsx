@@ -12,6 +12,7 @@ import { useCanvasStore } from '../../stores/canvasStore'
 import { useOllamaModels } from '../../hooks/useOllamaModels'
 import type { LLMNodeData } from '../../types'
 import { SkillPicker } from './SkillPicker'
+import { LLMHistory, pushLLMHistory, readLLMHistory, type LLMHistoryEntry } from './LLMHistory'
 import styles from '../_shared/Node.module.css'
 
 type LLMNodeType = Node<LLMNodeData, 'llm'>
@@ -23,6 +24,7 @@ const LLM_MODELS = [
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', api: 'gemini', tooltip: '1M context, fast balanced performance, multimodal', price: '$0.50/$3', cost: 0.50, deprecated: false },
   { id: 'gemini-3-flash-preview:thinking', name: 'Gemini 3 Flash Thinking', api: 'gemini', tooltip: 'Gemini 3 Flash with high thinking level', price: '$0.50/$3', cost: 0.50, deprecated: false },
   { id: 'cli-claude-opus-4-8', name: 'Opus 4.8 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
+  { id: 'cli-claude-opus-4-7', name: 'Opus 4.7 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
   { id: 'cli-claude-opus-4-6', name: 'Opus 4.6 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
   { id: 'cli-claude-sonnet-4-6', name: 'Sonnet 4.6 (Local CLI)', api: 'claude-cli', tooltip: 'Runs via the local claude CLI — subscription auth, no API key', price: 'sub', cost: 0, deprecated: false },
 ] as const
@@ -55,7 +57,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   }, [mediaCount, id, updateNodeInternals])
 
   const [selectedModel, setSelectedModel] = useState(
-    typeof data.selectedModel === 'string' ? data.selectedModel : LLM_MODELS[0].id
+    typeof data.selectedModel === 'string' ? data.selectedModel : 'cli-claude-opus-4-8'
   )
   const [output, setOutput] = useState(
     typeof data.outputText === 'string' ? data.outputText
@@ -79,6 +81,14 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
   )
   const [skillsMode, setSkillsMode] = useState(
     typeof data.skillsMode === 'boolean' ? data.skillsMode : false
+  )
+  // Claude CLI effort knob — forwarded to `claude --effort <level>`.
+  // 'auto' (default) omits the flag so the CLI uses its own default depth.
+  const [effort, setEffort] = useState<'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>(
+    (() => {
+      const v = (data as Record<string, unknown>).effort
+      return v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh' || v === 'max' || v === 'auto' ? v : 'auto'
+    })(),
   )
   const [selectedSkills, setSelectedSkills] = useState<string[]>(
     Array.isArray(data.selectedSkills) ? data.selectedSkills as string[] : []
@@ -138,6 +148,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
         files.length ? files : undefined, systemPrompt,
         isClaudeCli && skillsMode,
         isClaudeCli && skillsMode ? selectedSkills : undefined,
+        isClaudeCli ? effort : undefined,
       )
       const text = r.text || ''
       setOutput(text)
@@ -145,10 +156,16 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       const filtered = text.includes('<thinking>')
         ? text.replace(/<thinking>[\s\S]*?<\/thinking>\s*/g, '').trim()
         : text
-      updateNodeData(id, { outputText: filtered, text, selectedModel, showThinking })
-      // Track cost from API response or fall back to client-side estimate
+      // Append this run to the node's prompt+response history (read-only browsing)
+      const entry: LLMHistoryEntry = { prompt, output: filtered, model: modelInfo.name, ts: Date.now() }
+      const llmHistory = pushLLMHistory(getNodes().find(n => n.id === id)?.data?.llmHistory, entry)
+      updateNodeData(id, { outputText: filtered, text, selectedModel, showThinking, llmHistory })
+      // Track cost from API response or fall back to client-side estimate.
+      // Claude Local CLI runs on subscription auth — the CLI reports the
+      // API-equivalent total_cost_usd, but the user's marginal cost is $0.
+      // Log $0 for CLI models (token counts are still recorded below).
       const fallback = estimateCost(selectedModel, 'llm_chat', prompt, files.length)
-      const costUsd = r.usage?.cost_usd ?? fallback.costUsd
+      const costUsd = isClaudeCli ? 0 : (r.usage?.cost_usd ?? fallback.costUsd)
       setLastCost(costUsd)
       if (isClaudeCli && r.usage) {
         setLastTokens({ input: r.usage.input_tokens ?? 0, output: r.usage.output_tokens ?? 0 })
@@ -159,7 +176,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
         timestamp: new Date().toISOString(),
         nodeId: id,
         nodeName: 'LLM',
-        model: modelInfo.name,
+        model: selectedModel,
         inputTokens: r.usage?.input_tokens ?? fallback.inputTokens,
         outputTokens: r.usage?.output_tokens ?? fallback.outputTokens,
         costUsd,
@@ -170,7 +187,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
       reportNodeError(id, msg)
     }
     finally { setLoading(false) }
-  }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, isClaudeCli, skillsMode, selectedSkills, id, getNodes, getEdges, updateNodeData])
+  }, [apiKey, anthropicKey, modelInfo, selectedModel, showThinking, localPrompt, prependMode, isClaudeCli, skillsMode, selectedSkills, effort, id, getNodes, getEdges, updateNodeData])
 
   const inputSlots: SlotDef[] = [
     { id: 'text-system', label: 'System', type: 'text' },
@@ -260,6 +277,21 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
               <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h13a3 3 0 0 1 3 3v13l-3-2-3 2-3-2-3 2-3-2V4zm3 4h9v2H7V8zm0 4h7v2H7v-2z"/></svg>
             </button>
           )}
+          {isClaudeCli && (
+            <button
+              className={`${styles.subtleToggle} ${effort !== 'auto' ? styles.subtleToggleOn : ''}`}
+              onClick={() => {
+                const order = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+                const next = order[(order.indexOf(effort) + 1) % order.length]
+                setEffort(next)
+                updateNodeData(id, { effort: next })
+              }}
+              title={`effort=${effort}${effort === 'auto' ? ' (CLI default)' : ' (--effort ' + effort + ')'} — click to cycle auto→low→medium→high→xhigh→max`}
+              style={{ minWidth: 38, padding: '0 4px', fontSize: 10 }}
+            >
+              {effort === 'auto' ? 'E:A' : effort === 'xhigh' ? 'E:X' : `E:${effort[0].toUpperCase()}`}
+            </button>
+          )}
         </div>
         {isClaudeCli && skillsMode && (
           <SkillPicker
@@ -296,6 +328,7 @@ export function LLMNode({ id, data, selected }: NodeProps<LLMNodeType>) {
         />
         {error && <p className={styles.error}>{error}</p>}
         <ExpandableText value={displayOutput} rows={6} placeholder="Output appears here..." onEdit={(text) => { setOutput(text); updateNodeData(id, { outputText: text, text }) }} />
+        <LLMHistory entries={readLLMHistory(data.llmHistory)} />
       </div>
     </NodeShell>
   )

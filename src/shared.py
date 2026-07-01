@@ -113,10 +113,16 @@ MODELS = {
 }
 
 IMAGE_MODELS = {
-    "Gemini 3.1 Flash Image": "gemini-3.1-flash-image-preview",
-    "Gemini 3 Pro Image": "gemini-3-pro-image-preview",
+    "Gemini 3.1 Flash Image": "gemini-3.1-flash-image",
+    "Gemini 3 Pro Image": "gemini-3-pro-image",
+    "Nano Banana 2 Lite": "gemini-3.1-flash-lite-image",
     "Imagen 4 Ultra": "imagen-4.0-ultra-generate-001",
     "Imagen 4 Fast": "imagen-4.0-fast-generate-001",
+    # Reverse aliases (old preview id -> new GA id) so pre-migration saved
+    # model ids still resolve to the GA canonical id.
+    "gemini-3.1-flash-image-preview": "gemini-3.1-flash-image",
+    "gemini-3-pro-image-preview": "gemini-3-pro-image",
+    "gemini-3.1-flash-lite-image-preview": "gemini-3.1-flash-lite-image",
 }
 
 # Cost per 1M tokens (USD): (input_per_1M, output_per_1M)
@@ -127,10 +133,12 @@ MODEL_PRICING = {
     # Transition alias — canvases saved before 2026-05-14 still pass this id.
     # Safe to remove after 2026-06-30.
     "gemini-3.1-flash-lite-preview": (0.25, 1.50),
-    "gemini-3.1-flash-image-preview": (0.50, 60.00),   # image gen: $60/1M output
+    "gemini-3.1-flash-image": (0.50, 60.00),           # image gen: $60/1M output
+    # Nano Banana 2 Lite — half NB2's token rate; batch-only precursor GA.
+    "gemini-3.1-flash-lite-image": (0.25, 30.00),      # image gen: $30/1M output
     # Gemini 3
     "gemini-3-flash-preview": (0.50, 3.00),
-    "gemini-3-pro-image-preview": (2.00, 120.00),      # image gen: $120/1M output
+    "gemini-3-pro-image": (2.00, 120.00),              # image gen: $120/1M output
     # Claude (Anthropic)
     "claude-sonnet-4-6-20250620": (3.00, 15.00),
     "claude-opus-4-6-20250620": (15.00, 75.00),

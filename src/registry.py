@@ -123,7 +123,7 @@ _TEXT_MODELS: tuple[Model, ...] = (
 
 _IMAGE_MODELS: tuple[Model, ...] = (
     Model(
-        id="gemini-3.1-flash-image-preview",
+        id="gemini-3.1-flash-image",
         name="Nano Banana 2",
         provider="gemini",
         capability="image",
@@ -134,7 +134,7 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         tooltip="Gemini 3.1 Flash — fast T\u2192I / I\u2192I, 0.5K-4K, extended aspect ratios",
     ),
     Model(
-        id="gemini-3-pro-image-preview",
+        id="gemini-3-pro-image",
         name="Nano Banana Pro",
         provider="gemini",
         capability="image",
@@ -142,6 +142,23 @@ _IMAGE_MODELS: tuple[Model, ...] = (
         aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16", "21:9"),
         qualities=("1K", "2K", "4K"),
         tooltip="Gemini 3 Pro — best quality, text rendering, 1K-4K",
+    ),
+    # Nano Banana 2 Lite — speed/cost model, exactly half NB2's per-image
+    # price. Batch-capable (half again under Batch API). No thinking gate.
+    # Google only supports 1K here: 2K/4K return "Image size not supported"
+    # (confirmed live 2026-07-01); 0.5K unconfirmed. Qualities restricted to 1K
+    # until scripts/smoke_test_ga_image_ids.py proves a wider range.
+    Model(
+        id="gemini-3.1-flash-lite-image",
+        name="Nano Banana 2 Lite",
+        provider="gemini",
+        capability="image",
+        cost_per_call=0.034,
+        # Official docs: 10 ratios for Lite — no 4:1/1:4/8:1/1:8 panoramics.
+        aspect_ratios=("1:1", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4",
+                       "16:9", "9:16", "21:9"),
+        qualities=("1K",),
+        tooltip="Google Gemini — Nano Banana 2 Lite, fastest/cheapest, 1K",
     ),
     # Recraft V4 (external.api.recraft.ai)
     Model(
@@ -461,13 +478,32 @@ _VIDEO_MODELS: tuple[Model, ...] = (
         tooltip="Google Vertex — Veo 3.1 Fast, 4-8s",
         provider_model_id="veo-3.1-fast-generate-preview",
     ),
+    # Gemini Omni Flash — Google Gemini native video (preview). 720p only,
+    # text/image-to-video, single ref.
+    Model(
+        id="gemini-omni-flash",
+        name="Gemini Omni Flash",
+        provider="gemini",
+        capability="video",
+        cost_per_sec={"720p": 0.10},
+        aspect_ratios=("16:9", "9:16"),
+        qualities=("720p",),
+        allowed_durations=tuple(range(3, 11)),
+        default_duration=8,
+        # Omni accepts multiple reference images (photo-to-video up to ~5; 7
+        # image slots total). ponytail: official docs give no number — 5 is
+        # blog-sourced; verify with scripts/smoke_test_omni_flash_video.py.
+        max_ref_images=5,
+        tooltip="Google Gemini — Omni Flash, 720p, 3-10s, text/image-to-video (preview)",
+        provider_model_id="gemini-omni-flash-preview",
+    ),
 )
 
 
 # The Gemini image model also works for editing; it appears under both
 # image and edit capabilities. We keep a single canonical entry under
 # "image" and expose an alias for edit callers rather than duplicating.
-_EDIT_ALIASES: tuple[str, ...] = ("gemini-3.1-flash-image-preview",)
+_EDIT_ALIASES: tuple[str, ...] = ("gemini-3.1-flash-image",)
 
 
 REGISTRY: dict[str, Model] = {

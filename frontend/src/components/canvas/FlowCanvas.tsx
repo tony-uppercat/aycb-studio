@@ -357,7 +357,7 @@ function FlowCanvasInner() {
   const {
     ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxBlock, ctxDuplicate,
     ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
-    ctxFlip,
+    ctxFlip, ctxRotate,
   } = useCanvasContextMenuActions({ getNodes, getEdges, setNodes, setEdges, snapshot, clipboardRef, fitView })
 
   function handleClearCanvas(): void {
@@ -777,6 +777,7 @@ function FlowCanvasInner() {
           onOpenCollage={handleOpenCollage}
           onMerge={handleQuickMerge}
           onFlip={ctxFlip}
+          onRotate={ctxRotate}
           onRunSelected={handleRunSelected}
           onUnpack={ctxUnpack}
           onDeleteEdge={ctxDeleteEdge}

@@ -53,6 +53,7 @@ export interface Props {
   onOpenCollage?: (images: CollageImage[]) => void
   onMerge?: (layout: LayoutMode, imageNodes: Node[]) => void
   onFlip?: (nodes: Node[], axis: 'horizontal' | 'vertical') => void
+  onRotate?: (nodes: Node[], angle: 90 | 180 | 270) => void
   onRunSelected?: (nodeIds: string[]) => void
   onUnpack?: (nodes: Node[]) => void
   onDeleteEdge?: (edgeId: string) => void
@@ -175,7 +176,7 @@ export function CanvasContextMenu({
   x, y, target, allEdges, onClose,
   onAddNode, onPaste, onSelectAll, onFitView,
   onDuplicate, onCopy, onDelete, onBypass, onBlock, onGroup, onUngroup,
-  onOpenCollage, onMerge, onFlip, onRunSelected, onUnpack, onDeleteEdge, flowPosition,
+  onOpenCollage, onMerge, onFlip, onRotate, onRunSelected, onUnpack, onDeleteEdge, flowPosition,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [showNodeExportChoice, setShowNodeExportChoice] = useState(false)
@@ -365,6 +366,13 @@ export function CanvasContextMenu({
     onClose()
   }, [onFlip, flippableNodes, onClose])
 
+  // ── Rotate (right-click → rotate selected image nodes in place) ──
+  const handleRotate = useCallback((angle: 90 | 180 | 270) => {
+    if (!onRotate || flippableNodes.length === 0) return
+    onRotate(flippableNodes, angle)
+    onClose()
+  }, [onRotate, flippableNodes, onClose])
+
   // ── Run Selected (async) — run every selected runnable node in parallel ──
   const handleRunSelected = useCallback(() => {
     const ids = runnableNodes.map(n => n.id)
@@ -444,6 +452,22 @@ export function CanvasContextMenu({
                   <span className={styles.icon}>↕</span>
                   <span className={styles.label}>Vertical</span>
                   <span className={styles.shortcut}>V</span>
+                </button>
+              </SubMenu>
+            )}
+            {canFlip && onRotate && (
+              <SubMenu label="Rotate" icon="⟳" menuX={menuX}>
+                <button className={styles.item} onClick={() => handleRotate(90)}>
+                  <span className={styles.icon}>⟳</span>
+                  <span className={styles.label}>90° CW</span>
+                </button>
+                <button className={styles.item} onClick={() => handleRotate(270)}>
+                  <span className={styles.icon}>⟲</span>
+                  <span className={styles.label}>90° CCW</span>
+                </button>
+                <button className={styles.item} onClick={() => handleRotate(180)}>
+                  <span className={styles.icon}>↻</span>
+                  <span className={styles.label}>180°</span>
                 </button>
               </SubMenu>
             )}

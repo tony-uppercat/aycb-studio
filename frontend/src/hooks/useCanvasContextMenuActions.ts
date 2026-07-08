@@ -4,6 +4,7 @@ import { getNextNodeId } from './useCanvasDragDrop'
 import type { NodeManifest } from '../nodes/index'
 import { cloneNodeMedia, loadMedia, saveMediaForProject, generateMediaId } from '../mediaStore'
 import { flipImageFile, type FlipAxis } from '../utils/flipImage'
+import { rotateImageFile, type RotateAngle } from '../utils/rotateImage'
 
 const UNPACK_W = 230, UNPACK_H = 200, UNPACK_GAP = 20, UNPACK_COLS = 5
 
@@ -100,19 +101,22 @@ export function useCanvasContextMenuActions({
     setNodes(postNodes)
   }, [getNodes, getEdges, setNodes, snapshot])
 
-  // Flip each selected image node's media in place: load the current file,
-  // mirror it on a canvas, save under a fresh mediaId so downstream re-pulls.
-  // Nodes without a mediaId are skipped. One snapshot for undo.
-  const ctxFlip = useCallback(async (nodes: Node[], axis: FlipAxis) => {
+  // Transform each selected image node's media in place: load the current
+  // file, bake the transform on a canvas, save under a fresh mediaId so
+  // downstream re-pulls. Nodes without a mediaId are skipped. One snapshot
+  // for undo. Shared by Flip and Rotate.
+  const ctxTransformMedia = useCallback(async (
+    nodes: Node[], transform: (file: File) => Promise<File>,
+  ) => {
     const updates: Record<string, string> = {}
     for (const n of nodes) {
       const mid = (n.data as Record<string, unknown>).mediaId
       if (typeof mid !== 'string') continue
       const file = await loadMedia(mid)
       if (!file) continue
-      const flipped = await flipImageFile(file, axis)
+      const transformed = await transform(file)
       const newMid = generateMediaId()
-      await saveMediaForProject(newMid, flipped)
+      await saveMediaForProject(newMid, transformed)
       updates[n.id] = newMid
     }
     if (Object.keys(updates).length === 0) return
@@ -122,6 +126,18 @@ export function useCanvasContextMenuActions({
     snapshot(postNodes, getEdges())
     setNodes(postNodes)
   }, [getNodes, getEdges, setNodes, snapshot])
+
+  const ctxFlip = useCallback(
+    (nodes: Node[], axis: FlipAxis) =>
+      ctxTransformMedia(nodes, file => flipImageFile(file, axis)),
+    [ctxTransformMedia],
+  )
+
+  const ctxRotate = useCallback(
+    (nodes: Node[], angle: RotateAngle) =>
+      ctxTransformMedia(nodes, file => rotateImageFile(file, angle)),
+    [ctxTransformMedia],
+  )
 
   const ctxCopy = useCallback((nodes: Node[]) => {
     const nodeIds = new Set(nodes.map(n => n.id))
@@ -193,6 +209,6 @@ export function useCanvasContextMenuActions({
   return {
     ctxAddNode, ctxSelectAll, ctxFitView, ctxBypass, ctxBlock, ctxDuplicate,
     ctxCopy, ctxPaste, ctxDelete, ctxDeleteEdge, ctxGroup, ctxUngroup, ctxUnpack,
-    ctxFlip,
+    ctxFlip, ctxRotate,
   }
 }

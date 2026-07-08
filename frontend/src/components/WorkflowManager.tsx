@@ -13,7 +13,11 @@ function loadPresets(): SavedPreset[] {
   try { return JSON.parse(localStorage.getItem(LS_PRESETS_KEY) ?? '[]') } catch { return [] }
 }
 function savePresets(presets: SavedPreset[]) {
-  try { localStorage.setItem(LS_PRESETS_KEY, JSON.stringify(presets)) } catch { /* quota */ }
+  try {
+    localStorage.setItem(LS_PRESETS_KEY, JSON.stringify(presets))
+  } catch (e) {
+    console.warn('[WorkflowManager] localStorage full — preset NOT saved:', e)
+  }
 }
 
 export function WorkflowManager({ nodes, edges, onLoad }: Props) {

@@ -1,4 +1,5 @@
 import { useCanvasStore } from './stores/canvasStore'
+import { collectReferencedIds, selectCapEvictions } from './storageCap'
 
 // legacy DB name, do not rename (would lose user data)
 const DB_NAME = 'geminishot_media'
@@ -161,18 +162,7 @@ export async function orphanSweep(): Promise<void> {
       listMediaIds(),
       (await import('./stores/projectStore')).listProjects(),
     ])
-    const referenced = new Set<string>()
-    for (const project of projects) {
-      for (const id of project.mediaIds) referenced.add(id)
-      for (const node of project.canvas?.nodes || []) {
-        const d = node.data as Record<string, unknown>
-        if (typeof d.mediaId === 'string') referenced.add(d.mediaId)
-        if (Array.isArray(d.historyIds))
-          for (const h of d.historyIds) if (typeof h === 'string') referenced.add(h)
-        if (Array.isArray(d.frameIds))
-          for (const f of d.frameIds) if (typeof f === 'string') referenced.add(f)
-      }
-    }
+    const referenced = collectReferencedIds(projects)
     const orphans = allIds.filter(id => !referenced.has(id))
     if (orphans.length > 0) {
       await deleteMultipleMedia(orphans)
@@ -186,18 +176,30 @@ export async function orphanSweep(): Promise<void> {
 // ── Storage Cap ─────────────────────────────────────────────────────────────
 
 /**
- * Evict oldest media blobs when total count exceeds MAX_MEDIA_ITEMS.
- * IDs contain timestamps (media-{Date.now()}-xxx), so sorting ascending
- * gives oldest-first order.
+ * Evict oldest ORPHAN media blobs when total count exceeds MAX_MEDIA_ITEMS.
+ * Reference-aware: media referenced by any project (registry, nodes,
+ * history, frames) is never evicted — heavy generation in one project
+ * must not delete another project's studio media.
  */
 export async function enforceStorageCap(): Promise<void> {
   try {
-    const ids = await listMediaIds()
+    const [ids, projects] = await Promise.all([
+      listMediaIds(),
+      (await import('./stores/projectStore')).listProjects(),
+    ])
     if (ids.length <= MAX_MEDIA_ITEMS) return
-    const sorted = ids.sort()
-    const toDelete = sorted.slice(0, ids.length - MAX_MEDIA_ITEMS)
-    await deleteMultipleMedia(toDelete)
-    console.log(`[mediaStore] enforceStorageCap: evicted ${toDelete.length} oldest blob(s)`)
+    const referenced = collectReferencedIds(projects)
+    const toDelete = selectCapEvictions(ids, referenced, MAX_MEDIA_ITEMS)
+    if (toDelete.length > 0) {
+      await deleteMultipleMedia(toDelete)
+      console.log(`[mediaStore] enforceStorageCap: evicted ${toDelete.length} orphan blob(s)`)
+    }
+    const stillOver = ids.length - toDelete.length - MAX_MEDIA_ITEMS
+    if (stillOver > 0) {
+      console.warn(
+        `[mediaStore] enforceStorageCap: ${stillOver} item(s) over cap but all referenced — nothing evicted`,
+      )
+    }
   } catch (e) {
     console.warn('[mediaStore] enforceStorageCap failed:', e)
   }

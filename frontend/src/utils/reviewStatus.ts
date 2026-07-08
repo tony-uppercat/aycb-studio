@@ -35,8 +35,22 @@ export function getMediaMeta(mediaId: string): Record<string, unknown> | null {
 }
 
 // ── mediaId → bridge stem mapping ────────────────────────────────────────────
-// Persisted to localStorage so it survives page reload.
+// Persisted to localStorage so it survives page reload. Capped at MAX_STEMS
+// entries — was unbounded and grew forever (3675 entries observed 2026-05-19).
 const STEM_MAP_KEY = STORAGE_KEYS.BRIDGE_STEMS
+export const MAX_STEMS = 2000
+
+/** Drop oldest entries when over cap (mediaIds embed Date.now → sortable). */
+export function pruneStemMap(
+  map: Record<string, string>,
+  max: number = MAX_STEMS,
+): Record<string, string> {
+  const keys = Object.keys(map)
+  if (keys.length <= max) return map
+  const pruned: Record<string, string> = {}
+  for (const k of keys.sort().slice(keys.length - max)) pruned[k] = map[k]
+  return pruned
+}
 
 function _loadStemMap(): Record<string, string> {
   try {
@@ -45,7 +59,11 @@ function _loadStemMap(): Record<string, string> {
 }
 
 function _saveStemMap(map: Record<string, string>) {
-  try { localStorage.setItem(STEM_MAP_KEY, JSON.stringify(map)) } catch { /* quota */ }
+  try {
+    localStorage.setItem(STEM_MAP_KEY, JSON.stringify(pruneStemMap(map)))
+  } catch (e) {
+    console.warn('[reviewStatus] failed to persist stem map:', e)
+  }
 }
 
 /** Register a mapping from an IndexedDB mediaId to its bridge stem (e.g. "generated_1774517737168"). */

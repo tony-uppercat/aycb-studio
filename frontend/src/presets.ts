@@ -27,22 +27,33 @@ export function getUserTemplates(): UserTemplate[] {
   } catch { return [] }
 }
 
-export function saveUserTemplate(template: UserTemplate): void {
+/** Returns false (and warns) if localStorage is full — never throws, never silent. */
+function persistTemplates(templates: UserTemplate[]): boolean {
+  try {
+    localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(templates))
+    return true
+  } catch (e) {
+    console.warn('[presets] localStorage full — template change NOT saved:', e)
+    return false
+  }
+}
+
+export function saveUserTemplate(template: UserTemplate): boolean {
   const now = new Date().toISOString()
   const existing = getUserTemplates()
   existing.push({ ...template, updatedAt: now })
-  localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(existing))
+  return persistTemplates(existing)
 }
 
 export function updateUserTemplate(
   id: string,
   updates: Partial<Pick<UserTemplate, 'name' | 'description' | 'nodes' | 'edges'>>,
-): void {
+): boolean {
   const templates = getUserTemplates()
   const idx = templates.findIndex(t => t.id === id)
-  if (idx === -1) return
+  if (idx === -1) return false
   templates[idx] = { ...templates[idx], ...updates, updatedAt: new Date().toISOString() }
-  localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(templates))
+  return persistTemplates(templates)
 }
 
 export function findTemplateByName(name: string): UserTemplate | undefined {
@@ -52,7 +63,7 @@ export function findTemplateByName(name: string): UserTemplate | undefined {
 
 export function deleteUserTemplate(id: string): void {
   const existing = getUserTemplates().filter(t => t.id !== id)
-  localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(existing))
+  persistTemplates(existing)
 }
 
 export const MODELS = ['Gemini 3.1 Pro', 'Gemini 3.1 Flash-Lite', 'Gemini 3 Flash']

@@ -58,7 +58,9 @@ class TestSubmit:
         assert body["response_format"]["delivery"] == "uri"
         vc = body["generation_config"]["video_config"]
         assert vc["task"] == "text_to_video"
-        assert vc["duration_seconds"] == 8
+        # Live API rejects any duration field here ("Unknown parameter
+        # 'duration_seconds'") — duration must never be forwarded.
+        assert "duration_seconds" not in vc
 
     def test_i2v_builds_multimodal_input(self):
         with patch.object(gemini_omni_gen, "_run", new=AsyncMock()) as run:
@@ -70,12 +72,15 @@ class TestSubmit:
         assert result["status"] == "pending"
         body = run.call_args.args[2]
         assert body["generation_config"]["video_config"]["task"] == "image_to_video"
+        # Media inputs must be wrapped in a user_input block (live contract).
         assert isinstance(body["input"], list)
-        img = body["input"][0]
+        block = body["input"][0]
+        assert block["type"] == "user_input"
+        img = block["content"][0]
         assert img["type"] == "image"
         assert img["mime_type"] == "image/png"
         assert base64.b64decode(img["data"]) == b"\x89PNG"
-        assert body["input"][1] == {"type": "text", "text": "go"}
+        assert block["content"][1] == {"type": "text", "text": "go"}
 
     def test_no_refs_delegates_to_t2v(self):
         with patch.object(gemini_omni_gen, "_run", new=AsyncMock()) as run:
@@ -96,7 +101,7 @@ class TestSubmit:
             ))
         assert "1 reference image" in " ".join(r.message for r in caplog.records)
         body = run.call_args.args[2]
-        assert base64.b64decode(body["input"][0]["data"]) == b"A"
+        assert base64.b64decode(body["input"][0]["content"][0]["data"]) == b"A"
 
 
 # ── Validation (failure paths) ────────────────────────────────────────────────
@@ -238,6 +243,39 @@ class TestFetchFileUri:
         )
         assert result == b"FINALMP4"
         assert calls["n"] == 2
+
+    def test_download_uri_polls_metadata_resource(self, monkeypatch):
+        """Live contract: content.uri is `files/<id>:download?alt=media`.
+
+        State polling must hit the bare metadata resource (no :download),
+        then download via the metadata's downloadUri.
+        """
+        monkeypatch.setattr(gemini_omni_helpers, "_FILE_STATE_INTERVAL", 0)
+        polled: list[str] = []
+
+        def handler(request):
+            url = str(request.url)
+            if "alt" in request.url.params:
+                return httpx.Response(200, content=b"EDGEMP4")
+            polled.append(url)
+            assert ":download" not in url, "metadata poll must not hit the download url"
+            return httpx.Response(200, json={
+                "state": "ACTIVE",
+                "downloadUri": "https://gen.example/files/abc:download?alt=media",
+            })
+
+        transport = httpx.MockTransport(handler)
+        orig = httpx.AsyncClient
+        monkeypatch.setattr(
+            gemini_omni_helpers.httpx, "AsyncClient",
+            lambda **kw: orig(transport=transport,
+                              **{k: v for k, v in kw.items() if k != "transport"}),
+        )
+        result = asyncio.run(gemini_omni_helpers._fetch_file_uri(
+            "k", "https://gen.example/files/abc:download?alt=media"
+        ))
+        assert result == b"EDGEMP4"
+        assert polled == ["https://gen.example/files/abc"]
 
     def test_download_http_error_raises(self, monkeypatch):
         monkeypatch.setattr(gemini_omni_helpers, "_FILE_STATE_INTERVAL", 0)

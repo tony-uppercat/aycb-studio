@@ -118,7 +118,7 @@ def _validate_duration(duration: int) -> int:
 
 
 def _build_body(
-    model_id: str, prompt: str, aspect_ratio: str, duration: int,
+    model_id: str, prompt: str, aspect_ratio: str,
     ref_images: list[tuple[str, str]],
 ) -> dict[str, Any]:
     """Assemble the interactions request body.
@@ -131,8 +131,11 @@ def _build_body(
         inp: Any = prompt
         task = "text_to_video"
     else:
-        inp = [{"type": "image", "data": b64, "mime_type": mime} for mime, b64 in ref_images]
-        inp.append({"type": "text", "text": prompt})
+        # Live-verified 2026-07-03: media+text parts must be wrapped in a
+        # user_input block (a flat parts list was never accepted in testing).
+        parts = [{"type": "image", "data": b64, "mime_type": mime} for mime, b64 in ref_images]
+        parts.append({"type": "text", "text": prompt})
+        inp = [{"type": "user_input", "content": parts}]
         task = "image_to_video"
     return {
         "model": info["provider_model_id"],
@@ -142,10 +145,12 @@ def _build_body(
             "aspect_ratio": aspect_ratio,
             "delivery": "uri",
         },
-        # ponytail: duration_seconds placement is a best guess — the canonical
-        # body schema only specified `task`, but the render needs the length.
+        # The interactions schema has NO duration field — live API 400s on
+        # `duration_seconds` ("Unknown parameter ... at generation_config.
+        # video_config"). Length is prompt-only (timecodes like "[0-3s] ...");
+        # `duration` stays in the signature for router parity, like seed.
         "generation_config": {
-            "video_config": {"task": task, "duration_seconds": duration},
+            "video_config": {"task": task},
         },
     }
 
@@ -170,7 +175,7 @@ async def submit_text_to_video(
     _validate_duration(duration)
     # ponytail: Omni's body schema exposes no seed field, so seed is accepted
     # for router-interface parity but not forwarded.
-    body = _build_body(model_id, prompt, aspect_ratio, duration, [])
+    body = _build_body(model_id, prompt, aspect_ratio, [])
     logger.info("Omni submit (T2V): model=%s prompt=%s", model_id, prompt[:80])
     return _spawn(api_key, body)
 
@@ -197,7 +202,7 @@ async def submit_with_refs(
         )
     refs = [(_mime_for(name), base64.b64encode(data).decode("ascii"))
             for name, data in ref_image_bytes[:max_refs]]
-    body = _build_body(model_id, prompt, aspect_ratio, duration, refs)
+    body = _build_body(model_id, prompt, aspect_ratio, refs)
     logger.info("Omni submit (I2V): model=%s refs=%d prompt=%s", model_id, len(refs), prompt[:80])
     return _spawn(api_key, body)
 

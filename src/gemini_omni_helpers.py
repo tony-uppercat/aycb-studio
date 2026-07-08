@@ -72,17 +72,23 @@ def _extract_video(data: dict[str, Any]) -> tuple[bytes | None, str | None]:
 
 
 async def _fetch_file_uri(api_key: str, uri: str) -> bytes:
-    """Poll a delivered file uri until ACTIVE, then download the bytes.
+    """Poll the file's metadata resource until ACTIVE, then download.
 
-    ponytail: the download-url construction (alt=media on the resource) is a
-    best guess for this preview endpoint, unverified against a live clip.
+    Live contract (verified 2026-07-03): interactions delivers ``content.uri``
+    as the DOWNLOAD url (``.../files/<id>:download?alt=media``). ``state`` and
+    ``downloadUri`` live on the metadata resource — the part before
+    ``:download``. The download itself 302-redirects to a ``/download/...``
+    path, so the client must follow redirects.
     """
+    meta_uri = uri.split(":download")[0]
     headers = {"x-goog-api-key": api_key}
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+    async with httpx.AsyncClient(
+        timeout=_HTTP_TIMEOUT, follow_redirects=True
+    ) as client:
         start = time.monotonic()
         meta: dict[str, Any] = {}
         while True:
-            meta_resp = await client.get(uri, headers=headers)
+            meta_resp = await client.get(meta_uri, headers=headers)
             if meta_resp.status_code >= 400:
                 raise GeminiOmniGenError(
                     f"Omni file poll HTTP {meta_resp.status_code}: {meta_resp.text[:300]}"
@@ -98,11 +104,14 @@ async def _fetch_file_uri(api_key: str, uri: str) -> bytes:
                     f"Omni file not ACTIVE after {_FILE_STATE_TIMEOUT}s (state={state})"
                 )
             await asyncio.sleep(_FILE_STATE_INTERVAL)
-        download_uri = (
-            meta.get("download_uri") or meta.get("downloadUri")
-            or meta.get("uri") or uri
-        )
-        dl = await client.get(download_uri, headers=headers, params={"alt": "media"})
+        download_uri = meta.get("downloadUri") or meta.get("download_uri")
+        if download_uri:
+            # downloadUri already carries ?alt=media — use verbatim.
+            dl = await client.get(download_uri, headers=headers)
+        else:
+            dl = await client.get(
+                meta_uri + ":download", headers=headers, params={"alt": "media"}
+            )
     if dl.status_code >= 400:
         raise GeminiOmniGenError(
             f"Omni file download HTTP {dl.status_code}: {dl.text[:300]}"

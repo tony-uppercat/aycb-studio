@@ -35,16 +35,17 @@ URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 PROVIDER_MODEL_ID = "gemini-omni-flash-preview"
 PROMPT = "A marble rolling fast on a smooth wooden track, continuous shot"
 ASPECT_RATIO = "16:9"
-DURATION = 3
 
 
 def build_body() -> dict:
     # Mirrors src/gemini_omni_gen.py:_build_body (text-to-video path).
+    # No duration field: the interactions schema has none (live API 400s on
+    # `duration_seconds`) — clip length is prompt/model-decided, capped at 10s.
     return {
         "model": PROVIDER_MODEL_ID,
         "input": PROMPT,
         "response_format": {"type": "video", "aspect_ratio": ASPECT_RATIO, "delivery": "uri"},
-        "generation_config": {"video_config": {"task": "text_to_video", "duration_seconds": DURATION}},
+        "generation_config": {"video_config": {"task": "text_to_video"}},
     }
 
 

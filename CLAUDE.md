@@ -12,14 +12,14 @@ Single-process architecture: React+Vite frontend (:5100) proxied to Python FastA
 ## Session Start
 
 At the start of EVERY session:
-1. Read `skills/aycb-workflow/SKILL.md` — session lifecycle (open, execute, compact, close).
+1. Invoke the `aycb-workflow` skill — session lifecycle (open, execute, compact, close).
 2. Read the latest `reports/*_technical.md` — current state and next tasks.
 3. Invoke all applicable superpowers skills BEFORE any action (brainstorming before features, debugging before fixes, writing-plans before multi-step work). No exceptions — even if the task seems simple.
 4. Orient: 3-4 lines max.
 
-When creating/porting nodes, read `skills/aycb-node-creator/SKILL.md`.
+When creating/porting nodes, invoke the `aycb-node-creator` skill.
 
-When creating or modifying CLI scripts in `scripts/` (image/video generation, smoke tests, Batch API), read `skills/aycb-cli-generation/SKILL.md`.
+When creating or modifying CLI scripts in `scripts/` (image/video generation, smoke tests, Batch API), invoke the `aycb-cli-generation` skill.
 
 ---
 

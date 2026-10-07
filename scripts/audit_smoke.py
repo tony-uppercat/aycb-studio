@@ -7,7 +7,7 @@ validation (canvas, gallery, Lightbox).
 
 Usage:
     python scripts/audit_smoke.py
-    python scripts/audit_smoke.py --host http://localhost:5101
+    python scripts/audit_smoke.py --host http://127.0.0.1:5101
 
 Exits 0 on all-green, 1 on any fail, 2 if the backend is unreachable.
 """
@@ -334,8 +334,8 @@ def cleanup_c1(host: str, stem: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--host", default="http://localhost:5101",
-                        help="backend base URL (default: http://localhost:5101)")
+    parser.add_argument("--host", default="http://127.0.0.1:5101",
+                        help="backend base URL (default: http://127.0.0.1:5101)")
     args = parser.parse_args()
     host = args.host.rstrip("/")
 

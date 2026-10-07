@@ -217,8 +217,10 @@ python -m uvicorn src.api:app --host 0.0.0.0 --port 5101 --reload
 cd frontend && npm run dev
 ```
 
-Frontend: http://localhost:5100
-Backend:  http://localhost:5101
+Frontend: http://127.0.0.1:5100
+Backend:  http://127.0.0.1:5101
+
+From scripts, curl and agents use `127.0.0.1`, never `localhost`: on this PC `localhost` resolves to `::1` first, the backend listens on IPv4 only, and every request waits ~2 s. Browsers and the Vite proxy are not affected.
 
 ### Restart Mechanism
 

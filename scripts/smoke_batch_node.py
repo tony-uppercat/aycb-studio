@@ -4,7 +4,7 @@ Submits ONE real Gemini Pro 2K request via /api/batch/submit, polls
 /api/batch/jobs until SUCCEEDED, verifies the resulting PNG exists in
 shared/Media with tEXt metadata, and prints discounted cost.
 
-Required: backend running on localhost:5101 with AYCB_GEMINI_API_KEY set.
+Required: backend running on 127.0.0.1:5101 with AYCB_GEMINI_API_KEY set.
 
 Run:
     python scripts/smoke_batch_node.py
@@ -22,7 +22,7 @@ sys.path.insert(0, str(_HERE.parent))
 
 from config.settings import settings  # noqa: E402
 
-API = "http://localhost:5101"
+API = "http://127.0.0.1:5101"
 TIMEOUT_MIN = 30  # batch jobs usually complete in <10 min
 
 
